@@ -9,6 +9,17 @@
     lg = log --graph --decorate --abbrev-commit --format=format:'%C(blue)%h%C(reset) - %C(green)(%ar)%C(reset)%C(yellow)%d%C(reset)\n  %C(white)%s%C(reset) %C(dim white)- %an%C(reset)'
     aa = add -A
     cm = commit -m
+    plo = pull origin
+    pso = push origin
+    cho = checkout
+    chob = checkout -b
+    st = status
+    ss = status -s
+    fe = fetch
+	psf = "!f() { branch=$(git branch --all | grep -v \"\\\\->\" | sed \"s/^..//\" | fzf); [ -n \"$branch\" ] && git push origin \"${branch##*/}\"; }; f"
+	plf = "!f() { branch=$(git branch --all | grep -v \"\\\\->\" | sed \"s/^..//\" | fzf); [ -n \"$branch\" ] && git pull origin \"${branch##*/}\"; }; f"
+    psc = !git push origin $(git rev-parse --abbrev-ref HEAD)
+    plc = !git pull origin $(git rev-parse --abbrev-ref HEAD)
 [rebase]
     autostash = true
 [pull]
