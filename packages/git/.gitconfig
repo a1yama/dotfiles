@@ -1,0 +1,15 @@
+[core]
+    excludesfile = /Users/a1yama/.gitignore_global
+    autocrlf = input
+[user]
+    name = a1yama
+    email = a1yama1123@gmail.com
+[alias]
+    cof = !git branch -a | fzf | xargs git checkout
+    lg = log --graph --decorate --abbrev-commit --format=format:'%C(blue)%h%C(reset) - %C(green)(%ar)%C(reset)%C(yellow)%d%C(reset)\n  %C(white)%s%C(reset) %C(dim white)- %an%C(reset)'
+    aa = add -A
+    cm = commit -m
+[rebase]
+    autostash = true
+[pull]
+    autostash = true

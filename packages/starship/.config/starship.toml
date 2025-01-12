@@ -5,10 +5,8 @@ $git_status\
 $time"""
 
 add_newline = false
-palette = "nord"
 
 [directory]
-style = "fg:#2E3440 bg:#88C0D0 bold"
 format = "[ $path ]($style)"
 truncation_length = 10
 truncate_to_repo = false
@@ -20,43 +18,7 @@ truncation_symbol = "…/"
 "Music" = " "
 "Pictures" = " "
 
-[git_branch]
-symbol = ""
-style = "bg:#394260"
-format = '[[ $symbol $branch ](fg:#769ff0 bg:#394260)]($style)'
-
-[git_status]
-style = "bg:#394260"
-format = '[[($all_status$ahead_behind )](fg:#769ff0 bg:#394260)]($style)'
-
 [time]
 disabled = false
-time_format = "%R" # Hour:Minute Format
-style = "bg:#1d2230"
-format = '[[  $time ](fg:#a0a9cb bg:#1d2230)]($style)'
-
-[palettes.nord]
-dark_blue = '#5E81AC'
-blue = '#81A1C1'
-teal = '#88C0D0'
-red = '#BF616A'
-orange = '#D08770'
-green = '#A3BE8C'
-yellow = '#EBCB8B'
-purple = '#B48EAD'
-gray = '#434C5E'
-black = '#2E3440'
-white='#D8DEE9'
-
-[palettes.onedark]
-dark_blue='#61afef'
-blue='#56b6c2'
-red='#e06c75'
-green='#98c379'
-purple='#c678dd'
-cyan='#56b6c2'
-orange='#be5046'
-yellow='#e5c07b'
-gray='#828997'
-white ='#abb2bf'
-black='#2c323c'
+time_format = "%R"
+format = '[[  $time ](fg:#a0a9cb)]($style)'
