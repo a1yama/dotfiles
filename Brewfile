@@ -18,6 +18,7 @@ brew "zsh-syntax-highlighting"
 
 cask "1password"
 cask "alfred"
+cask "cleanshot"
 cask "obsidian"
 cask "docker"
 cask "google-chrome"
