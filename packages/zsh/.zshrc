@@ -16,5 +16,10 @@ if type brew &>/dev/null; then
   autoload -Uz compinit && compinit
 fi
 
-alias g="git"
-alias cat="bat"
+ZSH_DIR="${HOME}/.zsh"
+
+if [ -d $ZSH_DIR ] && [ -r $ZSH_DIR ] && [ -x $ZSH_DIR ]; then
+    for file in ${ZSH_DIR}/**/*.zsh; do
+        [ -r $file ] && source $file
+    done
+fi
