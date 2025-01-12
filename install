@@ -4,4 +4,4 @@ set -e
 
 brew bundle -v --file ./Brewfile
 
-stow -v -d ./packages -t $HOME zsh starship
+stow -v -d ./packages -t $HOME zsh starship git wezterm
