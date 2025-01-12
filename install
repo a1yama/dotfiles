@@ -39,6 +39,12 @@ fi
 # Stow link
 ###########################################################
 log 'Link dotfiles'
-ensure_dir ~/.config/starship
+ensure_dir ~/.config
 
 stow -vd "$STOW_PACKAGES_PATH" -t "$HOME" $(ls "$STOW_PACKAGES_PATH")
+
+###########################################################
+# create zsh export files
+###########################################################
+log 'Create zsh export files'
+touch ~/.zsh/export.zsh
