@@ -2,6 +2,43 @@
 
 set -e
 
-brew bundle -v --file ./Brewfile
+STOW_PACKAGES_PATH="$HOME"/dotfiles/packages
 
-stow -v -d ./packages -t $HOME zsh starship git wezterm
+log() {
+    echo "[INFO] $1"
+}
+
+ensure_dir() {
+    mkdir -p "$1"
+}
+
+###########################################################
+# Install Homebrew
+###########################################################
+if [ ! -f /opt/homebrew/bin/brew ]; then
+    log 'Setup Homebrew'
+    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+    eval "$(/opt/homebrew/bin/brew shellenv)"
+
+    log 'Install Rosetta 2'
+    sudo softwareupdate --install-rosetta
+fi
+
+if [ ! -d "$HOME"/dotfiles ]; then
+    log 'Clone dotfiles'
+    cd "$HOME"
+    git clone https://github.com/JunichiSugiura/dotfiles.git
+fi
+
+if [ -z "$skip_apps" ]; then
+    log 'Install Apps and CLIs'
+    brew bundle --file "$HOME"/dotfiles/Brewfile
+fi
+
+###########################################################
+# Stow link
+###########################################################
+log 'Link dotfiles'
+ensure_dir ~/.config/starship
+
+stow -vd "$STOW_PACKAGES_PATH" -t "$HOME" $(ls "$STOW_PACKAGES_PATH")
