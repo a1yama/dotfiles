@@ -22,6 +22,8 @@
     plc = !git pull origin $(git rev-parse --abbrev-ref HEAD)
 	dff = "!f() { files=$(git status --short | grep -E \"^( M| M)\" | awk \"{print \\$2}\" | fzf --multi); [ -n \"$files\" ] && git diff -- $files; }; f"
     dfno = "diff --name-only"
+	adf = "!f() { files=$(git status --short | grep -E \"^( M| M|??)\" | awk \"{print \\$2}\" | fzf --multi); [ -n \"$files\" ] && git add $files; }; f"
+	resf = "!f() { files=$(git status --short | grep -E \"^( M| M| D)\" | awk \"{print \\$2}\" | fzf --multi); [ -n \"$files\" ] && git restore $files; }; f"
 [rebase]
     autostash = true
 [pull]

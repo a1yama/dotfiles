@@ -1,24 +1,45 @@
-format = """
-$directory\
-$git_branch\
-$git_status\
-$time"""
+"$schema" = 'https://starship.rs/config-schema.json'
 
 add_newline = false
 
-[directory]
-format = "[ $path ]($style)"
-truncation_length = 10
-truncate_to_repo = false
-truncation_symbol = "…/"
+[shell]
+disabled = false
+style = "bold"
+bash_indicator = "[bsh](#a593e0)"
+zsh_indicator = "[zsh](#fff1b9)"
+powershell_indicator = "[psh](#f7aa97)"
+cmd_indicator = "[cmd](#a3daff)"
 
-[directory.substitutions]
-"Documents" = "󰈙 "
-"Downloads" = " "
-"Music" = " "
-"Pictures" = " "
+[character]
+success_symbol = "[❯](bold #00ff00)"
+error_symbol = "[✘](bold #ff4444)"
+
+[directory]
+truncation_length = 10
+truncation_symbol = '…/'
+style = "bold #00FFFF"
+truncate_to_repo = false
 
 [time]
 disabled = false
-time_format = "%R"
-format = '[[  $time ](fg:#a0a9cb)]($style)'
+format = "[$time]($style) "
+style = "bold #ffff00"
+
+[git_branch]
+format = "[$symbol$branch(:$remote_branch)]($style) "
+
+[git_status]
+ahead = '⇡${count}'
+diverged = '⇕⇡${ahead_count}⇣${behind_count}'
+behind = '⇣${count}'
+modified = '[!\($count\)](green)'
+untracked = '[?\($count\)](red)'
+staged = '[++\($count\)](green)'
+
+[cmd_duration]
+format = "[$duration]($style) "
+show_milliseconds = true
+style = "bold #ff9900"
+
+[aws]
+disabled = true
