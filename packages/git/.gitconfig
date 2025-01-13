@@ -12,7 +12,7 @@
     plo = pull origin
     pso = push origin
     cho = checkout
-    chob = checkout -b
+    cob = checkout -b
     st = status
     ss = status -s
     fe = fetch
