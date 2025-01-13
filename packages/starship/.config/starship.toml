@@ -36,10 +36,5 @@ modified = '[!\($count\)](green)'
 untracked = '[?\($count\)](red)'
 staged = '[++\($count\)](green)'
 
-[cmd_duration]
-format = "[$duration]($style) "
-show_milliseconds = true
-style = "bold #ff9900"
-
 [aws]
 disabled = true
