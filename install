@@ -40,6 +40,7 @@ fi
 ###########################################################
 log 'Link dotfiles'
 ensure_dir ~/.config
+ensure_dir ~/.config/nvim
 
 stow -vd "$STOW_PACKAGES_PATH" -t "$HOME" $(ls "$STOW_PACKAGES_PATH")
 
