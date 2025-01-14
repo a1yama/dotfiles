@@ -19,15 +19,12 @@ if [ ! -f /opt/homebrew/bin/brew ]; then
     log 'Setup Homebrew'
     /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
     eval "$(/opt/homebrew/bin/brew shellenv)"
-
-    log 'Install Rosetta 2'
-    sudo softwareupdate --install-rosetta
 fi
 
 if [ ! -d "$HOME"/dotfiles ]; then
     log 'Clone dotfiles'
     cd "$HOME"
-    git clone https://github.com/JunichiSugiura/dotfiles.git
+    git clone https://github.com/a1yama/dotfiles.git
 fi
 
 if [ -z "$skip_apps" ]; then
@@ -47,5 +44,5 @@ stow -vd "$STOW_PACKAGES_PATH" -t "$HOME" $(ls "$STOW_PACKAGES_PATH")
 ###########################################################
 # create zsh export files
 ###########################################################
-log 'Create zsh export files'
-touch ~/.zsh/export.zsh
+log 'Create zsh local files'
+touch ~/.zsh/local.zsh

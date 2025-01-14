@@ -2,14 +2,6 @@
 
 add_newline = false
 
-[shell]
-disabled = false
-style = "bold"
-bash_indicator = "[bsh](#a593e0)"
-zsh_indicator = "[zsh](#fff1b9)"
-powershell_indicator = "[psh](#f7aa97)"
-cmd_indicator = "[cmd](#a3daff)"
-
 [character]
 success_symbol = "[❯](bold #00ff00)"
 error_symbol = "[✘](bold #ff4444)"
@@ -35,6 +27,3 @@ behind = '⇣${count}'
 modified = '[!\($count\)](green)'
 untracked = '[?\($count\)](red)'
 staged = '[++\($count\)](green)'
-
-[aws]
-disabled = true

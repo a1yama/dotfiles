@@ -1,6 +1,7 @@
 precmd() {
   print -Pn "\e]0;%~\a"
 }
+eval "$(/opt/homebrew/bin/brew shellenv)"
 eval "$(starship init zsh)"
 
 export PATH="/opt/homebrew/opt/php@8.1/bin:$PATH"

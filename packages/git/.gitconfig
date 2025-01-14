@@ -1,5 +1,4 @@
 [core]
-    excludesfile = /Users/a1yama/.gitignore_global
     autocrlf = input
 [user]
     name = a1yama
