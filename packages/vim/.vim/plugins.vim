@@ -36,8 +36,6 @@ Plug 'glts/vim-magnum' " ↑ req by vim-radical
 Plug 'tpope/vim-speeddating' " <C-a> <C-x> on dates
 Plug 'nvim-telescope/telescope.nvim'
 Plug 'nvim-telescope/telescope-media-files.nvim'
-Plug 'iamcco/markdown-preview.nvim', { 'do': 'cd app & yarn install' }
-
 
 " EDITING
 Plug 'tpope/vim-surround'
@@ -70,12 +68,10 @@ Plug 'thosakwe/vim-flutter'
 Plug 'habamax/vim-godot'
 
 " complition
-Plug 'neoclide/coc.nvim', {'branch': 'release', 'do': 'npm ci'}
 Plug 'neovim/nvim-lspconfig'
 Plug 'hrsh7th/cmp-nvim-lsp'
 Plug 'hrsh7th/cmp-buffer'
 Plug 'hrsh7th/nvim-cmp'
-Plug 'github/copilot.vim'  
 Plug 'honza/vim-snippets'
 Plug 'SirVer/ultisnips'
 Plug 'tpope/vim-endwise'
@@ -190,5 +186,3 @@ endfunc
 augroup godot | au!
     au FileType gdscript call GodotSettings()
 augroup end"
-
-so ~/.vim/coc.vim
