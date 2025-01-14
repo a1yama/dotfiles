@@ -24,6 +24,8 @@
 	adf = "!f() { files=$(git status --short | grep -E \"^( M| M|??)\" | awk \"{print \\$2}\" | fzf --multi); [ -n \"$files\" ] && git add $files; }; f"
 	rsf = "!f() { files=$(git status --short | grep -E \"^( M| M| D)\" | awk \"{print \\$2}\" | fzf --multi); [ -n \"$files\" ] && git restore $files; }; f"
 	mgf = "!f() { branch=$(git branch --all | grep -v \"\\->\" | sed \"s/^..//\" | fzf); [ -n \"$branch\" ] && git merge --no-ff \"${branch##*/}\"; }; f"
+	deletebranch = "!f() { branches=$(git branch --format=\"%(refname:short)\" | fzf --multi); [ -n \"$branches\" ] && git branch -d $branches; }; f"
+	deletebranchf = "!f() { branches=$(git branch --format=\"%(refname:short)\" | fzf --multi); [ -n \"$branches\" ] && git branch -D $branches; }; f"
 [rebase]
     autostash = true
 [pull]
