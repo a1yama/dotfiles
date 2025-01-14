@@ -8,7 +8,6 @@ set t_Co=256            " Use 256 colors
 set nocompatible        " Use Vim defaults instead of Vi defaults
 set encoding=utf8       " Use UTF-8 encoding
 set belloff=all         " Disable all bell sounds
-set fileformat=unix     " Use Unix file format for new files
 
 " ==========================================================
 " FILETYPE AND PLUGIN SETTINGS
