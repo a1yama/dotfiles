@@ -4,6 +4,15 @@ set -e
 
 STOW_PACKAGES_PATH="$HOME"/dotfiles/packages
 
+for i in "$@"; do
+    case "$i" in
+       -s|--skip-apps)
+            skip_apps=1
+            shift ;;
+        *) ;;
+    esac
+done
+
 log() {
     echo "[INFO] $1"
 }
@@ -42,7 +51,8 @@ ensure_dir ~/.config/nvim
 stow -vd "$STOW_PACKAGES_PATH" -t "$HOME" $(ls "$STOW_PACKAGES_PATH")
 
 ###########################################################
-# create zsh export files
+# create local config files
 ###########################################################
-log 'Create zsh local files'
+log 'Create local config files'
 touch ~/.zsh/local.zsh
+touch ~/.config/git/config.d/local.conf
