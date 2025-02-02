@@ -3,16 +3,29 @@ alias cat="bat"
 alias gaa="git aa"
 alias gst="git st"
 alias gss="git ss"
+alias gfe="git fe"
 alias commit="git cm"
 alias pullc="git plc"
 alias pushc="git psc"
-alias pullf="git plf"
-alias pushf="git psf"
-alias addf="git adf"
-alias grsf="git rsf"
-alias gcob="git cob"
-alias gcof="git cof"
-alias gfe="git fe"
-alias mergef="git mgf"
+alias addfzf="git adf"
+alias restorefzf="git rsf"
+alias mergefzf="git mgf"
 alias checkout="git cho"
 alias checkoutb="git cob"
+
+switch() {
+  local branch
+  branch=$(git branch --all --format='%(refname:short)' | grep -v 'HEAD' | fzf --height=15 --reverse)
+  
+  if [ -n "$branch" ]; then
+    # リモートブランチであればローカルに追跡ブランチを作成
+    if [[ "$branch" == remotes/* ]]; then
+      local local_branch="${branch#remotes/origin/}"
+      echo "Switching to remote branch $local_branch"
+      git switch --track "$branch"
+    else
+      echo "Switching to local branch $branch"
+      git switch "$branch"
+    fi
+  fi
+}
