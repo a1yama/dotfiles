@@ -1,5 +1,6 @@
 alias g="git"
 alias cat="bat"
+alias ll="ls -l"
 alias gaa="git aa"
 alias gst="git st"
 alias gss="git ss"
