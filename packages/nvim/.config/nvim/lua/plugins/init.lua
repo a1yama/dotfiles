@@ -5,9 +5,8 @@ return {
       branch = "v3.x",
       dependencies = {
         "nvim-lua/plenary.nvim",
-        "nvim-tree/nvim-web-devicons", -- not strictly required, but recommended
+        "nvim-tree/nvim-web-devicons",
         "MunifTanjim/nui.nvim",
-        -- {"3rd/image.nvim", opts = {}}, -- Optional image support in preview window: See `# Preview Mode` for more information
       },
       opts = {
         filesystem = {
@@ -15,10 +14,10 @@ return {
             hijack_netrw_behavior = "open_current",
             use_libuv_file_watcher = true,
             filtered_items = {
-              visible = false, -- デフォルトで隠されているかどうか
+              visible = false,
               show_hidden_count = true,
-              hide_dotfiles = false, -- dotfileを隠すかどうか
-              hide_gitignored = false, -- gitignoreされているファイルを隠すかどうか
+              hide_dotfiles = false,
+              hide_gitignored = false,
               hide_by_name = {
                 "node_modules",
                 "thumbs.db",
@@ -49,17 +48,17 @@ return {
               '--line-number',
               '--column',
               '--smart-case',
-              '--hidden',         -- 隠しファイルも検索
-              '--glob', '!.git/*' -- .git ディレクトリを無視
+              '--hidden',
+              '--glob', '!.git/*'
             },
-            file_ignore_patterns = { "%.git/" }, -- 無視したいパターンを指定
-            follow = true, -- シンボリックリンクを辿る
+            file_ignore_patterns = { "%.git/" },
+            follow = true,
           },
           pickers = {
             find_files = {
-              hidden = true, -- 隠しファイルも検索対象に含める
-              follow = true, -- シンボリックリンクも検索対象に含める
-              find_command = { 'fd', '--type', 'f', '--hidden', '--follow' } -- `fd` コマンドを使う
+              hidden = true,
+              follow = true,
+              find_command = { 'fd', '--type', 'f', '--hidden', '--follow' }
             }
           }
         }
