@@ -1,6 +1,9 @@
+tap "jesseduffield/lazygit"
+
 brew "awscli"
 brew "bat"
 brew "curl"
+brew "fd"
 brew "fzf"
 brew "git"
 brew "gh"

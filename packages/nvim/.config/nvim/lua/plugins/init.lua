@@ -34,12 +34,38 @@ return {
     },
   
     -- telescope.nvim
-    { 
+    {
       "nvim-telescope/telescope.nvim",
       tag = '0.1.8',
       dependencies = { "nvim-lua/plenary.nvim" },
+      config = function()
+        require('telescope').setup {
+          defaults = {
+            vimgrep_arguments = {
+              'rg',
+              '--color=never',
+              '--no-heading',
+              '--with-filename',
+              '--line-number',
+              '--column',
+              '--smart-case',
+              '--hidden',         -- 隠しファイルも検索
+              '--glob', '!.git/*' -- .git ディレクトリを無視
+            },
+            file_ignore_patterns = { "%.git/" }, -- 無視したいパターンを指定
+            follow = true, -- シンボリックリンクを辿る
+          },
+          pickers = {
+            find_files = {
+              hidden = true, -- 隠しファイルも検索対象に含める
+              follow = true, -- シンボリックリンクも検索対象に含める
+              find_command = { 'fd', '--type', 'f', '--hidden', '--follow' } -- `fd` コマンドを使う
+            }
+          }
+        }
+      end
     },
-  
+        
     -- lualine.nvim
     { "nvim-lualine/lualine.nvim" },
   
