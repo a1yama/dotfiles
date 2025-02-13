@@ -1,9 +1,5 @@
 customCommands:
   - command: git-cz-go
-    context: files
+    context: global
     subprocess: true
-    key: c
-
-gui:
-  language: "ja"
-  showIcons: true
+    key: Z
