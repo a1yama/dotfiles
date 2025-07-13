@@ -1,6 +1,5 @@
 [include]
     path = ~/.config/git/config.d/alias.conf
-    path = ~/.config/git/config.d/local.conf
 [core]
     autocrlf = input
 [user]
