@@ -53,6 +53,23 @@ return {
         end),
       }),
     },
+    {
+      key = ']',
+      mods = 'CTRL|SHIFT',
+      action = act.SwitchWorkspaceRelative(1),
+    },
+    {
+      key = '[',
+      mods = 'CTRL|SHIFT',
+      action = act.SwitchWorkspaceRelative(-1),
+    },
+    {
+      key = 'w',
+      mods = 'CTRL|SHIFT',
+      action = act.ShowLauncherArgs {
+        flags = 'FUZZY|WORKSPACES',
+      },
+    },
     -- コマンドパレット表示
     { key = "p", mods = "SUPER", action = act.ActivateCommandPalette },
     -- Tab移動
@@ -88,7 +105,7 @@ return {
     { key = "k", mods = "LEADER", action = act.ActivatePaneDirection("Up") },
     { key = "j", mods = "LEADER", action = act.ActivatePaneDirection("Down") },
     -- Pane選択
-    { key = "[", mods = "CTRL|SHIFT", action = act.PaneSelect },
+    { key = "l", mods = "CTRL|SHIFT", action = act.PaneSelect },
     -- 選択中のPaneのみ表示
     { key = "z", mods = "LEADER", action = act.TogglePaneZoomState },
 
