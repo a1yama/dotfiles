@@ -9,6 +9,11 @@ config.window_background_opacity = 0.85
 config.macos_window_background_blur = 20
 config.adjust_window_size_when_changing_font_size = false
 
+-- 右上にworkspace名を表示
+wezterm.on('update-right-status', function(window, pane)
+  window:set_right_status(window:active_workspace())
+end)
+
 ----------------------------------------------------
 -- Tab
 ----------------------------------------------------
