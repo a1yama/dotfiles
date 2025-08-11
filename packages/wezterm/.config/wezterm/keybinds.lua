@@ -13,6 +13,11 @@ end)
 return {
   keys = {
     {
+      key = 'Enter',
+      mods = 'SHIFT',
+      action = wezterm.action.SendString('\n')
+    },
+    {
       -- workspaceの切り替え
       key = "w",
       mods = "LEADER",
