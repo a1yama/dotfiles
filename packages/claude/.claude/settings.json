@@ -38,6 +38,7 @@
       "Bash(go build:*)",
       "Bash(go fmt:*)",
       "Bash(go vet:*)",
+      "Bash(go mod:*)",
       "Bash(gofmt:*)",
       "Bash(gh pr list:*)",
       "Bash(gh pr view:*)",
@@ -53,7 +54,8 @@
       "Bash(git pull:*)",
       "Bash(git reset:*)",
       "Bash(git commit:*)",
-      "Bash(git cherry-pick:*)"
+      "Bash(git cherry-pick:*)",
+      "mcp__o3__o3-search"
     ],
     "deny": []
   }
