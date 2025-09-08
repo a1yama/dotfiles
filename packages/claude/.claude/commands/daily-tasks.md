@@ -18,10 +18,10 @@
      - PR: gh search prs --author=@me --state=open --owner=Kyash --json repository,number,title,url --sort=created
    - マークダウンのチェックボックス形式で記載
 
-4. Notion API MCP (mcp_notion) を使用して Notion の Tasks データベースからSlackタスクを取得
-   - ステータスが "In Progress" または "Not Started" のタスクを取得
-   - 優先度（Priority）の高い順にソート
-   - 全件取得（page_sizeは大きめに設定）
+4. Notion API MCP (mcp_notionApi) を使用して Notion の Tasks データベースからSlackタスクを取得
+   - 全てのタスクページを取得（全ユーザーのタスクを含む）
+   - 自分（eiichi.yamazaki）だけでなく、他のユーザーのタスクも取得
+   - 全件取得（page_sizeは100に設定）
    - 各タスクページのコンテンツブロックを取得
    - コンテンツの内容を要約してタスクのタイトルとして使用
    - Slack URLをコンテンツから抽出して表示
@@ -46,8 +46,5 @@
    ```
    
    注意: 時刻（HH:MM）は実行時の時刻を使用し、複数回実行時は最新の情報で上書き更新
-
-6. 完了後、Obsidian でデイリーノートを開く
-   - `open "obsidian://open?vault=obsidian&file=Diary%2FYYYY%2FYYYY-MM-DD"`
 
 引数: $ARGUMENTS
