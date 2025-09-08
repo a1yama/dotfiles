@@ -47,6 +47,9 @@
       "Bash(gh issue create:*)",
       "Bash(gh issue edit:*)",
       "Bash(gh issue view:*)",
+      "Bash(gh issue list:*)",
+      "Bash(gh search issues:*)",
+      "Bash(gh search prs:*)",
       "Bash(git checkout:*)",
       "Bash(git add:*)",
       "Bash(git push:*)",
@@ -55,7 +58,11 @@
       "Bash(git reset:*)",
       "Bash(git commit:*)",
       "Bash(git cherry-pick:*)",
-      "mcp__o3__o3-search"
+      "mcp__o3__o3-search",
+      "mcp__notionApi__API-post-search",
+      "mcp__notionApi__API-post-database-query",
+      "mcp__notionApi__API-get-block-children",
+      "mcp__notionApi__API-retrieve-a-database"
     ],
     "deny": []
   }
