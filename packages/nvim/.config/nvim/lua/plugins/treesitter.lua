@@ -27,7 +27,6 @@ return {
         "markdown_inline",
         "markdown",
         "sql",
-        "yaml",
         "git_config",
         "git_rebase",
         "gitattributes",
