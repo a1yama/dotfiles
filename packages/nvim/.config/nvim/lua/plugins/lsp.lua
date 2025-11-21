@@ -37,35 +37,21 @@ return {
       end
     end
 
-    M.capabilities = vim.lsp.protocol.make_client_capabilities()
-
-    M.capabilities.textDocument.completion.completionItem = {
-      documentationFormat = { "markdown", "plaintext" },
-      snippetSupport = true,
-      preselectSupport = true,
-      insertReplaceSupport = true,
-      labelDetailsSupport = true,
-      deprecatedSupport = true,
-      commitCharactersSupport = true,
-      tagSupport = { valueSet = { 1 } },
-      resolveSupport = {
-        properties = {
-          "documentation",
-          "detail",
-          "additionalTextEdits",
-        },
-      },
-    }
+    M.capabilities = require('cmp_nvim_lsp').default_capabilities()
 
     M.defaults = function()
       -- dofile(vim.g.base46_cache .. "lsp")
       -- require("nvchad.lsp").diagnostic_config()
 
-      require("lspconfig").lua_ls.setup {
+      local function setup_server(name, config)
+        vim.lsp.config[name] = config or {}
+        vim.lsp.enable(name)
+      end
+
+      setup_server("lua_ls", {
         on_attach = M.on_attach,
         capabilities = M.capabilities,
         on_init = M.on_init,
-
         settings = {
           Lua = {
             diagnostics = {
@@ -84,13 +70,13 @@ return {
             },
           },
         },
-      }
+      })
 
-      require("lspconfig").ts_ls.setup({})
-      require("lspconfig").phpactor.setup({})
-      require("lspconfig").gopls.setup({})
-      require("lspconfig").ruby_lsp.setup({})
-      require("lspconfig").ziggy.setup({})
+      setup_server("ts_ls", {})
+      setup_server("phpactor", {})
+      setup_server("gopls", {})
+      setup_server("ruby_lsp", {})
+      setup_server("ziggy", {})
     end
 
     M.defaults()
