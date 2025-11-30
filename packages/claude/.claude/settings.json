@@ -66,5 +66,6 @@
       "mcp__codex"
     ],
     "deny": []
-  }
+  },
+  "alwaysThinkingEnabled": true
 }
