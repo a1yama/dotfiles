@@ -14,6 +14,7 @@ alias restorefzf="git rsf"
 alias mergefzf="git mgf"
 alias checkout="git cho"
 alias checkoutb="git cob"
+alias aicommit="!f() { COMMITMSG=$(claude -p 'Generate ONLY a one-line Git commit message in English, using imperative mood, summarizing what was changed and why, based strictly on the contents of `git diff --cached`. Do not add explanation or a body. Output only the commit summary line.'); git commit -m \"$COMMITMSG\" -e; }; f"
 
 switch() {
   local branch
