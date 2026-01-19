@@ -67,5 +67,9 @@
     ],
     "deny": []
   },
+  "statusLine": {
+    "type": "command",
+    "command": "/Users/eiichi.yamazaki/dotfiles/packages/claude/.claude/statusline.sh"
+  },
   "alwaysThinkingEnabled": true
 }
