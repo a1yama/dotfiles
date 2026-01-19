@@ -71,5 +71,8 @@
     "type": "command",
     "command": "/Users/eiichi.yamazaki/dotfiles/packages/claude/.claude/statusline.sh"
   },
-  "alwaysThinkingEnabled": true
+  "alwaysThinkingEnabled": true,
+  "enabledPlugins": {
+    "typescript-lsp@claude-plugins-official": true
+  }
 }
