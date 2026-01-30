@@ -1,5 +1,5 @@
 customCommands:
   - command: git-cz-go
     context: global
-    subprocess: true
     key: Z
+    output: terminal
