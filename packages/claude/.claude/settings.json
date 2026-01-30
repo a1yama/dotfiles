@@ -71,8 +71,8 @@
     "type": "command",
     "command": "~/dotfiles/packages/claude/.claude/statusline.sh"
   },
-  "alwaysThinkingEnabled": true,
   "enabledPlugins": {
     "typescript-lsp@claude-plugins-official": true
-  }
+  },
+  "alwaysThinkingEnabled": true
 }
