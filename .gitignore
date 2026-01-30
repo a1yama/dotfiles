@@ -1,2 +1,4 @@
 packages/zsh/.zsh/local.zsh
 packages/git/.config/git/config.d/local.conf
+packages/yazi/.local/
+packages/yazi/.cache/
