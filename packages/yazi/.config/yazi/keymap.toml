@@ -1,0 +1,4 @@
+[manager]
+prepend_keymap = [
+  { on = [ "g", "g" ], run = 'shell "lazygit --block"', desc = "Open lazygit" },
+]
