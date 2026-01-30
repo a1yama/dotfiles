@@ -51,6 +51,20 @@ ensure_dir ~/.config/nvim
 stow -vd "$STOW_PACKAGES_PATH" -t "$HOME" $(ls "$STOW_PACKAGES_PATH")
 
 ###########################################################
+# Install yazi plugins
+###########################################################
+log 'Install yazi plugins'
+if command -v ya >/dev/null 2>&1; then
+    XDG_CONFIG_HOME="$HOME"/dotfiles/packages/yazi/.config \
+    XDG_DATA_HOME="$HOME"/dotfiles/packages/yazi/.local/share \
+    XDG_STATE_HOME="$HOME"/dotfiles/packages/yazi/.local/state \
+    XDG_CACHE_HOME="$HOME"/dotfiles/packages/yazi/.cache \
+    ya pkg install
+else
+    log 'yazi is not installed, skipping plugin installation'
+fi
+
+###########################################################
 # create local config files
 ###########################################################
 log 'Create local config files'
