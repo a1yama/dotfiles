@@ -11,6 +11,9 @@ if type brew &>/dev/null; then
   autoload -Uz compinit && compinit
 fi
 
+# Editor settings
+export EDITOR=nvim
+
 ZSH_DIR="${HOME}/.zsh"
 
 if [ -d $ZSH_DIR ] && [ -r $ZSH_DIR ] && [ -x $ZSH_DIR ]; then

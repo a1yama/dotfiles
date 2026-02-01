@@ -1,3 +1,11 @@
+# tmux
+alias t="tmux"
+alias ta="tmux attach"
+alias tat="tmux attach -t"
+alias tl="tmux list-sessions"
+alias tn="tmux new -s"
+alias tk="tmux kill-session -t"
+
 alias g="git"
 alias cat="bat"
 alias ll="ls -l"
