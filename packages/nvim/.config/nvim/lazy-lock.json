@@ -27,5 +27,5 @@
   "vim-rhubarb": { "branch": "master", "commit": "5496d7c94581c4c9ad7430357449bb57fc59f501" },
   "which-key.nvim": { "branch": "main", "commit": "3aab2147e74890957785941f0c1ad87d0a44c15a" },
   "winresizer": { "branch": "master", "commit": "9bd559a03ccec98a458e60c705547119eb5350f3" },
-  "yazi.nvim": { "branch": "main", "commit": "7a5a72d915241a2f07901c324a14c02a30b8515e" }
+  "yazi.nvim": { "branch": "main", "commit": "80d0a86a1cd27c56e48f4c72c951acc7cf1fff82" }
 }
