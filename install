@@ -65,6 +65,15 @@ else
 fi
 
 ###########################################################
+# Install tmux plugins (TPM)
+###########################################################
+log 'Install tmux plugins'
+if [ ! -d "$HOME"/.tmux/plugins/tpm ]; then
+    git clone https://github.com/tmux-plugins/tpm "$HOME"/.tmux/plugins/tpm
+fi
+"$HOME"/.tmux/plugins/tpm/bin/install_plugins
+
+###########################################################
 # create local config files
 ###########################################################
 log 'Create local config files'

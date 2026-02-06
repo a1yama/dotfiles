@@ -57,6 +57,8 @@
       "Bash(gh search prs *)",
       "Bash(gh list *)",
       "Bash(gh api *)",
+      "Bash(gh label *)",
+      "Bash(gh project *)",
       "Bash(git checkout *)",
       "Bash(git add *)",
       "Bash(git push *)",
