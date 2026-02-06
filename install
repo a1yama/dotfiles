@@ -47,6 +47,9 @@ fi
 log 'Link dotfiles'
 ensure_dir ~/.config
 ensure_dir ~/.config/nvim
+ensure_dir ~/.config/lazygit
+ensure_dir ~/.claude
+ensure_dir ~/.codex
 
 stow -vd "$STOW_PACKAGES_PATH" -t "$HOME" $(ls "$STOW_PACKAGES_PATH")
 
