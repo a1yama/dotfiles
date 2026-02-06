@@ -1,14 +1,29 @@
+# Fix corrupted FPATH if inherited from parent process
+unset FPATH
+fpath=()
+
 precmd() {
   print -Pn "\e]0;%~\a"
 }
 eval "$(/opt/homebrew/bin/brew shellenv)"
+
+# Load zsh completion system first
+# Ensure system function paths are included
+fpath=(/usr/share/zsh/site-functions /usr/share/zsh/${ZSH_VERSION}/functions $fpath)
+
+if type brew &>/dev/null; then
+  fpath=($(brew --prefix)/share/zsh-completions $fpath)
+fi
+
+autoload -Uz compinit add-zsh-hook is-at-least
+compinit
+
+# Initialize starship and plugins after compinit
 eval "$(starship init zsh)"
 
 if type brew &>/dev/null; then
-  FPATH=$(brew --prefix)/share/zsh-completions:$FPATH
   source $(brew --prefix)/share/zsh-autosuggestions/zsh-autosuggestions.zsh
   source $(brew --prefix)/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
-  autoload -Uz compinit && compinit
 fi
 
 # Editor settings
