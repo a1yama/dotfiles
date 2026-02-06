@@ -77,6 +77,32 @@ fi
 "$HOME"/.tmux/plugins/tpm/bin/install_plugins
 
 ###########################################################
+# Install Neovim plugins (lazy.nvim)
+###########################################################
+log 'Install Neovim plugins'
+if command -v nvim >/dev/null 2>&1; then
+    nvim --headless "+Lazy! sync" +qa
+else
+    log 'neovim is not installed, skipping plugin installation'
+fi
+
+###########################################################
+# Install LSP servers (npm/gem)
+###########################################################
+log 'Install LSP servers'
+if command -v npm >/dev/null 2>&1; then
+    npm install -g typescript-language-server typescript
+else
+    log 'npm is not installed, skipping typescript-language-server'
+fi
+
+if command -v gem >/dev/null 2>&1; then
+    gem install ruby-lsp
+else
+    log 'gem is not installed, skipping ruby-lsp'
+fi
+
+###########################################################
 # create local config files
 ###########################################################
 log 'Create local config files'
