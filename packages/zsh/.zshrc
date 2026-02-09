@@ -18,6 +18,11 @@ fi
 autoload -Uz compinit add-zsh-hook is-at-least
 compinit
 
+# Initialize rbenv
+if command -v rbenv >/dev/null 2>&1; then
+  eval "$(rbenv init - zsh)"
+fi
+
 # Initialize starship and plugins after compinit
 eval "$(starship init zsh)"
 

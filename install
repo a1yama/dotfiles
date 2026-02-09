@@ -87,6 +87,23 @@ else
 fi
 
 ###########################################################
+# Setup rbenv and install Ruby
+###########################################################
+log 'Setup rbenv'
+if command -v rbenv >/dev/null 2>&1; then
+    eval "$(rbenv init - zsh)"
+
+    # Install latest stable Ruby if not already installed
+    if ! rbenv versions | grep -q "3.3"; then
+        log 'Installing Ruby 3.3.6 via rbenv'
+        rbenv install 3.3.6
+        rbenv global 3.3.6
+    fi
+else
+    log 'rbenv is not installed, skipping Ruby setup'
+fi
+
+###########################################################
 # Install LSP servers (npm/gem)
 ###########################################################
 log 'Install LSP servers'
@@ -96,10 +113,11 @@ else
     log 'npm is not installed, skipping typescript-language-server'
 fi
 
-if command -v gem >/dev/null 2>&1; then
+if command -v rbenv >/dev/null 2>&1; then
+    eval "$(rbenv init - zsh)"
     gem install ruby-lsp
 else
-    log 'gem is not installed, skipping ruby-lsp'
+    log 'rbenv is not installed, skipping ruby-lsp'
 fi
 
 ###########################################################
