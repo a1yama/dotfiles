@@ -4,6 +4,7 @@
       "List(*)",
       "Read(*)",
       "Search(*)",
+      "Web Search(*)",
       "Fetch(https://*)",
       "Bash(cd *)",
       "Bash(ls *)",
@@ -78,15 +79,6 @@
     ],
     "deny": []
   },
-  "statusLine": {
-    "type": "command",
-    "command": "~/dotfiles/packages/claude/.claude/statusline.sh"
-  },
-  "enabledPlugins": {
-    "typescript-lsp@claude-plugins-official": true,
-    "lua-lsp@claude-plugins-official": true
-  },
-  "alwaysThinkingEnabled": true,
   "hooks": {
     "Notification": [
       {
@@ -108,5 +100,14 @@
         ]
       }
     ]
-  }
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "~/dotfiles/packages/claude/.claude/statusline.sh"
+  },
+  "enabledPlugins": {
+    "typescript-lsp@claude-plugins-official": true,
+    "lua-lsp@claude-plugins-official": true
+  },
+  "alwaysThinkingEnabled": true
 }
