@@ -24,3 +24,33 @@ git commit -m "fix: 認証情報を含むGitHub URLのパース処理を修正"
 
 ## Development Philosophy
 
+- 独立したサブタスクが複数ある場合は、`claude-tmux spawn` で並列エージェントの活用を検討する
+
+## claude-tmux
+
+tmux内でClaude Codeのヘッドレスエージェントを並列実行するためのCLIツール。
+
+### サブコマンド
+
+| コマンド | 説明 |
+|---|---|
+| `claude-tmux spawn "タスク説明" [--name NAME] [--dir DIR]` | 新しいtmuxウィンドウでヘッドレスエージェントを起動 |
+| `claude-tmux issues 42 43 44` | 複数のGitHub Issueを並列エージェントで処理 |
+| `claude-tmux status` | 実行中のエージェント一覧と最新ログを表示 |
+| `claude-tmux logs <name>` | 特定エージェントのログを `less` で表示 |
+| `claude-tmux kill [name\|all]` | エージェントウィンドウを停止 |
+
+### スキル
+
+- `/spawn-agents タスクの説明` — タスクをサブタスクに分解し、`claude-tmux spawn` で並列エージェントを起動する
+
+### tmux キーバインド
+
+- `C-q a` — カレントディレクトリで新しいClaude Codeインタラクティブウィンドウを起動
+
+### 仕様
+
+- ログ出力先: `/tmp/claude-agents/<name>.log`
+- ウィンドウ名: `🤖<name>` でtmux内で識別可能
+- 完了時に macOS `say` で通知、`read` で待機
+- tmuxセッション外での実行時はエラー
