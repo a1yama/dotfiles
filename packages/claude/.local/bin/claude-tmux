@@ -1,0 +1,245 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+AGENT_PREFIX="🤖"
+LOG_DIR="/tmp/claude-agents"
+
+usage() {
+  cat <<'EOF'
+claude-tmux - tmux × Claude Code 並列エージェント管理
+
+Usage:
+  claude-tmux spawn "タスク説明"  [--name NAME] [--dir DIR]
+  claude-tmux issues 42 43 44
+  claude-tmux status
+  claude-tmux logs <name>
+  claude-tmux kill [name|all]
+
+Subcommands:
+  spawn   新しいtmuxウィンドウでヘッドレスエージェントを起動
+  issues  複数のGitHub Issueを並列エージェントで処理
+  status  実行中のエージェントウィンドウ一覧と最新ログを表示
+  logs    特定エージェントのログを less で表示
+  kill    エージェントウィンドウを停止
+EOF
+}
+
+require_tmux() {
+  if [[ -z "${TMUX:-}" ]]; then
+    echo "Error: tmuxセッション内で実行してください" >&2
+    exit 1
+  fi
+}
+
+ensure_log_dir() {
+  mkdir -p "$LOG_DIR"
+}
+
+# spawn: 新しいtmuxウィンドウでヘッドレスエージェントを起動
+cmd_spawn() {
+  require_tmux
+  ensure_log_dir
+
+  local name=""
+  local dir=""
+  local prompt=""
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --name)
+        name="$2"
+        shift 2
+        ;;
+      --dir)
+        dir="$2"
+        shift 2
+        ;;
+      *)
+        if [[ -z "$prompt" ]]; then
+          prompt="$1"
+        else
+          prompt="$prompt $1"
+        fi
+        shift
+        ;;
+    esac
+  done
+
+  if [[ -z "$prompt" ]]; then
+    echo "Error: タスク説明を指定してください" >&2
+    echo "Usage: claude-tmux spawn \"タスク説明\" [--name NAME] [--dir DIR]" >&2
+    exit 1
+  fi
+
+  if [[ -z "$name" ]]; then
+    name="agent-$(date +%s)"
+  fi
+
+  local window_name="${AGENT_PREFIX}${name}"
+  local log_file="${LOG_DIR}/${name}.log"
+  local work_dir="${dir:-$(pwd)}"
+
+  # プロンプトをファイルに書き出し（クォーティング問題を回避）
+  local prompt_file="${LOG_DIR}/${name}.prompt"
+  printf '%s' "$prompt" > "$prompt_file"
+
+  # エージェント実行用のラッパースクリプトを生成
+  local runner="${LOG_DIR}/${name}.runner.sh"
+  cat > "$runner" <<RUNNER
+#!/usr/bin/env bash
+name="${name}"
+log_file="${log_file}"
+prompt_file="${prompt_file}"
+
+echo "=== Claude Agent: \${name} ===" | tee "\${log_file}"
+echo "Prompt: \$(cat "\${prompt_file}")" | tee -a "\${log_file}"
+echo "Dir: \$(pwd)" | tee -a "\${log_file}"
+echo "---" | tee -a "\${log_file}"
+
+claude -p "\$(cat "\${prompt_file}")" 2>&1 | tee -a "\${log_file}"
+
+echo ""
+echo "=== 完了 ==="
+say "Claude agent \${name} が完了しました"
+rm -f "\${prompt_file}" "\${runner:-}"
+read -r -p "Enterで閉じる..."
+RUNNER
+  chmod +x "$runner"
+
+  tmux new-window -n "$window_name" -c "$work_dir" "$runner"
+
+  echo "Agent '${name}' を起動しました (window: ${window_name})"
+  echo "Log: ${log_file}"
+}
+
+# issues: 複数のGitHub Issueを並列エージェントで処理
+cmd_issues() {
+  require_tmux
+  ensure_log_dir
+
+  if [[ $# -eq 0 ]]; then
+    echo "Error: Issue番号を指定してください" >&2
+    echo "Usage: claude-tmux issues 42 43 44" >&2
+    exit 1
+  fi
+
+  for issue_num in "$@"; do
+    local prompt="GitHub Issue #${issue_num} を \`gh issue view ${issue_num}\` で確認し、内容に基づいてタスクを遂行してください。"
+    cmd_spawn "$prompt" --name "issue-${issue_num}"
+  done
+}
+
+# status: 実行中のエージェントウィンドウ一覧と最新ログを表示
+cmd_status() {
+  require_tmux
+
+  local windows
+  windows=$(tmux list-windows -F '#{window_name}' 2>/dev/null | grep "^${AGENT_PREFIX}" || true)
+
+  if [[ -z "$windows" ]]; then
+    echo "実行中のエージェントはありません"
+    return
+  fi
+
+  echo "=== 実行中のエージェント ==="
+  echo ""
+
+  while IFS= read -r window_name; do
+    local name="${window_name#${AGENT_PREFIX}}"
+    local log_file="${LOG_DIR}/${name}.log"
+
+    echo "  ${window_name}"
+    if [[ -f "$log_file" ]]; then
+      echo "    Log: ${log_file}"
+      echo "    最新:"
+      tail -3 "$log_file" 2>/dev/null | sed 's/^/      /'
+    fi
+    echo ""
+  done <<< "$windows"
+}
+
+# logs: 特定エージェントのログを less で表示
+cmd_logs() {
+  if [[ $# -eq 0 ]]; then
+    echo "Error: エージェント名を指定してください" >&2
+    echo "Usage: claude-tmux logs <name>" >&2
+    exit 1
+  fi
+
+  local name="$1"
+  local log_file="${LOG_DIR}/${name}.log"
+
+  if [[ ! -f "$log_file" ]]; then
+    echo "Error: ログファイルが見つかりません: ${log_file}" >&2
+    exit 1
+  fi
+
+  less +F "$log_file"
+}
+
+# kill: エージェントウィンドウを停止
+cmd_kill() {
+  require_tmux
+
+  if [[ $# -eq 0 ]]; then
+    echo "Error: エージェント名または 'all' を指定してください" >&2
+    echo "Usage: claude-tmux kill [name|all]" >&2
+    exit 1
+  fi
+
+  local target="$1"
+
+  if [[ "$target" == "all" ]]; then
+    local windows
+    windows=$(tmux list-windows -F '#{window_name}' 2>/dev/null | grep "^${AGENT_PREFIX}" || true)
+
+    if [[ -z "$windows" ]]; then
+      echo "実行中のエージェントはありません"
+      return
+    fi
+
+    while IFS= read -r window_name; do
+      tmux kill-window -t ":${window_name}" 2>/dev/null || true
+      echo "停止: ${window_name}"
+    done <<< "$windows"
+  else
+    local window_name="${AGENT_PREFIX}${target}"
+    if tmux kill-window -t ":${window_name}" 2>/dev/null; then
+      echo "停止: ${window_name}"
+    else
+      echo "Error: エージェント '${target}' が見つかりません" >&2
+      exit 1
+    fi
+  fi
+}
+
+# メインルーティング
+case "${1:-}" in
+  spawn)
+    shift
+    cmd_spawn "$@"
+    ;;
+  issues)
+    shift
+    cmd_issues "$@"
+    ;;
+  status)
+    cmd_status
+    ;;
+  logs)
+    shift
+    cmd_logs "$@"
+    ;;
+  kill)
+    shift
+    cmd_kill "$@"
+    ;;
+  -h|--help|"")
+    usage
+    ;;
+  *)
+    echo "Error: 不明なサブコマンド '$1'" >&2
+    usage
+    exit 1
+    ;;
+esac
