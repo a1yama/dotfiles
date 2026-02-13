@@ -58,6 +58,7 @@ if git -C "$cwd" rev-parse --git-dir >/dev/null 2>&1; then
     # ==============================================================
     # Line 2: GitHub PR info (only if PR exists)
     # ==============================================================
+    pr_line=""
     if command -v gh >/dev/null 2>&1 && [ -n "$branch" ]; then
         {
             pr_json=$(gh pr list --head "$branch" --state open --json number,url,state,statusCheckRollup,reviewDecision --limit 1 2>/dev/null)
@@ -91,7 +92,7 @@ if git -C "$cwd" rev-parse --git-dir >/dev/null 2>&1; then
                     fi
                 fi
 
-                echo -e "\033[1;35mPR#${pr_number}\033[0m ${pr_url} ${review_label}${ci_status}"
+                pr_line="${pr_url} ${review_label}${ci_status}"
             fi
         } 2>/tmp/claude-statusline/pr-error.log
     fi
@@ -100,6 +101,7 @@ else
 fi
 
 echo -e "$git_line"
+[ -n "$pr_line" ] && echo -e "$pr_line"
 
 # ==============================================================
 # Line 3: Claude Code info
