@@ -1,0 +1,149 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# stdin から hook イベントの JSON を読み取る
+input=$(cat)
+
+# デバッグログ
+mkdir -p /tmp/claude-notify
+echo "$input" > /tmp/claude-notify/last.json
+
+event=$(echo "$input" | jq -r '.hook_event_name // "unknown"')
+cwd=$(echo "$input" | jq -r '.cwd // ""')
+dir_name="${cwd/#$HOME/\~}"
+session_id=$(echo "$input" | jq -r '.session_id // ""')
+short_session="${session_id:0:8}"
+transcript_path=$(echo "$input" | jq -r '.transcript_path // ""')
+
+# トランスクリプトから直近のメッセージを取得
+extract_last_message() {
+  local role="$1"
+  local max_chars="${2:-150}"
+  if [[ -n "$transcript_path" && -f "$transcript_path" ]]; then
+    local msg
+    msg=$(tail -50 "$transcript_path" 2>/dev/null \
+      | jq -r "select(.type == \"$role\") | .message.content | if type == \"array\" then map(select(.type == \"text\") | .text) | join(\"\") elif type == \"string\" then . else empty end" 2>/dev/null \
+      | tail -1)
+    # 改行を除去して先頭を切り出し
+    msg=$(echo "$msg" | tr '\n' ' ' | head -c "$max_chars")
+    echo "$msg"
+  fi
+}
+
+last_user=$(extract_last_message "user")
+last_assistant=$(extract_last_message "assistant")
+
+# イベントに応じたメッセージを組み立て
+case "$event" in
+  Stop)
+    title="完了"
+    emoji=":white_check_mark:"
+    color="65280"  # green
+    description="$last_assistant"
+    ;;
+  Notification)
+    message=$(echo "$input" | jq -r '.message // ""')
+    notification_type=$(echo "$input" | jq -r '.notification_type // ""')
+    # idle_prompt は通知不要
+    if [[ "$notification_type" == "idle_prompt" ]]; then
+      exit 0
+    fi
+    case "$notification_type" in
+      permission_prompt)
+        title="許可が必要です"
+        emoji=":lock:"
+        color="16776960"  # yellow
+        ;;
+      *)
+        title="通知"
+        emoji=":bell:"
+        color="5814783"  # blue
+        ;;
+    esac
+    description="$message"
+    ;;
+  *)
+    title="$event"
+    description=""
+    emoji=":robot_face:"
+    color="5814783"  # blue
+    ;;
+esac
+
+# ベル通知（既存の動作を維持）
+printf '\a' > /dev/tty 2>/dev/null || true
+
+# Slack 通知
+if [[ -n "${CLAUDE_SLACK_WEBHOOK_URL:-}" ]]; then
+  # last_user がある場合はコンテキストに追加
+  context_text=":file_folder: \`${dir_name}\` | :label: \`${short_session}\`"
+  [[ -n "$last_user" ]] && context_text=":speech_balloon: ${last_user}\n${context_text}"
+
+  slack_payload=$(jq -n \
+    --arg emoji "$emoji" \
+    --arg title "$title" \
+    --arg desc "$description" \
+    --arg ctx "$context_text" \
+    '{
+      blocks: [
+        {
+          type: "section",
+          text: {
+            type: "mrkdwn",
+            text: ($emoji + " *" + $title + "*\n" + $desc)
+          }
+        },
+        {
+          type: "context",
+          elements: [
+            {
+              type: "mrkdwn",
+              text: $ctx
+            }
+          ]
+        }
+      ]
+    }')
+  curl -s -X POST "$CLAUDE_SLACK_WEBHOOK_URL" \
+    -H 'Content-Type: application/json' \
+    -d "$slack_payload" \
+    >/dev/null 2>&1 &
+fi
+
+# Discord 通知
+if [[ -n "${CLAUDE_DISCORD_WEBHOOK_URL:-}" ]]; then
+  # fields を動的に構築
+  fields="[]"
+  if [[ -n "$last_user" ]]; then
+    fields=$(echo "$fields" | jq --arg v "$last_user" '. + [{ name: "Task", value: $v, inline: false }]')
+  fi
+  fields=$(echo "$fields" | jq \
+    --arg dir "$dir_name" \
+    --arg sid "$short_session" \
+    '. + [
+      { name: "Directory", value: ("`" + $dir + "`"), inline: true },
+      { name: "Session", value: ("`" + $sid + "`"), inline: true }
+    ]')
+
+  discord_payload=$(jq -n \
+    --arg title "$title" \
+    --arg desc "$description" \
+    --argjson color "$color" \
+    --argjson fields "$fields" \
+    '{
+      embeds: [
+        {
+          title: $title,
+          description: $desc,
+          color: $color,
+          fields: $fields
+        }
+      ]
+    }')
+  curl -s -X POST "$CLAUDE_DISCORD_WEBHOOK_URL" \
+    -H 'Content-Type: application/json' \
+    -d "$discord_payload" \
+    >/dev/null 2>&1 &
+fi
+
+wait
