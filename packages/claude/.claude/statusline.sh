@@ -9,7 +9,7 @@ echo "$input" > /tmp/claude-statusline/last.json
 
 # Parse basic info
 cwd=$(echo "$input" | jq -r '.workspace.current_dir')
-dir_name=$(basename "$cwd")
+dir_name="${cwd/#$HOME/~}"
 model=$(echo "$input" | jq -r '.model.display_name // .model.id // "unknown"')
 
 # Parse token usage

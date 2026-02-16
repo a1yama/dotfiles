@@ -3,8 +3,8 @@
     "allow": [
       "List(*)",
       "Read(*)",
-      "Search(*)",
-      "Web Search(*)",
+      "WebSearch",
+      "WebFetch(domain:*)",
       "Fetch(https://*)",
       "Bash(cd *)",
       "Bash(ls *)",
@@ -85,7 +85,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "printf '\\a' > /dev/tty"
+            "command": "claude-notify"
           }
         ]
       }
@@ -95,7 +95,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "printf '\\a' > /dev/tty"
+            "command": "claude-notify"
           }
         ]
       }
@@ -107,7 +107,8 @@
   },
   "enabledPlugins": {
     "typescript-lsp@claude-plugins-official": true,
-    "lua-lsp@claude-plugins-official": true
+    "lua-lsp@claude-plugins-official": true,
+    "gopls-lsp@claude-plugins-official": true
   },
   "alwaysThinkingEnabled": true
 }
