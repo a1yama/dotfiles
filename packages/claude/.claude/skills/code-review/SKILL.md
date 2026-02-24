@@ -26,6 +26,17 @@ git status --short
 3. **可読性・保守性** — 不明瞭な命名、不必要な複雑さ、過剰な抽象化
 4. **一貫性** — 既存コードベースのスタイル・パターンとの整合性
 
+## 言語固有のチェックポイント
+
+変更されたファイルの言語に応じて、`languages/` ディレクトリ内の該当ファイルを参照してください:
+- Go → `languages/go.md`
+- TypeScript/JavaScript → `languages/typescript.md`
+- PHP → `languages/php.md`
+- Python → `languages/python.md`
+- Rust → `languages/rust.md`
+
+各ファイルには、言語特有のよくあるミスと参考資料がまとめられています。
+
 ## 出力フォーマット
 
 問題がある場合のみ報告してください。問題がなければ「問題なし」と報告してください。
@@ -37,3 +48,8 @@ git status --short
 内容: 問題の説明
 提案: 修正案
 ```
+
+---
+
+**レビュー後のフィードバック:**
+このレビューで見逃したミスや新たに気づいた落とし穴があれば、`/update-review-checklist` スキルでチェックリストに追加してください。
