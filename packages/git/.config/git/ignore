@@ -1,4 +1,5 @@
 .DS_Store
 .idea
+.takt
 
 **/.claude/settings.local.json
