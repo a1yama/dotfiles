@@ -32,6 +32,7 @@ movements:
           format: plan
   - name: implement
     edit: true
+    model: opus
     persona: coder
     policy:
       - coding
@@ -60,6 +61,7 @@ movements:
           format: coder-scope
   - name: review
     edit: false
+    model: opus
     persona: supervisor
     policy: review
     allowed_tools:
@@ -81,6 +83,7 @@ movements:
           use_judge: false
   - name: fix
     edit: true
+    model: opus
     persona: coder
     policy:
       - coding
