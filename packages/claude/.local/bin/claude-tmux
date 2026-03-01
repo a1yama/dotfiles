@@ -3,20 +3,21 @@ set -euo pipefail
 
 AGENT_PREFIX="🤖"
 LOG_DIR="/tmp/claude-agents"
+SKILL_DIR="$HOME/.claude/skills/code-review"
 
 usage() {
   cat <<'EOF'
 claude-tmux - tmux × Claude Code 並列エージェント管理
 
 Usage:
-  claude-tmux spawn "タスク説明"  [--name NAME] [--dir DIR]
+  claude-tmux spawn "タスク説明"  [--name NAME] [--dir DIR] [--no-review]
   claude-tmux issues 42 43 44
   claude-tmux status
   claude-tmux logs <name>
   claude-tmux kill [name|all]
 
 Subcommands:
-  spawn   新しいtmuxウィンドウでヘッドレスエージェントを起動
+  spawn   新しいtmuxウィンドウでヘッドレスエージェントを起動（実装後に自動レビュー）
   issues  複数のGitHub Issueを並列エージェントで処理
   status  実行中のエージェントウィンドウ一覧と最新ログを表示
   logs    特定エージェントのログを less で表示
@@ -48,6 +49,7 @@ cmd_spawn() {
   local name=""
   local dir=""
   local prompt=""
+  local no_review="false"
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -58,6 +60,10 @@ cmd_spawn() {
       --dir)
         dir="$2"
         shift 2
+        ;;
+      --no-review)
+        no_review="true"
+        shift
         ;;
       *)
         if [[ -z "$prompt" ]]; then
@@ -105,6 +111,58 @@ echo "---" | tee -a "\${log_file}"
 # エージェントはファイルの作成・編集を確認なしで実行する。
 # Bash等の他ツールは許可されていないため、ヘッドレスモードではスキップされる。
 claude -p --allowedTools "Edit Write" "\$(cat "\${prompt_file}")" 2>&1 | tee -a "\${log_file}"
+
+echo ""
+echo "=== 実装完了 ===" | tee -a "\${log_file}"
+
+# 自動コードレビュー
+if [[ "${no_review}" != "true" ]]; then
+  changes=\$(git status --short 2>/dev/null || true)
+  if [[ -n "\${changes}" ]]; then
+    echo "=== コードレビュー開始 ===" | tee -a "\${log_file}"
+    review_file="${LOG_DIR}/\${name}.review-prompt"
+
+    # code-review スキル（~/.claude/skills/code-review/SKILL.md）を使用
+    if [[ -f "${SKILL_DIR}/SKILL.md" ]]; then
+      awk 'BEGIN{f=0} /^---$/{f++; next} f>=2' "${SKILL_DIR}/SKILL.md" > "\${review_file}"
+      echo "" >> "\${review_file}"
+      echo "言語固有のチェックポイントは ${SKILL_DIR}/languages/ にあります。" >> "\${review_file}"
+    else
+      echo "code-review スキルが見つかりません。基本レビューで実行します。" | tee -a "\${log_file}"
+      cat > "\${review_file}" <<'REVIEW_EOF'
+以下のコード変更をレビューしてください。
+問題がある場合のみ報告。問題がなければ「問題なし」と報告。
+各指摘: [重要度: high/medium/low] ファイルパス:行番号
+内容: 問題の説明 / 提案: 修正案
+REVIEW_EOF
+    fi
+
+    {
+      echo ""
+      echo "## git status"
+      git status --short 2>/dev/null
+      echo ""
+      echo "## git diff"
+      git diff 2>/dev/null
+      echo ""
+      echo "## git diff --cached"
+      git diff --cached 2>/dev/null
+      echo ""
+      echo "## 新規ファイル（未追跡）"
+      git status --short 2>/dev/null | grep '^??' | cut -c4- | while read -r f; do
+        echo "--- \$f ---"
+        cat "\$f" 2>/dev/null || true
+        echo ""
+      done
+    } >> "\${review_file}"
+
+    cat "\${review_file}" | claude -p --allowedTools "Read" 2>&1 | tee -a "\${log_file}"
+    rm -f "\${review_file}"
+    echo "=== レビュー完了 ===" | tee -a "\${log_file}"
+  else
+    echo "変更なし — レビューをスキップ" | tee -a "\${log_file}"
+  fi
+fi
 
 echo ""
 echo "=== 完了 ==="
