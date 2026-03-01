@@ -1,0 +1,17 @@
+piece: lean
+language: ja
+log_level: info
+provider: claude
+model: sonnet
+minimal_output: true
+runtime:
+  prepare:
+    - gradle
+    - node
+branch_name_strategy: ai
+interactive_preview_movements: 1
+concurrency: 1
+auto_fetch: false
+create_worktree: false
+auto_pr: false
+draft: false

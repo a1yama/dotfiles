@@ -21,6 +21,11 @@ Subcommands:
   status  実行中のエージェントウィンドウ一覧と最新ログを表示
   logs    特定エージェントのログを less で表示
   kill    エージェントウィンドウを停止
+
+Note:
+  spawn/issues で起動されるエージェントは Edit/Write が承認なしで許可されています。
+  エージェントはファイルの作成・編集を確認なしで実行します。
+  意図しないファイル変更のリスクがあるため、実行後に git diff で変更内容を確認してください。
 EOF
 }
 
@@ -96,7 +101,10 @@ echo "Prompt: \$(cat "\${prompt_file}")" | tee -a "\${log_file}"
 echo "Dir: \$(pwd)" | tee -a "\${log_file}"
 echo "---" | tee -a "\${log_file}"
 
-claude -p "\$(cat "\${prompt_file}")" 2>&1 | tee -a "\${log_file}"
+# NOTE: Edit/Write は承認なしで許可されている（--allowedTools）。
+# エージェントはファイルの作成・編集を確認なしで実行する。
+# Bash等の他ツールは許可されていないため、ヘッドレスモードではスキップされる。
+claude -p --allowedTools "Edit Write" "\$(cat "\${prompt_file}")" 2>&1 | tee -a "\${log_file}"
 
 echo ""
 echo "=== 完了 ==="
