@@ -24,6 +24,9 @@ alias mergefzf="git mgf"
 alias checkout="git cho"
 alias checkoutb="git cob"
 
+alias ctsp="claude-tmux spawn"
+alias ctst="claude-tmux status"
+
 switch() {
   local branch
   branch=$(git branch --all --format='%(refname:short)' | grep -v 'HEAD' | fzf --height=15 --reverse)

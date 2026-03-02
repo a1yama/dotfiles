@@ -109,6 +109,7 @@ fi
 log 'Install LSP servers'
 if command -v npm >/dev/null 2>&1; then
     npm install -g typescript-language-server typescript
+    npm install -g takt
 else
     log 'npm is not installed, skipping typescript-language-server'
 fi
