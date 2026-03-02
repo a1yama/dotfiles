@@ -2,30 +2,38 @@
 set -euo pipefail
 
 AGENT_PREFIX="🤖"
-LOG_DIR="/tmp/claude-agents"
+AGENTS_DIR="/tmp/claude-agents"
 SKILL_DIR="$HOME/.claude/skills/code-review"
 
 usage() {
   cat <<'EOF'
-claude-tmux - tmux × Claude Code 並列エージェント管理
+claude-tmux - tmux × Claude Code 並列エージェント管理（オーケストレーション対応）
 
 Usage:
   claude-tmux spawn "タスク説明"  [--name NAME] [--dir DIR] [--no-review]
   claude-tmux issues 42 43 44
   claude-tmux status
+  claude-tmux supervise
+  claude-tmux questions
+  claude-tmux answer <name> <回答>
   claude-tmux logs <name>
   claude-tmux kill [name|all]
+  claude-tmux clean
 
 Subcommands:
-  spawn   新しいtmuxウィンドウでヘッドレスエージェントを起動（実装後に自動レビュー）
-  issues  複数のGitHub Issueを並列エージェントで処理
-  status  実行中のエージェントウィンドウ一覧と最新ログを表示
-  logs    特定エージェントのログを less で表示
-  kill    エージェントウィンドウを停止
+  spawn      新しいtmuxペインでインタラクティブエージェントを起動（実装後に自動レビュー）
+  issues     複数のGitHub Issueを並列エージェントで処理
+  status     実行中のエージェント一覧とペイン生存確認
+  supervise  監督モード：質問待ちエージェントを検出して対話的に回答（推奨）
+  questions  質問待ちのエージェント一覧を表示（デバッグ用）
+  answer     質問に回答（answerファイル作成 + ペインに通知）（デバッグ用）
+  logs       特定エージェントのログを less で表示
+  kill       エージェントペイン停止とディレクトリ削除
+  clean      完了/死亡したエージェントのディレクトリをクリーンアップ
 
 Note:
-  spawn/issues で起動されるエージェントは Edit/Write が承認なしで許可されています。
-  エージェントはファイルの作成・編集を確認なしで実行します。
+  エージェントはインタラクティブモードでペイン分割実行されます。
+  質問は監督モード (supervise) が自動的に検出して処理します。
   意図しないファイル変更のリスクがあるため、実行後に git diff で変更内容を確認してください。
 EOF
 }
@@ -37,14 +45,24 @@ require_tmux() {
   fi
 }
 
-ensure_log_dir() {
-  mkdir -p "$LOG_DIR"
+ensure_agents_dir() {
+  mkdir -p "$AGENTS_DIR"
 }
 
-# spawn: 新しいtmuxウィンドウでヘッドレスエージェントを起動
+get_agent_dir() {
+  local name="$1"
+  echo "${AGENTS_DIR}/${name}"
+}
+
+is_pane_alive() {
+  local pane_id="$1"
+  tmux list-panes -a -F '#{pane_id}' 2>/dev/null | grep -q "^${pane_id}$"
+}
+
+# spawn: 新しいtmuxペインでインタラクティブエージェントを起動
 cmd_spawn() {
   require_tmux
-  ensure_log_dir
+  ensure_agents_dir
 
   local name=""
   local dir=""
@@ -86,102 +104,211 @@ cmd_spawn() {
     name="agent-$(date +%s)"
   fi
 
-  local window_name="${AGENT_PREFIX}${name}"
-  local log_file="${LOG_DIR}/${name}.log"
   local work_dir="${dir:-$(pwd)}"
+  local agent_dir="$(get_agent_dir "$name")"
 
-  # プロンプトをファイルに書き出し（クォーティング問題を回避）
-  local prompt_file="${LOG_DIR}/${name}.prompt"
+  # エージェントディレクトリ作成
+  mkdir -p "$agent_dir"
+
+  # プロンプトファイル作成
+  local prompt_file="${agent_dir}/prompt"
   printf '%s' "$prompt" > "$prompt_file"
 
-  # エージェント実行用のラッパースクリプトを生成
-  local runner="${LOG_DIR}/${name}.runner.sh"
-  cat > "$runner" <<RUNNER
+  # 拡張プロンプト作成
+  local enhanced_prompt="${prompt}
+
+---
+
+【重要】自律的な実装について：
+
+このタスクは自動実行モードで実行されています。以下のルールに従ってください：
+- ユーザーに質問せず、最善の判断で実装を進めてください
+- 技術選択が必要な場合は、一般的でメンテナンス性の高い選択を優先してください
+- セキュリティとシンプルさを重視してください
+
+【ツール使用の制限】
+- Bashツールの使用は極力避けてください
+- ファイルの読み取りはReadツール、検索はGrepツールを優先してください
+- どうしてもBashが必要な場合は、以下の手順で監督に確認してください：
+  1. Write ツールで ${agent_dir}/question に「Bashコマンド実行の承認: <コマンド内容>」を書き込む
+  2. 監督が ${agent_dir}/answer に回答を書き込むまで待機
+  3. Read ツールで ${agent_dir}/answer から回答を読み取り、承認されたら実行"
+
+  # プロンプトファイル作成
+  echo "$enhanced_prompt" > "${agent_dir}/enhanced_prompt"
+
+  # ラッパースクリプトを作成
+  local runner_script="${agent_dir}/runner.sh"
+  cat > "$runner_script" <<RUNNER
 #!/usr/bin/env bash
 name="${name}"
-log_file="${log_file}"
-prompt_file="${prompt_file}"
+agent_dir="${agent_dir}"
+prompt_file="\${agent_dir}/enhanced_prompt"
+log_file="\${agent_dir}/log"
 
-echo "=== Claude Agent: \${name} ===" | tee "\${log_file}"
-echo "Prompt: \$(cat "\${prompt_file}")" | tee -a "\${log_file}"
-echo "Dir: \$(pwd)" | tee -a "\${log_file}"
-echo "---" | tee -a "\${log_file}"
+echo "=== Claude Agent: \${name} ==="
+echo "Dir: \$(pwd)"
+echo "---"
 
-# NOTE: Edit/Write は承認なしで許可されている（--allowedTools）。
-# エージェントはファイルの作成・編集を確認なしで実行する。
-# Bash等の他ツールは許可されていないため、ヘッドレスモードではスキップされる。
-claude -p --allowedTools "Edit Write" "\$(cat "\${prompt_file}")" 2>&1 | tee -a "\${log_file}"
+# 過程を表示しながら実行（Edit/Write/Read自動承認）
+claude --allowedTools "Edit Write Read" < "\${prompt_file}"
 
 echo ""
-echo "=== 実装完了 ===" | tee -a "\${log_file}"
+echo "=== 実装完了 ==="
 
-# 自動コードレビュー
+# 自動コードレビュー（--no-reviewでスキップ）
 if [[ "${no_review}" != "true" ]]; then
   changes=\$(git status --short 2>/dev/null || true)
   if [[ -n "\${changes}" ]]; then
-    echo "=== コードレビュー開始 ===" | tee -a "\${log_file}"
-    review_file="${LOG_DIR}/\${name}.review-prompt"
-
-    # code-review スキル（~/.claude/skills/code-review/SKILL.md）を使用
-    if [[ -f "${SKILL_DIR}/SKILL.md" ]]; then
-      awk 'BEGIN{f=0} /^---$/{f++; next} f>=2' "${SKILL_DIR}/SKILL.md" > "\${review_file}"
-      echo "" >> "\${review_file}"
-      echo "言語固有のチェックポイントは ${SKILL_DIR}/languages/ にあります。" >> "\${review_file}"
-    else
-      echo "code-review スキルが見つかりません。基本レビューで実行します。" | tee -a "\${log_file}"
-      cat > "\${review_file}" <<'REVIEW_EOF'
-以下のコード変更をレビューしてください。
-問題がある場合のみ報告。問題がなければ「問題なし」と報告。
-各指摘: [重要度: high/medium/low] ファイルパス:行番号
-内容: 問題の説明 / 提案: 修正案
-REVIEW_EOF
-    fi
-
-    {
-      echo ""
-      echo "## git status"
-      git status --short 2>/dev/null
-      echo ""
-      echo "## git diff"
-      git diff 2>/dev/null
-      echo ""
-      echo "## git diff --cached"
-      git diff --cached 2>/dev/null
-      echo ""
-      echo "## 新規ファイル（未追跡）"
-      git status --short 2>/dev/null | grep '^??' | cut -c4- | while read -r f; do
-        echo "--- \$f ---"
-        cat "\$f" 2>/dev/null || true
-        echo ""
-      done
-    } >> "\${review_file}"
-
-    cat "\${review_file}" | claude -p --allowedTools "Read" 2>&1 | tee -a "\${log_file}"
-    rm -f "\${review_file}"
-    echo "=== レビュー完了 ===" | tee -a "\${log_file}"
+    echo "=== コードレビュー開始 ==="
+    echo "/code-review" | claude
+    echo "=== レビュー完了 ==="
   else
-    echo "変更なし — レビューをスキップ" | tee -a "\${log_file}"
+    echo "変更なし — レビューをスキップ"
   fi
 fi
 
 echo ""
 echo "=== 完了 ==="
-say "Claude agent \${name} が完了しました"
-rm -f "\${prompt_file}" "\${runner:-}"
+say "エージェント \${name} が完了しました"
 read -r -p "Enterで閉じる..."
 RUNNER
-  chmod +x "$runner"
+  chmod +x "$runner_script"
 
-  tmux new-window -n "$window_name" -c "$work_dir" "$runner"
+  # 新しいウィンドウを作成してラッパースクリプトを実行
+  local window_name="${AGENT_PREFIX}${name}"
+  tmux new-window -n "$window_name" -c "$work_dir" "$runner_script"
 
-  echo "Agent '${name}' を起動しました (window: ${window_name})"
-  echo "Log: ${log_file}"
+  # window nameを保存
+  echo "$window_name" > "${agent_dir}/window-name"
+
+  # statusファイル作成
+  echo "running" > "${agent_dir}/status"
+
+  echo "Agent '${name}' を起動しました (pane: ${pane_id})"
+  echo "Dir: ${agent_dir}"
+  echo ""
+  echo "監督: /supervise"
+}
+
+# supervise: 監督モード - 質問を検出して対話的に処理
+cmd_supervise() {
+  ensure_agents_dir
+
+  echo "=== 監督モード: 質問待ちエージェントをチェック ==="
+  echo ""
+
+  local questions_found=0
+
+  for agent_dir in "$AGENTS_DIR"/*/; do
+    if [[ ! -d "$agent_dir" ]]; then
+      continue
+    fi
+
+    local name=$(basename "$agent_dir")
+    local question_file="${agent_dir}question"
+    local answer_file="${agent_dir}answer"
+
+    if [[ -f "$question_file" ]] && [[ ! -f "$answer_file" ]]; then
+      questions_found=$((questions_found + 1))
+      local question_content=$(cat "$question_file")
+
+      echo "Agent: ${name}"
+      echo "Question:"
+      echo "${question_content}"
+      echo "---"
+    fi
+  done
+
+  if [[ $questions_found -eq 0 ]]; then
+    echo "質問待ちのエージェントはありません"
+    return 0
+  fi
+
+  echo ""
+  echo "${questions_found} 件の質問があります。"
+  echo ""
+  echo "推奨: /supervise スキルを使用すると、自動的に判断して回答できます。"
+}
+
+# questions: 質問待ちエージェント一覧
+cmd_questions() {
+  ensure_agents_dir
+
+  local found=0
+
+  for agent_dir in "$AGENTS_DIR"/*/; do
+    if [[ ! -d "$agent_dir" ]]; then
+      continue
+    fi
+
+    local name=$(basename "$agent_dir")
+    local question_file="${agent_dir}question"
+    local answer_file="${agent_dir}answer"
+
+    if [[ -f "$question_file" ]] && [[ ! -f "$answer_file" ]]; then
+      found=1
+      echo "=== Agent: ${name} ==="
+      echo "質問:"
+      cat "$question_file"
+      echo ""
+      echo "回答方法: claude-tmux answer ${name} \"回答内容\""
+      echo ""
+    fi
+  done
+
+  if [[ $found -eq 0 ]]; then
+    echo "質問待ちのエージェントはありません"
+  fi
+}
+
+# answer: 質問に回答
+cmd_answer() {
+  if [[ $# -lt 2 ]]; then
+    echo "Error: エージェント名と回答を指定してください" >&2
+    echo "Usage: claude-tmux answer <name> <回答>" >&2
+    exit 1
+  fi
+
+  local name="$1"
+  shift
+  local answer="$*"
+
+  local agent_dir="$(get_agent_dir "$name")"
+  local question_file="${agent_dir}/question"
+  local answer_file="${agent_dir}/answer"
+  local pane_id_file="${agent_dir}/pane-id"
+
+  if [[ ! -d "$agent_dir" ]]; then
+    echo "Error: エージェント '${name}' が見つかりません" >&2
+    exit 1
+  fi
+
+  if [[ ! -f "$question_file" ]]; then
+    echo "Error: エージェント '${name}' には質問がありません" >&2
+    exit 1
+  fi
+
+  # 回答をファイルに書き込み
+  printf '%s' "$answer" > "$answer_file"
+  echo "回答を ${answer_file} に書き込みました"
+
+  # ペインが生きている場合、通知を送信
+  if [[ -f "$pane_id_file" ]]; then
+    local pane_id=$(cat "$pane_id_file")
+    if is_pane_alive "$pane_id"; then
+      tmux send-keys -t "$pane_id" "" Enter
+      echo "ペイン ${pane_id} に通知を送信しました"
+    else
+      echo "Warning: ペインは既に終了しています"
+    fi
+  fi
 }
 
 # issues: 複数のGitHub Issueを並列エージェントで処理
 cmd_issues() {
   require_tmux
-  ensure_log_dir
+  ensure_agents_dir
 
   if [[ $# -eq 0 ]]; then
     echo "Error: Issue番号を指定してください" >&2
@@ -190,38 +317,106 @@ cmd_issues() {
   fi
 
   for issue_num in "$@"; do
-    local prompt="GitHub Issue #${issue_num} を \`gh issue view ${issue_num}\` で確認し、内容に基づいてタスクを遂行してください。"
+    local prompt="GitHub Issue #${issue_num} を gh issue view ${issue_num} で確認し、内容に基づいてタスクを遂行してください。"
     cmd_spawn "$prompt" --name "issue-${issue_num}"
   done
 }
 
-# status: 実行中のエージェントウィンドウ一覧と最新ログを表示
+# status: 実行中のエージェント一覧とペイン生存確認
 cmd_status() {
-  require_tmux
+  ensure_agents_dir
 
-  local windows
-  windows=$(tmux list-windows -F '#{window_name}' 2>/dev/null | grep "^${AGENT_PREFIX}" || true)
+  local count=0
 
-  if [[ -z "$windows" ]]; then
-    echo "実行中のエージェントはありません"
-    return
-  fi
-
-  echo "=== 実行中のエージェント ==="
+  echo "=== エージェント一覧 ==="
   echo ""
 
-  while IFS= read -r window_name; do
-    local name="${window_name#${AGENT_PREFIX}}"
-    local log_file="${LOG_DIR}/${name}.log"
-
-    echo "  ${window_name}"
-    if [[ -f "$log_file" ]]; then
-      echo "    Log: ${log_file}"
-      echo "    最新:"
-      tail -3 "$log_file" 2>/dev/null | sed 's/^/      /'
+  for agent_dir in "$AGENTS_DIR"/*/; do
+    if [[ ! -d "$agent_dir" ]]; then
+      continue
     fi
+
+    local name=$(basename "$agent_dir")
+    local pane_id_file="${agent_dir}/pane-id"
+    local status_file="${agent_dir}/status"
+    local question_file="${agent_dir}/question"
+    local answer_file="${agent_dir}/answer"
+
+    count=$((count + 1))
+
+    echo "  ${AGENT_PREFIX}${name}"
+
+    # ペイン生存確認
+    if [[ -f "$pane_id_file" ]]; then
+      local pane_id=$(cat "$pane_id_file")
+      if is_pane_alive "$pane_id"; then
+        echo "    Pane: ${pane_id} (alive)"
+      else
+        echo "    Pane: ${pane_id} (dead)"
+        echo "completed" > "$status_file"
+      fi
+    else
+      echo "    Pane: unknown"
+    fi
+
+    # ステータス
+    if [[ -f "$status_file" ]]; then
+      local status=$(cat "$status_file")
+      echo "    Status: ${status}"
+    fi
+
+    # 質問・回答の状態
+    if [[ -f "$question_file" ]] && [[ ! -f "$answer_file" ]]; then
+      echo "    ⚠️  質問待ち - '/supervise' で自動回答"
+    elif [[ -f "$answer_file" ]]; then
+      echo "    ✓ 回答済み"
+    fi
+
+    echo "    Dir: ${agent_dir}"
     echo ""
-  done <<< "$windows"
+  done
+
+  if [[ $count -eq 0 ]]; then
+    echo "エージェントはありません"
+  fi
+}
+
+# clean: 完了/死亡したエージェントのディレクトリをクリーンアップ
+cmd_clean() {
+  ensure_agents_dir
+
+  local cleaned=0
+
+  for agent_dir in "$AGENTS_DIR"/*/; do
+    if [[ ! -d "$agent_dir" ]]; then
+      continue
+    fi
+
+    local name=$(basename "$agent_dir")
+    local pane_id_file="${agent_dir}/pane-id"
+    local should_clean=0
+
+    if [[ -f "$pane_id_file" ]]; then
+      local pane_id=$(cat "$pane_id_file")
+      if ! is_pane_alive "$pane_id"; then
+        should_clean=1
+      fi
+    else
+      should_clean=1
+    fi
+
+    if [[ $should_clean -eq 1 ]]; then
+      echo "クリーンアップ: ${name}"
+      rm -rf "$agent_dir"
+      cleaned=$((cleaned + 1))
+    fi
+  done
+
+  if [[ $cleaned -eq 0 ]]; then
+    echo "クリーンアップするエージェントはありません"
+  else
+    echo "${cleaned} 件のエージェントをクリーンアップしました"
+  fi
 }
 
 # logs: 特定エージェントのログを less で表示
@@ -233,17 +428,19 @@ cmd_logs() {
   fi
 
   local name="$1"
-  local log_file="${LOG_DIR}/${name}.log"
+  local agent_dir="$(get_agent_dir "$name")"
+  local log_file="${agent_dir}/log"
 
   if [[ ! -f "$log_file" ]]; then
     echo "Error: ログファイルが見つかりません: ${log_file}" >&2
+    echo "Note: ログ機能は現在未実装です" >&2
     exit 1
   fi
 
   less +F "$log_file"
 }
 
-# kill: エージェントウィンドウを停止
+# kill: エージェントペイン停止とディレクトリ削除
 cmd_kill() {
   require_tmux
 
@@ -256,26 +453,45 @@ cmd_kill() {
   local target="$1"
 
   if [[ "$target" == "all" ]]; then
-    local windows
-    windows=$(tmux list-windows -F '#{window_name}' 2>/dev/null | grep "^${AGENT_PREFIX}" || true)
+    for agent_dir in "$AGENTS_DIR"/*/; do
+      if [[ ! -d "$agent_dir" ]]; then
+        continue
+      fi
 
-    if [[ -z "$windows" ]]; then
-      echo "実行中のエージェントはありません"
-      return
-    fi
+      local name=$(basename "$agent_dir")
+      local pane_id_file="${agent_dir}/pane-id"
 
-    while IFS= read -r window_name; do
-      tmux kill-window -t ":${window_name}" 2>/dev/null || true
-      echo "停止: ${window_name}"
-    done <<< "$windows"
+      if [[ -f "$pane_id_file" ]]; then
+        local pane_id=$(cat "$pane_id_file")
+        if is_pane_alive "$pane_id"; then
+          tmux kill-pane -t "$pane_id" 2>/dev/null || true
+          echo "停止: ${name} (${pane_id})"
+        fi
+      fi
+
+      rm -rf "$agent_dir"
+    done
   else
-    local window_name="${AGENT_PREFIX}${target}"
-    if tmux kill-window -t ":${window_name}" 2>/dev/null; then
-      echo "停止: ${window_name}"
-    else
+    local agent_dir="$(get_agent_dir "$target")"
+    local pane_id_file="${agent_dir}/pane-id"
+
+    if [[ ! -d "$agent_dir" ]]; then
       echo "Error: エージェント '${target}' が見つかりません" >&2
       exit 1
     fi
+
+    if [[ -f "$pane_id_file" ]]; then
+      local pane_id=$(cat "$pane_id_file")
+      if is_pane_alive "$pane_id"; then
+        tmux kill-pane -t "$pane_id" 2>/dev/null || true
+        echo "停止: ${target} (${pane_id})"
+      else
+        echo "Warning: ペインは既に終了しています"
+      fi
+    fi
+
+    rm -rf "$agent_dir"
+    echo "削除: ${agent_dir}"
   fi
 }
 
@@ -292,6 +508,16 @@ case "${1:-}" in
   status)
     cmd_status
     ;;
+  supervise)
+    cmd_supervise
+    ;;
+  questions)
+    cmd_questions
+    ;;
+  answer)
+    shift
+    cmd_answer "$@"
+    ;;
   logs)
     shift
     cmd_logs "$@"
@@ -299,6 +525,9 @@ case "${1:-}" in
   kill)
     shift
     cmd_kill "$@"
+    ;;
+  clean)
+    cmd_clean
     ;;
   -h|--help|"")
     usage
