@@ -21,7 +21,7 @@ Usage:
   claude-tmux clean
 
 Subcommands:
-  spawn      新しいtmuxペインでインタラクティブエージェントを起動（実装後に自動レビュー）
+  spawn      新しいtmuxウィンドウで監督+作業者ペインを起動（実装後に自動レビュー）
   issues     複数のGitHub Issueを並列エージェントで処理
   status     実行中のエージェント一覧とペイン生存確認
   supervise  監督モード：質問待ちエージェントを検出して対話的に回答（推奨）
@@ -59,7 +59,7 @@ is_pane_alive() {
   tmux list-panes -a -F '#{pane_id}' 2>/dev/null | grep -q "^${pane_id}$"
 }
 
-# spawn: 新しいtmuxペインでインタラクティブエージェントを起動
+# spawn: 新しいtmuxウィンドウで監督+作業者ペインを起動
 cmd_spawn() {
   require_tmux
   ensure_agents_dir
@@ -131,27 +131,27 @@ cmd_spawn() {
 - ファイルの読み取りはReadツール、検索はGrepツールを優先してください
 - どうしてもBashが必要な場合は、以下の手順で監督に確認してください：
   1. Write ツールで ${agent_dir}/question に「Bashコマンド実行の承認: <コマンド内容>」を書き込む
-  2. 監督が ${agent_dir}/answer に回答を書き込むまで待機
-  3. Read ツールで ${agent_dir}/answer から回答を読み取り、承認されたら実行"
+  2. 数秒待ってから Read ツールで ${agent_dir}/answer を確認してください
+  3. ファイルが存在しない場合は5秒待ってから再度確認してください（最大3回）
+  4. 回答を読み取り、承認されたら実行してください"
 
   # プロンプトファイル作成
   echo "$enhanced_prompt" > "${agent_dir}/enhanced_prompt"
 
-  # ラッパースクリプトを作成
+  # 作業者ラッパースクリプトを作成
   local runner_script="${agent_dir}/runner.sh"
   cat > "$runner_script" <<RUNNER
 #!/usr/bin/env bash
 name="${name}"
 agent_dir="${agent_dir}"
 prompt_file="\${agent_dir}/enhanced_prompt"
-log_file="\${agent_dir}/log"
 
-echo "=== Claude Agent: \${name} ==="
+echo "=== 作業者: \${name} ==="
 echo "Dir: \$(pwd)"
 echo "---"
 
-# 過程を表示しながら実行（Edit/Write/Read自動承認）
-claude --allowedTools "Edit Write Read" < "\${prompt_file}"
+# 過程を表示しながら実行（Edit/Write/Read/Grep/Glob自動承認）
+claude --allowedTools "Edit,Write,Read,Grep,Glob,WebSearch,WebFetch" < "\${prompt_file}"
 
 echo ""
 echo "=== 実装完了 ==="
@@ -161,13 +161,14 @@ if [[ "${no_review}" != "true" ]]; then
   changes=\$(git status --short 2>/dev/null || true)
   if [[ -n "\${changes}" ]]; then
     echo "=== コードレビュー開始 ==="
-    echo "/code-review" | claude
+    echo "/code-review" | claude --allowedTools "Read,Grep,Glob,WebSearch,WebFetch"
     echo "=== レビュー完了 ==="
   else
     echo "変更なし — レビューをスキップ"
   fi
 fi
 
+echo "completed" > "\${agent_dir}/status"
 echo ""
 echo "=== 完了 ==="
 say "エージェント \${name} が完了しました"
@@ -175,20 +176,96 @@ read -r -p "Enterで閉じる..."
 RUNNER
   chmod +x "$runner_script"
 
-  # 新しいウィンドウを作成してラッパースクリプトを実行
+  # 監督スクリプトを作成
+  local supervisor_script="${agent_dir}/supervisor.sh"
+  cat > "$supervisor_script" <<SUPERVISOR
+#!/usr/bin/env bash
+name="${name}"
+agent_dir="${agent_dir}"
+worker_pane_id_file="\${agent_dir}/worker-pane-id"
+question_file="\${agent_dir}/question"
+answer_file="\${agent_dir}/answer"
+
+echo "=== 監督: \${name} ==="
+echo "作業者の承認リクエストを監視中..."
+echo ""
+
+while true; do
+  # 作業者ペインの生存確認
+  if [[ -f "\${worker_pane_id_file}" ]]; then
+    worker_pane=\$(cat "\${worker_pane_id_file}")
+    if ! tmux list-panes -a -F '#{pane_id}' 2>/dev/null | grep -q "^\${worker_pane}\\\$"; then
+      echo ""
+      echo "=== 作業者が終了しました ==="
+      echo "completed" > "\${agent_dir}/status"
+      break
+    fi
+  fi
+
+  # 承認リクエストの検出
+  if [[ -f "\${question_file}" ]] && [[ ! -f "\${answer_file}" ]]; then
+    question_content=\$(cat "\${question_file}")
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "📋 承認リクエスト検出"
+    echo ""
+    echo "\${question_content}"
+    echo ""
+    echo "判断中..."
+
+    # claude -p で判断（エラー時は安全のため却下）
+    answer=\$(claude -p "あなたは監督エージェントです。作業者からの以下の承認リクエストを判断してください。
+
+リクエスト内容:
+\${question_content}
+
+判断基準:
+- セキュリティ上の問題がないか
+- 破壊的な操作ではないか
+- タスクの目的に合致しているか
+
+承認する場合は「承認: <簡潔な理由>」、却下する場合は「却下: <理由>」と回答してください。" 2>&1) || {
+      echo "警告: 監督判断に失敗しました" >&2
+      answer="却下: claude -p の実行に失敗しました。手動で確認してください"
+    }
+
+    # 回答を書き込み
+    printf '%s' "\${answer}" > "\${answer_file}"
+    echo "✅ 回答: \${answer}"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+
+    # 10秒後にクリーンアップ（次の質問に備える）
+    (sleep 10 && rm -f "\${question_file}" "\${answer_file}") &
+  fi
+
+  sleep 3
+done
+
+echo ""
+say "監督 \${name} が終了しました"
+read -r -p "Enterで閉じる..."
+SUPERVISOR
+  chmod +x "$supervisor_script"
+
+  # 新しいウィンドウを作成して作業者を起動
   local window_name="${AGENT_PREFIX}${name}"
-  tmux new-window -n "$window_name" -c "$work_dir" "$runner_script"
+  local worker_pane_id
+  worker_pane_id=$(tmux new-window -n "$window_name" -c "$work_dir" -P -F '#{pane_id}' "$runner_script")
 
-  # window nameを保存
+  # 監督ペインを左側に追加（35%幅）
+  local supervisor_pane_id
+  supervisor_pane_id=$(tmux split-window -hb -l 35% -t "$worker_pane_id" -c "$work_dir" -P -F '#{pane_id}' "$supervisor_script")
+
+  # メタデータ保存
   echo "$window_name" > "${agent_dir}/window-name"
-
-  # statusファイル作成
+  echo "$worker_pane_id" > "${agent_dir}/worker-pane-id"
+  echo "$supervisor_pane_id" > "${agent_dir}/supervisor-pane-id"
   echo "running" > "${agent_dir}/status"
 
-  echo "Agent '${name}' を起動しました (pane: ${pane_id})"
-  echo "Dir: ${agent_dir}"
-  echo ""
-  echo "監督: /supervise"
+  echo "Agent '${name}' を起動しました"
+  echo "  作業者ペイン: ${worker_pane_id}"
+  echo "  監督ペイン:   ${supervisor_pane_id}"
+  echo "  Dir: ${agent_dir}"
 }
 
 # supervise: 監督モード - 質問を検出して対話的に処理
@@ -206,8 +283,8 @@ cmd_supervise() {
     fi
 
     local name=$(basename "$agent_dir")
-    local question_file="${agent_dir}question"
-    local answer_file="${agent_dir}answer"
+    local question_file="${agent_dir}/question"
+    local answer_file="${agent_dir}/answer"
 
     if [[ -f "$question_file" ]] && [[ ! -f "$answer_file" ]]; then
       questions_found=$((questions_found + 1))
@@ -243,8 +320,8 @@ cmd_questions() {
     fi
 
     local name=$(basename "$agent_dir")
-    local question_file="${agent_dir}question"
-    local answer_file="${agent_dir}answer"
+    local question_file="${agent_dir}/question"
+    local answer_file="${agent_dir}/answer"
 
     if [[ -f "$question_file" ]] && [[ ! -f "$answer_file" ]]; then
       found=1
@@ -277,7 +354,7 @@ cmd_answer() {
   local agent_dir="$(get_agent_dir "$name")"
   local question_file="${agent_dir}/question"
   local answer_file="${agent_dir}/answer"
-  local pane_id_file="${agent_dir}/pane-id"
+  local worker_pane_file="${agent_dir}/worker-pane-id"
 
   if [[ ! -d "$agent_dir" ]]; then
     echo "Error: エージェント '${name}' が見つかりません" >&2
@@ -293,14 +370,14 @@ cmd_answer() {
   printf '%s' "$answer" > "$answer_file"
   echo "回答を ${answer_file} に書き込みました"
 
-  # ペインが生きている場合、通知を送信
-  if [[ -f "$pane_id_file" ]]; then
-    local pane_id=$(cat "$pane_id_file")
-    if is_pane_alive "$pane_id"; then
-      tmux send-keys -t "$pane_id" "" Enter
-      echo "ペイン ${pane_id} に通知を送信しました"
+  # 作業者ペインが生きている場合、通知を送信
+  if [[ -f "$worker_pane_file" ]]; then
+    local worker_pane=$(cat "$worker_pane_file")
+    if is_pane_alive "$worker_pane"; then
+      tmux send-keys -t "$worker_pane" "" Enter
+      echo "ペイン ${worker_pane} に通知を送信しました"
     else
-      echo "Warning: ペインは既に終了しています"
+      echo "Warning: 作業者ペインは既に終了しています"
     fi
   fi
 }
@@ -337,7 +414,8 @@ cmd_status() {
     fi
 
     local name=$(basename "$agent_dir")
-    local pane_id_file="${agent_dir}/pane-id"
+    local worker_pane_file="${agent_dir}/worker-pane-id"
+    local supervisor_pane_file="${agent_dir}/supervisor-pane-id"
     local status_file="${agent_dir}/status"
     local question_file="${agent_dir}/question"
     local answer_file="${agent_dir}/answer"
@@ -346,17 +424,27 @@ cmd_status() {
 
     echo "  ${AGENT_PREFIX}${name}"
 
-    # ペイン生存確認
-    if [[ -f "$pane_id_file" ]]; then
-      local pane_id=$(cat "$pane_id_file")
-      if is_pane_alive "$pane_id"; then
-        echo "    Pane: ${pane_id} (alive)"
+    # 作業者ペイン生存確認
+    if [[ -f "$worker_pane_file" ]]; then
+      local worker_pane=$(cat "$worker_pane_file")
+      if is_pane_alive "$worker_pane"; then
+        echo "    作業者: ${worker_pane} (alive)"
       else
-        echo "    Pane: ${pane_id} (dead)"
+        echo "    作業者: ${worker_pane} (dead)"
         echo "completed" > "$status_file"
       fi
     else
-      echo "    Pane: unknown"
+      echo "    作業者: unknown"
+    fi
+
+    # 監督ペイン生存確認
+    if [[ -f "$supervisor_pane_file" ]]; then
+      local supervisor_pane=$(cat "$supervisor_pane_file")
+      if is_pane_alive "$supervisor_pane"; then
+        echo "    監督:   ${supervisor_pane} (alive)"
+      else
+        echo "    監督:   ${supervisor_pane} (dead)"
+      fi
     fi
 
     # ステータス
@@ -367,7 +455,7 @@ cmd_status() {
 
     # 質問・回答の状態
     if [[ -f "$question_file" ]] && [[ ! -f "$answer_file" ]]; then
-      echo "    ⚠️  質問待ち - '/supervise' で自動回答"
+      echo "    ⚠️  承認待ち"
     elif [[ -f "$answer_file" ]]; then
       echo "    ✓ 回答済み"
     fi
@@ -393,12 +481,12 @@ cmd_clean() {
     fi
 
     local name=$(basename "$agent_dir")
-    local pane_id_file="${agent_dir}/pane-id"
+    local worker_pane_file="${agent_dir}/worker-pane-id"
     local should_clean=0
 
-    if [[ -f "$pane_id_file" ]]; then
-      local pane_id=$(cat "$pane_id_file")
-      if ! is_pane_alive "$pane_id"; then
+    if [[ -f "$worker_pane_file" ]]; then
+      local worker_pane=$(cat "$worker_pane_file")
+      if ! is_pane_alive "$worker_pane"; then
         should_clean=1
       fi
     else
@@ -440,7 +528,7 @@ cmd_logs() {
   less +F "$log_file"
 }
 
-# kill: エージェントペイン停止とディレクトリ削除
+# kill: エージェントウィンドウ停止とディレクトリ削除
 cmd_kill() {
   require_tmux
 
@@ -459,40 +547,49 @@ cmd_kill() {
       fi
 
       local name=$(basename "$agent_dir")
-      local pane_id_file="${agent_dir}/pane-id"
-
-      if [[ -f "$pane_id_file" ]]; then
-        local pane_id=$(cat "$pane_id_file")
-        if is_pane_alive "$pane_id"; then
-          tmux kill-pane -t "$pane_id" 2>/dev/null || true
-          echo "停止: ${name} (${pane_id})"
-        fi
-      fi
-
+      kill_agent_window "$agent_dir" "$name"
       rm -rf "$agent_dir"
     done
   else
     local agent_dir="$(get_agent_dir "$target")"
-    local pane_id_file="${agent_dir}/pane-id"
 
     if [[ ! -d "$agent_dir" ]]; then
       echo "Error: エージェント '${target}' が見つかりません" >&2
       exit 1
     fi
 
-    if [[ -f "$pane_id_file" ]]; then
-      local pane_id=$(cat "$pane_id_file")
-      if is_pane_alive "$pane_id"; then
-        tmux kill-pane -t "$pane_id" 2>/dev/null || true
-        echo "停止: ${target} (${pane_id})"
-      else
-        echo "Warning: ペインは既に終了しています"
-      fi
-    fi
-
+    kill_agent_window "$agent_dir" "$target"
     rm -rf "$agent_dir"
     echo "削除: ${agent_dir}"
   fi
+}
+
+# ウィンドウ単位でエージェントを停止するヘルパー
+kill_agent_window() {
+  local agent_dir="$1"
+  local name="$2"
+  local window_name_file="${agent_dir}/window-name"
+
+  # ウィンドウ名でkill（両ペインまとめて停止）
+  if [[ -f "$window_name_file" ]]; then
+    local window_name=$(cat "$window_name_file")
+    if tmux list-windows -F '#{window_name}' 2>/dev/null | grep -q "^${window_name}$"; then
+      tmux kill-window -t "=${window_name}" 2>/dev/null || true
+      echo "停止: ${name} (window: ${window_name})"
+      return
+    fi
+  fi
+
+  # フォールバック: 個別ペインをkill
+  for pane_file in "${agent_dir}/worker-pane-id" "${agent_dir}/supervisor-pane-id"; do
+    if [[ -f "$pane_file" ]]; then
+      local pane_id=$(cat "$pane_file")
+      if is_pane_alive "$pane_id"; then
+        tmux kill-pane -t "$pane_id" 2>/dev/null || true
+      fi
+    fi
+  done
+  echo "停止: ${name}"
 }
 
 # メインルーティング
