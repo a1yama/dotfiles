@@ -126,14 +126,22 @@ cmd_spawn() {
 - 技術選択が必要な場合は、一般的でメンテナンス性の高い選択を優先してください
 - セキュリティとシンプルさを重視してください
 
-【ツール使用の制限】
-- Bashツールの使用は極力避けてください
-- ファイルの読み取りはReadツール、検索はGrepツールを優先してください
-- どうしてもBashが必要な場合は、以下の手順で監督に確認してください：
-  1. Write ツールで ${agent_dir}/question に「Bashコマンド実行の承認: <コマンド内容>」を書き込む
+【実装完了後のレビューループ】$(if [[ "${no_review}" == "true" ]]; then echo "
+※ レビューはスキップしてください。実装完了後、/exit で終了してください。"; else echo "
+実装が完了したら、以下のループを実行してください：
+1. /code-review スキルを実行してコードレビューを行う
+2. 指摘事項がある場合は修正を実施する
+3. 修正後、再度 /code-review を実行する
+4. 指摘事項がなくなるまで 2-3 を繰り返す（最大3回）
+5. レビュー結果（最終）を Write ツールで ${agent_dir}/review-result に書き込む
+6. 完了したら /exit で終了する"; fi)
+
+【質問がある場合】
+- どうしても判断に迷う場合は、以下の手順で監督に確認してください：
+  1. Write ツールで ${agent_dir}/question に質問内容を書き込む
   2. 数秒待ってから Read ツールで ${agent_dir}/answer を確認してください
   3. ファイルが存在しない場合は5秒待ってから再度確認してください（最大3回）
-  4. 回答を読み取り、承認されたら実行してください"
+  4. 回答を読み取り、タスクを続行してください"
 
   # プロンプトファイル作成
   echo "$enhanced_prompt" > "${agent_dir}/enhanced_prompt"
@@ -150,29 +158,13 @@ echo "=== 作業者: \${name} ==="
 echo "Dir: \$(pwd)"
 echo "---"
 
-# 過程を表示しながら実行（Edit/Write/Read/Grep/Glob自動承認）
-claude --allowedTools "Edit,Write,Read,Grep,Glob,WebSearch,WebFetch" < "\${prompt_file}"
-
-echo ""
-echo "=== 実装完了 ==="
-
-# 自動コードレビュー（--no-reviewでスキップ）
-if [[ "${no_review}" != "true" ]]; then
-  changes=\$(git status --short 2>/dev/null || true)
-  if [[ -n "\${changes}" ]]; then
-    echo "=== コードレビュー開始 ==="
-    echo "/code-review" | claude --allowedTools "Read,Grep,Glob,WebSearch,WebFetch"
-    echo "=== レビュー完了 ==="
-  else
-    echo "変更なし — レビューをスキップ"
-  fi
-fi
+# 対話モードで実行（実装→レビュー→修正ループをセッション内で完結）
+claude --allowedTools "Edit,Write,Read,Grep,Glob,Bash,WebSearch,WebFetch" < "\${prompt_file}"
 
 echo "completed" > "\${agent_dir}/status"
 echo ""
 echo "=== 完了 ==="
 say "エージェント \${name} が完了しました"
-read -r -p "Enterで閉じる..."
 RUNNER
   chmod +x "$runner_script"
 
@@ -200,6 +192,18 @@ while true; do
       echo "completed" > "\${agent_dir}/status"
       break
     fi
+  fi
+
+  # レビュー結果の検出
+  local review_file="\${agent_dir}/review-result"
+  if [[ -f "\${review_file}" ]] && [[ ! -f "\${agent_dir}/review-notified" ]]; then
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "📝 コードレビュー結果"
+    echo ""
+    cat "\${review_file}"
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    touch "\${agent_dir}/review-notified"
   fi
 
   # 承認リクエストの検出

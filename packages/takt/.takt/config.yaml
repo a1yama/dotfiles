@@ -1,4 +1,6 @@
-log_level: info
+language: ja
+logging:
+  level: info
 provider: claude
 model: sonnet
 minimal_output: true

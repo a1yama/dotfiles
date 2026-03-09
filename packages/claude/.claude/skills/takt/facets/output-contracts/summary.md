@@ -1,18 +1,18 @@
 ```markdown
-# Task Completion Summary
+# タスク完了サマリー
 
-## Task
-{Original request in 1-2 sentences}
+## タスク
+{元の要求を1-2文で}
 
-## Result
-Completed
+## 結果
+完了
 
-## Changes
-| Type | File | Overview |
-|------|------|----------|
-| Create | `src/file.ts` | Brief description |
+## 変更内容
+| 種別 | ファイル | 概要 |
+|------|---------|------|
+| 作成 | `src/file.ts` | 概要説明 |
 
-## Verification Commands
+## 確認コマンド
 ```bash
 npm test
 npm run build

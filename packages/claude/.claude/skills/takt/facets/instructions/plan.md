@@ -1,25 +1,31 @@
-Analyze the task and formulate an implementation plan including design decisions.
+タスクを分析し、設計を含めた実装方針を立ててください。
 
-**Note:** If a Previous Response exists, this is a replan due to rejection.
-Revise the plan taking that feedback into account.
+**注意:** Previous Responseがある場合は差し戻しのため、
+その内容を踏まえて計画を見直してください（replan）。
 
-**Criteria for small tasks:**
-- Only 1-2 file changes
-- No design decisions needed
-- No technology selection needed
+**小規模タスクの判断基準:**
+- 1-2ファイルの変更のみ
+- 設計判断が不要
+- 技術選定が不要
 
-For small tasks, skip the design sections in the report.
+小規模タスクの場合は設計セクションを省略してください。
 
-**Actions:**
-1. Understand the task requirements
-   - **When reference material points to an external implementation, determine whether it is a "bug fix clue" or a "design approach to adopt". If narrowing scope beyond the reference material's intent, include the rationale in the plan report**
-   - **For each requirement, determine "change needed / not needed". If "not needed", cite the relevant code (file:line) as evidence. Claiming "already correct" without evidence is prohibited**
-2. Investigate code to resolve unknowns
-3. Identify the impact area
-4. Determine file structure and design patterns (if needed)
-5. Decide on the implementation approach
-   - Verify the implementation approach does not violate knowledge/policy constraints
-6. Include the following in coder implementation guidelines:
-   - Existing implementation patterns to reference (file:line). Always cite when similar processing already exists
-   - Impact area of changes. Especially when adding new parameters, enumerate all call sites that need wiring
-   - Anti-patterns to watch for in this specific task (if applicable)
+**やること:**
+1. **参照資料の読み込み（必須・最初に実行）**
+   - タスク指示書の「参照資料」セクションに記載されたファイル・ディレクトリを **Read/Glob で実際に開いて内容を確認する**
+   - ディレクトリが指定されている場合は中身を列挙し、該当ファイルを特定してから読む
+   - 参照資料が存在しない・見つからない場合はその旨を報告し、推測で代用しない
+   - **指示書に明記されていない別ファイルを「参照資料の代わり」として使うことは禁止**
+2. タスクの要件を理解する
+   - 参照資料の内容と現在の実装を突き合わせて差分を特定する
+   - **参照資料が外部実装を指す場合、「バグ修正の手がかり」か「採用すべき設計アプローチ」かを判断する。スコープを参照資料の意図より狭める場合は判断根拠を計画レポートに含めること**
+   - **要件ごとに「変更要/不要」を判定する。「不要」の場合は現行コードの該当箇所（ファイル:行）を根拠として示すこと。根拠なしの「既に正しい」は禁止**
+3. コードを調査して不明点を解決する
+4. 影響範囲を特定する
+5. ファイル構成・設計パターンを決定する（必要な場合）
+6. 実装アプローチを決める
+   - 実装アプローチがナレッジ・ポリシーの制約に違反しないか照合する
+7. Coder向けの実装ガイドラインに以下を含めること:
+   - 参照すべき既存実装パターン（ファイル:行）。同種の処理が既にある場合は必ず示す
+   - 変更の影響範囲。特に新しいパラメータを追加する場合、配線が必要な全箇所を列挙する
+   - このタスクで特に注意すべきアンチパターン（該当するものがあれば）

@@ -1,45 +1,45 @@
-# arbitrate -- Arbitration Instruction Template
+# arbitrate — 裁定 instruction テンプレート
 
-> **Purpose**: Arbitrate when the reviewer and coder disagree
-> **Agent**: architecture-reviewer (as a neutral third party)
-> **Prerequisite**: ai_fix judged "no fix needed" -> resolve the contradiction with the reviewer's findings
-
----
-
-## Template
-
-```
-ai_review (reviewer) and ai_fix (coder) disagree.
-
-- ai_review identified issues and REJECTed
-- ai_fix verified and judged "no fix needed"
-
-Review both outputs and arbitrate which judgment is valid.
-
-**Reports to review:**
-- AI review results: {report:ai-review.md}
-
-**Judgment criteria:**
-- Are ai_review's findings specific and pointing to real issues in the code?
-- Does ai_fix's rebuttal have evidence (file verification results, test results)?
-- Are the findings non-blocking (record only) level, or do they actually require fixes?
-```
+> **用途**: レビュアーとコーダーの意見が食い違った場合の裁定
+> **使用エージェント**: architecture-reviewer（第三者として）
+> **前提**: ai_fix が「修正不要」と判断 → レビュアーの指摘との矛盾を解決
 
 ---
 
-## Typical rules
+## テンプレート
+
+```
+ai_review（レビュアー）と ai_fix（コーダー）の意見が食い違っています。
+
+- ai_review は問題を指摘し REJECT しました
+- ai_fix は確認の上「修正不要」と判断しました
+
+両者の出力を確認し、どちらの判断が妥当か裁定してください。
+
+**参照するレポート:**
+- AIレビュー結果: {report:ai-review.md}
+
+**判断基準:**
+- ai_review の指摘が具体的で、コード上の実在する問題を指しているか
+- ai_fix の反論に根拠（ファイル確認結果、テスト結果）があるか
+- 指摘が非ブロッキング（記録のみ）レベルか、実際に修正が必要か
+```
+
+---
+
+## 典型的な rules
 
 ```yaml
 rules:
-  - condition: ai_review's findings are valid (should be fixed)
+  - condition: ai_reviewの指摘が妥当（修正すべき）
     next: ai_fix
-  - condition: ai_fix's judgment is valid (no fix needed)
+  - condition: ai_fixの判断が妥当（修正不要）
     next: reviewers
 ```
 
 ---
 
-## Notes
+## 注意
 
-- Change the report reference filename according to the piece
-- Use a third party for arbitration, not the reviewer or coder themselves
+- レポート参照先のファイル名はピースに応じて変更する
+- 裁定者はレビュアーでもコーダーでもない第三者を使う

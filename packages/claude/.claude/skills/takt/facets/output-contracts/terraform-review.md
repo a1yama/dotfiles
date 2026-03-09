@@ -1,47 +1,47 @@
 ```markdown
-# Terraform Convention Review
+# Terraform 規約レビュー
 
-## Result: APPROVE / REJECT
+## 結果: APPROVE / REJECT
 
-## Summary
-{Summarize the result in 1-2 sentences}
+## サマリー
+{1-2文で結果を要約}
 
-## Reviewed Aspects
-- [x] Variable declarations (type, description, sensitive)
-- [x] Resource naming (name_prefix pattern)
-- [x] File structure (one concern per file)
-- [x] Security settings
-- [x] Tag management
-- [x] lifecycle rules
-- [x] Cost trade-off documentation
+## 確認した観点
+- [x] 変数宣言（type, description, sensitive）
+- [x] リソース命名（name_prefix パターン）
+- [x] ファイル構成（1ファイル1関心事）
+- [x] セキュリティ設定
+- [x] タグ管理
+- [x] lifecycle ルール
+- [x] コストトレードオフ文書化
 
-## Current Iteration Findings (new)
-| # | finding_id | family_tag | Scope | Location | Issue | Fix Suggestion |
-|---|------------|------------|-------|----------|-------|----------------|
-| 1 | TF-NEW-file-L42 | tf-convention | In-scope | `modules/example/main.tf:42` | Issue description | Fix approach |
+## 今回の指摘（new）
+| # | finding_id | family_tag | スコープ | 場所 | 問題 | 修正案 |
+|---|------------|------------|---------|------|------|--------|
+| 1 | TF-NEW-file-L42 | tf-convention | スコープ内 | `modules/example/main.tf:42` | 問題の説明 | 修正方法 |
 
-Scope: "In-scope" (fixable in this change) / "Out-of-scope" (existing issue, non-blocking)
+スコープ: 「スコープ内」（今回修正可能）/ 「スコープ外」（既存問題・非ブロッキング）
 
-## Carry-over Findings (persists)
-| # | finding_id | family_tag | Previous Evidence | Current Evidence | Issue | Fix Suggestion |
-|---|------------|------------|-------------------|------------------|-------|----------------|
-| 1 | TF-PERSIST-file-L77 | tf-convention | `file.tf:77` | `file.tf:77` | Still unresolved | Apply prior fix plan |
+## 継続指摘（persists）
+| # | finding_id | family_tag | 前回根拠 | 今回根拠 | 問題 | 修正案 |
+|---|------------|------------|----------|----------|------|--------|
+| 1 | TF-PERSIST-file-L77 | tf-convention | `file.tf:77` | `file.tf:77` | 未解消 | 既存修正方針を適用 |
 
-## Resolved Findings (resolved)
-| finding_id | Resolution Evidence |
-|------------|---------------------|
-| TF-RESOLVED-file-L10 | `file.tf:10` now satisfies the convention |
+## 解消済み（resolved）
+| finding_id | 解消根拠 |
+|------------|----------|
+| TF-RESOLVED-file-L10 | `file.tf:10` は規約を満たす |
 
-## Reopened Findings (reopened)
-| # | finding_id | family_tag | Prior Resolution Evidence | Recurrence Evidence | Issue | Fix Suggestion |
-|---|------------|------------|--------------------------|---------------------|-------|----------------|
-| 1 | TF-REOPENED-file-L55 | tf-convention | `Previously fixed at file.tf:10` | `Recurred at file.tf:55` | Issue description | Fix approach |
+## 再開指摘（reopened）
+| # | finding_id | family_tag | 解消根拠（前回） | 再発根拠 | 問題 | 修正案 |
+|---|------------|------------|----------------|---------|------|--------|
+| 1 | TF-REOPENED-file-L55 | tf-convention | `前回: file.tf:10 で修正済み` | `file.tf:55 で再発` | 問題の説明 | 修正方法 |
 
-## Rejection Gate
-- REJECT is valid only when at least one finding exists in `new`, `persists`, or `reopened`
-- Findings without `finding_id` are invalid
+## REJECT判定条件
+- `new`、`persists`、または `reopened` が1件以上ある場合のみ REJECT 可
+- `finding_id` なしの指摘は無効
 ```
 
-**Cognitive load reduction rules:**
-- APPROVE → Summary only (5 lines or fewer)
-- REJECT → Include only relevant finding rows (30 lines or fewer)
+**認知負荷軽減ルール:**
+- APPROVE → サマリーのみ（5行以内）
+- REJECT → 該当指摘のみ表で記載（30行以内）

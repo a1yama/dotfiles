@@ -1,24 +1,24 @@
 ```markdown
-# Test Plan
+# テスト計画
 
-## Target Modules
-{List of modules to analyze}
+## 対象モジュール
+{分析対象のモジュール一覧}
 
-## Existing Test Analysis
-| Module | Existing Tests | Coverage Status |
-|--------|---------------|-----------------|
-| `src/xxx.ts` | `xxx.test.ts` | {Coverage status} |
+## 既存テストの分析
+| モジュール | 既存テスト | カバレッジ状況 |
+|-----------|-----------|--------------|
+| `src/xxx.ts` | `xxx.test.ts` | {カバー状況} |
 
-## Missing Test Cases
-| # | Target | Test Case | Priority | Reason |
-|---|--------|-----------|----------|--------|
-| 1 | `src/xxx.ts` | {Test case summary} | High/Medium/Low | {Reason} |
+## 不足テストケース
+| # | 対象 | テストケース | 優先度 | 理由 |
+|---|------|------------|--------|------|
+| 1 | `src/xxx.ts` | {テストケース概要} | 高/中/低 | {理由} |
 
-## Test Strategy
-- {Mock approach}
-- {Fixture design}
-- {Test helper usage}
+## テスト方針
+- {モック戦略}
+- {フィクスチャ設計}
+- {テストヘルパー活用}
 
-## Implementation Guidelines
-- {Concrete instructions for the test implementer}
+## 実装ガイドライン
+- {テスト実装者向けの具体的指示}
 ```

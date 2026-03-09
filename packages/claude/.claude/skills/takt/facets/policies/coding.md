@@ -1,128 +1,128 @@
-# Coding Policy
+# コーディングポリシー
 
-Prioritize correctness over speed, and code accuracy over ease of implementation.
+速さより丁寧さ、実装の楽さよりコードの正確さを優先する。
 
-## Principles
+## 原則
 
-| Principle | Criteria |
-|-----------|----------|
-| Simple > Easy | Prioritize readability over writability |
-| DRY | Eliminate essential duplication |
-| Comments | Why only. Never write What/How |
-| Function size | One function, one responsibility. ~30 lines |
-| File size | ~300 lines as a guideline. Be flexible depending on the task |
-| Boy Scout | Leave touched areas a little better than you found them |
-| Fail Fast | Detect errors early. Never swallow them |
-| Project scripts first | Use project-defined scripts for tool execution. Direct invocation is a last resort |
+| 原則 | 基準 |
+|------|------|
+| Simple > Easy | 書きやすさより読みやすさを優先 |
+| DRY | 本質的な重複は排除する |
+| コメント | Why のみ。What/How は書かない |
+| 関数サイズ | 1関数1責務。30行目安 |
+| ファイルサイズ | 目安として300行。タスクに応じて柔軟に |
+| ボーイスカウト | 触った箇所は少し改善して去る |
+| Fail Fast | エラーは早期に検出。握りつぶさない |
+| プロジェクトスクリプト優先 | ツール実行はプロジェクト定義のスクリプトを使う。直接実行は最後の手段 |
 
-## No Fallbacks or Default Arguments
+## フォールバック・デフォルト引数の禁止
 
-Do not write code that obscures the flow of values. Code where you must trace logic to understand a value is bad code.
+値の流れを不明瞭にするコードは書かない。ロジックを追わないと値が分からないのは悪いコード。
 
-### Prohibited Patterns
+### 禁止パターン
 
-| Pattern | Example | Problem |
-|---------|---------|---------|
-| Fallback for required data | `user?.id ?? 'unknown'` | Processing continues in a state that should error |
-| Default argument abuse | `function f(x = 'default')` where all call sites omit it | Impossible to tell where the value comes from |
-| Null coalesce with no way to pass | `options?.cwd ?? process.cwd()` with no path from callers | Always falls back (meaningless) |
-| Return empty value in try-catch | `catch { return ''; }` | Swallows the error |
-| Silent skip on inconsistent values | `if (a !== expected) return undefined` | Config errors silently ignored at runtime |
+| パターン | 例 | 問題 |
+|---------|-----|------|
+| 必須データへのフォールバック | `user?.id ?? 'unknown'` | エラーになるべき状態で処理が進む |
+| デフォルト引数の濫用 | `function f(x = 'default')` で全呼び出し元が省略 | 値がどこから来るか分からない |
+| null合体で渡す口がない | `options?.cwd ?? process.cwd()` で上位から渡す経路なし | 常にフォールバックになる（意味がない） |
+| try-catch で空値返却 | `catch { return ''; }` | エラーを握りつぶす |
+| 不整合な値のサイレントスキップ | `if (a !== expected) return undefined` | 設定ミスが実行時に黙って無視される |
 
-### Correct Implementation
+### 正しい実装
 
 ```typescript
-// ❌ Prohibited - Fallback for required data
+// ❌ 禁止 - 必須データへのフォールバック
 const userId = user?.id ?? 'unknown'
-processUser(userId)  // Processing continues with 'unknown'
+processUser(userId)  // 'unknown' で処理が進んでしまう
 
-// ✅ Correct - Fail Fast
+// ✅ 正しい - Fail Fast
 if (!user?.id) {
   throw new Error('User ID is required')
 }
 processUser(user.id)
 
-// ❌ Prohibited - Default argument where all call sites omit
+// ❌ 禁止 - デフォルト引数で全呼び出し元が省略
 function loadConfig(path = './config.json') { ... }
-// All call sites: loadConfig()  ← path is never passed
+// 全呼び出し元: loadConfig()  ← path を渡していない
 
-// ✅ Correct - Make it required and pass explicitly
+// ✅ 正しい - 必須引数にして明示的に渡す
 function loadConfig(path: string) { ... }
-// Call site: loadConfig('./config.json')  ← explicit
+// 呼び出し元: loadConfig('./config.json')  ← 明示的
 
-// ❌ Prohibited - Null coalesce with no way to pass
+// ❌ 禁止 - null合体で渡す口がない
 class Engine {
   constructor(config, options?) {
     this.cwd = options?.cwd ?? process.cwd()
-    // Problem: if there's no path to pass cwd via options, it always falls back to process.cwd()
+    // 問題: options に cwd を渡す経路がない場合、常に process.cwd() になる
   }
 }
 
-// ✅ Correct - Allow passing from the caller
+// ✅ 正しい - 上位から渡せるようにする
 function createEngine(config, cwd: string) {
   return new Engine(config, { cwd })
 }
 ```
 
-### Acceptable Cases
+### 許容されるケース
 
-- Default values when validating external input (user input, API responses)
-- Optional values in config files (explicitly designed to be omittable)
-- Only some call sites use the default argument (prohibited if all callers omit it)
+- 外部入力（ユーザー入力、API応答）のバリデーション時のデフォルト値
+- 設定ファイルのオプショナル値（明示的に省略可能と設計されている）
+- 一部の呼び出し元のみがデフォルト引数を使用（全員が省略している場合は禁止）
 
-### Decision Criteria
+### 判断基準
 
-1. **Is it required data?** → Throw an error, do not fall back
-2. **Do all call sites omit it?** → Remove the default, make it required
-3. **Is there a path to pass the value from above?** → If not, add a parameter or field
-4. **Do related values have invariants?** → Cross-validate at load/setup time
+1. **必須データか？** → フォールバックせず、エラーにする
+2. **全呼び出し元が省略しているか？** → デフォルト引数を削除し、必須にする
+3. **上位から値を渡す経路があるか？** → なければ引数・フィールドを追加
+4. **関連する値に不変条件があるか？** → ロード・セットアップ時にクロスバリデーションする
 
-## Abstraction
+## 抽象化
 
-### Think Before Adding Conditionals
+### 条件分岐を追加する前に考える
 
-- Does the same condition exist elsewhere? → Abstract with a pattern
-- Will more branches be added? → Use Strategy/Map pattern
-- Branching on type? → Replace with polymorphism
+- 同じ条件が他にもあるか → あればパターンで抽象化
+- 今後も分岐が増えそうか → Strategy/Mapパターンを使う
+- 型で分岐しているか → ポリモーフィズムで置換
 
 ```typescript
-// ❌ Growing conditionals
+// ❌ 条件分岐を増やす
 if (type === 'A') { ... }
 else if (type === 'B') { ... }
-else if (type === 'C') { ... }  // Yet another branch
+else if (type === 'C') { ... }  // また増えた
 
-// ✅ Abstract with a Map
+// ✅ Mapで抽象化
 const handlers = { A: handleA, B: handleB, C: handleC };
 handlers[type]?.();
 ```
 
-### Keep Abstraction Levels Consistent
+### 抽象度を揃える
 
-Within a single function, keep operations at the same granularity. Extract detailed operations into separate functions. Do not mix "what to do" with "how to do it."
+1つの関数内では同じ粒度の処理を並べる。詳細な処理は別関数に切り出す。「何をするか」と「どうやるか」を混ぜない。
 
 ```typescript
-// ❌ Mixed abstraction levels
+// ❌ 抽象度が混在
 function processOrder(order) {
-  validateOrder(order);           // High level
-  const conn = pool.getConnection(); // Low-level detail
-  conn.query('INSERT...');        // Low-level detail
+  validateOrder(order);           // 高レベル
+  const conn = pool.getConnection(); // 低レベル詳細
+  conn.query('INSERT...');        // 低レベル詳細
 }
 
-// ✅ Consistent abstraction levels
+// ✅ 抽象度を揃える
 function processOrder(order) {
   validateOrder(order);
-  saveOrder(order);  // Details are hidden
+  saveOrder(order);  // 詳細は隠蔽
 }
 ```
 
-In orchestration functions (Step 1 → Step 2 → Step 3), pay special attention. If an individual step's internals expand with conditional branches, extract that step into a function. The criterion is not the number of branches, but **whether the branch belongs at the function's abstraction level**.
+オーケストレーション関数（Step 1 → Step 2 → Step 3 と処理を並べる関数）では特に注意する。あるStepの内部に条件分岐が膨らんでいたら、そのStepを関数に抽出する。判定基準は分岐の数ではなく、**その分岐がその関数の抽象レベルに合っているか**。
 
 ```typescript
-// ❌ Low-level branching exposed in orchestration function
+// ❌ オーケストレーション関数に詳細な分岐が露出
 async function executePipeline(options) {
-  const task = resolveTask(options);      // Step 1: high level ✅
+  const task = resolveTask(options);      // Step 1: 高レベル ✅
 
-  // Step 2: low-level details exposed ❌
+  // Step 2: 低レベル詳細が露出 ❌
   let execCwd = cwd;
   if (options.createWorktree) {
     const result = await confirmAndCreateWorktree(cwd, task, true);
@@ -134,10 +134,10 @@ async function executePipeline(options) {
     createBranch(cwd, branch);
   }
 
-  await executeTask({ cwd: execCwd, ... }); // Step 3: high level ✅
+  await executeTask({ cwd: execCwd, ... }); // Step 3: 高レベル ✅
 }
 
-// ✅ Extract details, keep abstraction levels consistent
+// ✅ 詳細を関数に抽出し、抽象度を揃える
 async function executePipeline(options) {
   const task = resolveTask(options);
   const ctx = await resolveExecutionContext(options);
@@ -145,25 +145,25 @@ async function executePipeline(options) {
 }
 ```
 
-### Follow Language and Framework Conventions
+### 言語・フレームワークの作法に従う
 
-- Write Pythonic Python, idiomatic Kotlin, etc.
-- Use framework-recommended patterns
-- Prefer standard approaches over custom ones
-- When unsure, research. Do not implement based on guesses
+- Pythonなら Pythonic に、KotlinならKotlinらしく
+- フレームワークの推奨パターンを使う
+- 独自の書き方より標準的な書き方を選ぶ
+- 不明なときはリサーチする。推測で実装しない
 
-### Interface Design
+### インターフェース設計
 
-Design interfaces from the consumer's perspective. Do not expose internal implementation details.
+インターフェースは利用側の都合で設計する。実装側の内部構造を露出しない。
 
-| Principle | Criteria |
-|-----------|----------|
-| Consumer perspective | Do not force things the caller does not need |
-| Separate configuration from execution | Decide "what to use" at setup time, keep the execution API simple |
-| No method proliferation | Absorb differences through configuration, not multiple methods doing the same thing |
+| 原則 | 基準 |
+|------|------|
+| 利用者視点 | 呼び出し側が必要としないものを押し付けない |
+| 構成と実行の分離 | 「何を使うか」はセットアップ時に決定し、実行APIはシンプルに保つ |
+| メソッド増殖の禁止 | 同じことをする複数メソッドは構成の違いで吸収する |
 
 ```typescript
-// ❌ Method proliferation — pushing configuration differences onto the caller
+// ❌ メソッド増殖 — 構成の違いを呼び出し側に押し付けている
 interface NotificationService {
   sendEmail(to, subject, body)
   sendSMS(to, message)
@@ -171,7 +171,7 @@ interface NotificationService {
   sendSlack(channel, message)
 }
 
-// ✅ Separate configuration from execution
+// ✅ 構成と実行の分離
 interface NotificationService {
   setup(config: ChannelConfig): Channel
 }
@@ -180,80 +180,80 @@ interface Channel {
 }
 ```
 
-### Leaky Abstraction
+### 抽象化の漏れ
 
-If a specific implementation appears in a generic layer, the abstraction is leaking. The generic layer should only know interfaces; branching should be absorbed by implementations.
+特定実装が汎用層に現れたら抽象化が漏れている。汎用層はインターフェースだけを知り、分岐は実装側で吸収する。
 
 ```typescript
-// ❌ Specific implementation imports and branching in generic layer
+// ❌ 汎用層に特定実装のインポートと分岐
 import { uploadToS3 } from '../aws/s3.js'
 if (config.storage === 's3') {
   return uploadToS3(config.bucket, file, options)
 }
 
-// ✅ Generic layer uses interface only. Unsupported cases error at creation time
+// ✅ 汎用層はインターフェースのみ。非対応は生成時にエラー
 const storage = createStorage(config)
 return storage.upload(file, options)
 ```
 
-## Structure
+## 構造
 
-### Criteria for Splitting
+### 分割の基準
 
-- Has its own state → Separate
-- UI/logic exceeding 50 lines → Separate
-- Has multiple responsibilities → Separate
+- 独自のstateを持つ → 分離
+- 50行超のUI/ロジック → 分離
+- 複数の責務がある → 分離
 
-### Dependency Direction
+### 依存の方向
 
-- Upper layers → Lower layers (reverse direction prohibited)
-- Fetch data at the root (View/Controller) and pass it down
-- Children do not know about their parents
+- 上位層 → 下位層（逆方向禁止）
+- データ取得はルート（View/Controller）で行い、子に渡す
+- 子は親のことを知らない
 
-### State Management
+### 状態管理
 
-- Confine state to where it is used
-- Children do not modify state directly (notify parents via events)
-- State flow is unidirectional
+- 状態は使う場所に閉じ込める
+- 子は状態を直接変更しない（イベントを親に通知）
+- 状態の流れは単方向
 
-## Error Handling
+## エラーハンドリング
 
-Centralize error handling. Do not scatter try-catch everywhere.
+エラーは一元管理する。各所でtry-catchしない。
 
 ```typescript
-// ❌ Scattered try-catch
+// ❌ 各所でtry-catch
 async function createUser(data) {
   try {
     const user = await userService.create(data)
     return user
   } catch (e) {
     console.error(e)
-    throw new Error('Failed to create user')
+    throw new Error('ユーザー作成に失敗しました')
   }
 }
 
-// ✅ Centralized handling at the upper layer
-// Catch collectively at the Controller/Handler layer
-// Or handle via @ControllerAdvice / ErrorBoundary
+// ✅ 上位層で一元処理
+// Controller/Handler層でまとめてキャッチ
+// または @ControllerAdvice / ErrorBoundary で処理
 async function createUser(data) {
-  return await userService.create(data)  // Let exceptions propagate up
+  return await userService.create(data)  // 例外はそのまま上に投げる
 }
 ```
 
-### Error Handling Placement
+### エラー処理の配置
 
-| Layer | Responsibility |
-|-------|---------------|
-| Domain/Service layer | Throw exceptions on business rule violations |
-| Controller/Handler layer | Catch exceptions and convert to responses |
-| Global handler | Handle common exceptions (NotFound, auth errors, etc.) |
+| 層 | 責務 |
+|----|------|
+| ドメイン/サービス層 | ビジネスルール違反時に例外をスロー |
+| Controller/Handler層 | 例外をキャッチしてレスポンスに変換 |
+| グローバルハンドラ | 共通例外（NotFound, 認証エラー等）を処理 |
 
-## Conversion Placement
+## 変換処理の配置
 
-Place conversion methods on the DTO side.
+変換メソッドはDTO側に持たせる。
 
 ```typescript
-// ✅ Conversion methods on Request/Response DTOs
+// ✅ Request/Response DTOに変換メソッド
 interface CreateUserRequest {
   name: string
   email: string
@@ -269,58 +269,58 @@ const output = await useCase.execute(input)
 return UserResponse.from(output)
 ```
 
-Conversion direction:
+変換の方向:
 ```
 Request → toInput() → UseCase/Service → Output → Response.from()
 ```
 
-## Shared Code Decisions
+## 共通化の判断
 
-Eliminate duplication by default. When logic is essentially the same and should be unified, apply DRY. Do not decide mechanically by count.
+基本的に重複は排除する。本質的に同じロジックであり、まとめるべきと判断したら DRY にする。回数で機械的に判断しない。
 
-### Should Be Shared
+### 共通化すべきもの
 
-- Essentially identical logic duplicated
-- Same style/UI pattern
-- Same validation logic
-- Same formatting logic
+- 本質的に同じロジックの重複
+- 同じスタイル/UIパターン
+- 同じバリデーションロジック
+- 同じフォーマット処理
 
-### Should Not Be Shared
+### 共通化すべきでないもの
 
-- Duplication across different domains (e.g., customer validation and admin validation are separate concerns)
-- Superficially similar code with different reasons to change
-- Based on "might need it in the future" predictions
+- ドメインが異なる重複（例: 顧客用バリデーションと管理者用バリデーションは別物）
+- 表面的に似ているが変更理由が異なるコード
+- 「将来使うかも」という予測に基づくもの
 
 ```typescript
-// ❌ Over-generalization
+// ❌ 過度な汎用化
 function formatValue(value, type, options) {
   if (type === 'currency') { ... }
   else if (type === 'date') { ... }
   else if (type === 'percentage') { ... }
 }
 
-// ✅ Separate functions by purpose
+// ✅ 用途別に関数を分ける
 function formatCurrency(amount: number): string { ... }
 function formatDate(date: Date): string { ... }
 function formatPercentage(value: number): string { ... }
 ```
 
-## Prohibited
+## 禁止事項
 
-- **Fallbacks are prohibited by default** - Do not write fallbacks using `?? 'unknown'`, `|| 'default'`, or swallowing via `try-catch`. Propagate errors upward. If absolutely necessary, add a comment explaining why
-- **Explanatory comments** - Express intent through code. Do not write What/How comments
-- **Unused code** - Do not write "just in case" code
-- **any type** - Do not break type safety
-- **Direct mutation of objects/arrays** - Create new instances with spread operators
-- **console.log** - Do not leave in production code
-- **Hardcoded secrets**
-- **Scattered hardcoded contract strings** - File names and config key names must be defined as constants in one place. Scattered literals are prohibited
-- **Scattered try-catch** - Centralize error handling at the upper layer
-- **Unsolicited backward compatibility / legacy support** - Not needed unless explicitly instructed
-- **Internal implementation exported from public API** - Only export domain-level functions and types. Do not export infrastructure functions or internal classes
-- **Replaced code surviving after refactoring** - Remove replaced code and exports. Do not keep unless explicitly told to
-- **Workarounds that bypass safety mechanisms** - If the root fix is correct, no additional bypass is needed
-- **Direct tool execution bypassing project scripts** - `npx tool` and similar bypass the lockfile, causing version mismatches. Look for project-defined scripts (npm scripts, Makefile, etc.) first. Only consider direct execution when no script exists
-- **Missing wiring** - When adding new parameters or fields, grep the entire call chain to verify. If callers do not pass the value, `options.xxx ?? fallback` always uses the fallback
-- **Redundant conditionals** - When if/else calls the same function with only argument differences, unify using ternary operators or spread syntax
-- **Copy-paste patterns** - Before writing new code, grep for existing implementations of the same kind and follow the existing pattern. Do not introduce your own style
+- **フォールバックは原則禁止** - `?? 'unknown'`、`|| 'default'`、`try-catch` で握りつぶすフォールバックを書かない。エラーは上位に伝播させる。どうしても必要な場合はコメントで理由を明記する
+- **説明コメント** - コードで意図を表現する。What/How のコメントは書かない
+- **未使用コード** - 「念のため」のコードは書かない
+- **any型** - 型安全を破壊しない
+- **オブジェクト/配列の直接変更** - スプレッド演算子で新規作成
+- **console.log** - 本番コードに残さない
+- **機密情報のハードコーディング**
+- **契約文字列のハードコード散在** - ファイル名・設定キー名は定数で1箇所管理。リテラルの散在は禁止
+- **各所でのtry-catch** - エラーは上位層で一元処理
+- **後方互換・Legacy対応の自発的追加** - 明示的な指示がない限り不要
+- **内部実装のパブリック API エクスポート** - 公開するのはドメイン操作の関数・型のみ。インフラ層の関数や内部クラスをエクスポートしない
+- **リファクタリング後の旧コード残存** - 置き換えたコード・エクスポートは削除する。明示的に残すよう指示されない限り残さない
+- **安全機構を迂回するワークアラウンド** - 根本修正が正しいなら追加の迂回は不要
+- **プロジェクトスクリプトを迂回するツール直接実行** - `npx tool` 等の直接実行は lockfile を迂回しバージョン不一致を起こす。プロジェクトが定義したスクリプト（npm scripts, Makefile 等）を探して使う。見つからない場合のみ直接実行を検討する
+- **配線忘れ** - 新しいパラメータやフィールドを追加したら、grep で呼び出しチェーン全体を確認する。呼び出し元が値を渡していないと `options.xxx ?? fallback` で常にフォールバックが使われる
+- **冗長な条件分岐** - if/else で同一関数を呼び出し引数の差異のみの場合、三項演算子やスプレッド構文で統一する
+- **コピペパターン** - 新しいコードを書く前に同種の既存実装を grep で確認し、既存パターンに合わせる。独自の書き方を持ち込まない

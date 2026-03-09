@@ -1,39 +1,39 @@
-# Terraform Policy
+# Terraform ポリシー
 
-Prioritize safety and maintainability. Write infrastructure code following consistent conventions.
+安全性と保守性を最優先し、一貫した規約に従うインフラコードを書く。
 
-## Principles
+## 原則
 
-| Principle | Criteria |
-|-----------|----------|
-| Security by Default | Security is strict by default. Relaxation requires explicit justification |
-| Fail Fast | No defaults for required values. Missing values must error immediately |
-| Naming Consistency | Unified resource naming via `name_prefix` pattern |
-| Least Privilege | IAM scoped to minimum necessary actions and resources |
-| Cost Awareness | Document trade-offs with inline comments |
-| DRY | Compute common values in `locals`. Eliminate duplication |
-| One File One Concern | Split files by resource category |
+| 原則 | 基準 |
+|------|------|
+| Security by Default | セキュリティはデフォルトで厳格。緩和は明示的かつ理由付き |
+| Fail Fast | 必須値にデフォルトを入れない。不足は即エラー |
+| 命名一貫性 | `name_prefix` パターンで全リソースを統一命名 |
+| 最小権限 | IAM は必要最小限のアクション・リソースに絞る |
+| コスト意識 | トレードオフはコメントで文書化 |
+| DRY | `locals` で共通値を計算。重複排除 |
+| 1ファイル1関心事 | リソースカテゴリごとにファイル分割 |
 
-## Variable Declarations
+## 変数宣言
 
-| Criteria | Judgment |
-|----------|----------|
-| Missing `type` | REJECT |
-| Missing `description` | REJECT |
-| Sensitive value without `sensitive = true` | REJECT |
-| Default on environment-dependent value | REJECT |
-| Default on constant value (port numbers, etc.) | OK |
+| 基準 | 判定 |
+|------|------|
+| `type` なし | REJECT |
+| `description` なし | REJECT |
+| 機密値に `sensitive = true` なし | REJECT |
+| 環境依存値にデフォルト設定 | REJECT |
+| 定数的な値（ポート番号等）にデフォルト設定 | OK |
 
 ```hcl
-# REJECT - no type/description
+# REJECT - type/description なし
 variable "region" {}
 
-# REJECT - sensitive value without sensitive flag
+# REJECT - 機密値に sensitive なし
 variable "db_password" {
   type = string
 }
 
-# OK - constant value with default
+# OK - 定数的な値にデフォルト
 variable "container_port" {
   type        = number
   description = "Container port for the application"
@@ -41,48 +41,48 @@ variable "container_port" {
 }
 ```
 
-## Security
+## セキュリティ
 
-| Criteria | Judgment |
-|----------|----------|
-| EC2 without IMDSv2 (`http_tokens != "required"`) | REJECT |
-| Unencrypted EBS/RDS | REJECT |
-| S3 without public access block | REJECT |
-| Security group with unnecessary `0.0.0.0/0` | REJECT |
-| IAM policy with `*` resource (no valid reason) | REJECT |
-| Direct SSH access (when SSM is viable) | REJECT |
-| Hardcoded secrets | REJECT |
-| Missing `lifecycle { prevent_destroy = true }` on critical data | Warning |
+| 基準 | 判定 |
+|------|------|
+| EC2 で IMDSv2 未強制（`http_tokens != "required"`） | REJECT |
+| EBS/RDS 暗号化なし | REJECT |
+| S3 パブリックアクセスブロックなし | REJECT |
+| セキュリティグループで `0.0.0.0/0` への不要な開放 | REJECT |
+| IAM ポリシーに `*` リソース（正当な理由なし） | REJECT |
+| SSH 直接アクセス（SSM 代替可能な場合） | REJECT |
+| 機密情報のハードコーディング | REJECT |
+| `lifecycle { prevent_destroy = true }` が重要データに未設定 | 警告 |
 
-## Naming Convention
+## 命名規約
 
-| Criteria | Judgment |
-|----------|----------|
-| `name_prefix` pattern not used | REJECT |
-| Resource name missing environment identifier | REJECT |
-| Tag names not in PascalCase | Warning |
-| Name exceeds AWS character limits | REJECT |
+| 基準 | 判定 |
+|------|------|
+| `name_prefix` パターン未使用 | REJECT |
+| リソース名に環境名が含まれない | REJECT |
+| タグ名が PascalCase でない | 警告 |
+| AWS 文字数制限を超える名前 | REJECT |
 
-## File Organization
+## ファイル構成
 
-| Criteria | Judgment |
-|----------|----------|
-| Resource definitions mixed in `main.tf` | REJECT |
-| Resources defined in `variables.tf` | REJECT |
-| Multiple resource categories in one file | Warning |
-| Unused variable / output / data source | REJECT |
+| 基準 | 判定 |
+|------|------|
+| `main.tf` にリソース定義が混在 | REJECT |
+| `variables.tf` にリソースが定義されている | REJECT |
+| 1ファイルに複数カテゴリのリソースが混在 | 警告 |
+| 未使用の variable / output / data source | REJECT |
 
-## Tag Management
+## タグ管理
 
-| Criteria | Judgment |
-|----------|----------|
-| Provider `default_tags` not configured | REJECT |
-| Tags duplicated between `default_tags` and individual resources | Warning |
-| Missing `ManagedBy = "Terraform"` tag | Warning |
+| 基準 | 判定 |
+|------|------|
+| provider `default_tags` 未設定 | REJECT |
+| `default_tags` と個別リソースでタグが重複 | 警告 |
+| `ManagedBy = "Terraform"` タグなし | 警告 |
 
-## Cost Management
+## コスト管理
 
-| Criteria | Judgment |
-|----------|----------|
-| Cost-impacting choice without documentation | Warning |
-| High-cost resource without alternative consideration | Warning |
+| 基準 | 判定 |
+|------|------|
+| コスト影響のある選択にコメントなし | 警告 |
+| 高コストリソース（NAT Gateway 等）に代替案の検討なし | 警告 |

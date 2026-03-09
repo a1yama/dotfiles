@@ -1,18 +1,18 @@
 ```markdown
-# Change Scope Declaration
+# 変更スコープ宣言
 
-## Task
-{One-line task summary}
+## タスク
+{タスクの1行要約}
 
-## Planned Changes
-| Type | File |
-|------|------|
-| Create | `src/example.ts` |
-| Modify | `src/routes.ts` |
+## 変更予定
+| 種別 | ファイル |
+|------|---------|
+| 作成 | `src/example.ts` |
+| 変更 | `src/routes.ts` |
 
-## Estimated Size
+## 推定規模
 Small / Medium / Large
 
-## Impact Area
-- {Affected modules or features}
+## 影響範囲
+- {影響するモジュールや機能}
 ```

@@ -1,28 +1,28 @@
-# QA Detection Criteria
+# QA 検出基準
 
-## Error Handling and Logging
+## エラーハンドリングとログ
 
-| Criteria | Verdict |
-|----------|---------|
-| Swallowed errors (empty catch) | REJECT |
-| Unclear user-facing error messages | Fix required |
-| Missing validation at system boundaries | Warning |
-| No debug logging for new code paths | Warning |
-| Sensitive information in logs | REJECT |
+| 基準 | 判定 |
+|------|------|
+| エラーの握りつぶし（空のcatch） | REJECT |
+| ユーザー向けエラーメッセージが不明確 | 修正が必要 |
+| システム境界でのバリデーション欠如 | 警告 |
+| 新しいコードパスにデバッグログがない | 警告 |
+| ログへの機密情報の出力 | REJECT |
 
-## Maintainability
+## 保守性
 
-| Criteria | Verdict |
-|----------|---------|
-| Functions/files too complex (hard to follow) | Warning |
-| Excessive duplicate code | Warning |
-| Unclear naming | Fix required |
+| 基準 | 判定 |
+|------|------|
+| 関数/ファイルが複雑すぎる（追いにくい） | 警告 |
+| 重複コードが多い | 警告 |
+| 命名が不明確 | 修正が必要 |
 
-## Technical Debt
+## 技術的負債
 
-| Pattern | Verdict |
-|---------|---------|
-| Abandoned TODO/FIXME | Warning |
-| @ts-ignore, @ts-expect-error without reason | Warning |
-| eslint-disable without reason | Warning |
-| Usage of deprecated APIs | Warning |
+| パターン | 判定 |
+|---------|------|
+| TODO/FIXMEの放置 | 警告 |
+| 理由なしの @ts-ignore, @ts-expect-error | 警告 |
+| 理由なしの eslint-disable | 警告 |
+| 非推奨APIの使用 | 警告 |

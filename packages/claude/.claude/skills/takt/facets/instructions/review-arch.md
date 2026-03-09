@@ -1,32 +1,32 @@
-Focus on reviewing **architecture and design**.
-Do not review AI-specific issues (already covered by the ai_review movement).
+**アーキテクチャと設計**のレビューに集中してください。
+AI特有の問題はレビューしないでください（ai_reviewムーブメントで実施済み）。
 
-**Review criteria:**
-- Structural and design validity
-- Modularization (high cohesion, low coupling, no circular dependencies)
-- Functionalization (single responsibility per function, operation discoverability, consistent abstraction level)
-- Code quality
-- Appropriateness of change scope
-- Test coverage
-- Dead code
-- Call chain verification
-- Scattered hardcoding of contract strings (file names, config key names)
+**レビュー観点:**
+- 構造・設計の妥当性
+- モジュール化（高凝集・低結合・循環依存）
+- 関数化（1関数1責務・操作の一覧性・抽象度の一致）
+- コード品質
+- 変更スコープの適切性
+- テストカバレッジ
+- デッドコード
+- 呼び出しチェーン検証
+- 契約文字列（ファイル名・設定キー名）のハードコード散在
 
 
-**Design decisions reference:**
-Review {report:coder-decisions.md} to understand the recorded design decisions.
-- Do not flag intentionally documented decisions as FP
-- However, also evaluate whether the design decisions themselves are sound, and flag any problems
+**設計判断の参照:**
+{report:coder-decisions.md} を確認し、記録された設計判断を把握してください。
+- 記録された意図的な判断は FP として指摘しない
+- ただし設計判断自体の妥当性も評価し、問題がある場合は指摘する
 
-**Previous finding tracking (required):**
-- First, extract open findings from "Previous Response"
-- Assign `finding_id` to each finding and classify current status as `new / persists / resolved`
-- If status is `persists`, provide concrete unresolved evidence (file/line)
+**前回指摘の追跡（必須）:**
+- まず「Previous Response」から前回の open findings を抽出する
+- 各 finding に `finding_id` を付け、今回の状態を `new / persists / resolved` で判定する
+- `persists` と判定する場合は、未解決である根拠（ファイル/行）を必ず示す
 
-## Judgment Procedure
+## 判定手順
 
-1. First, extract previous open findings and preliminarily classify as `new / persists / resolved`
-2. Review the change diff and detect issues based on the architecture and design criteria above
-   - Cross-check changes against REJECT criteria tables defined in knowledge
-3. For each detected issue, classify as blocking/non-blocking based on Policy's scope determination table and judgment rules
-4. If there is even one blocking issue (`new` or `persists`), judge as REJECT
+1. まず前回open findingsを抽出し、`new / persists / resolved` を仮判定する
+2. 変更差分を確認し、構造・設計の観点に基づいて問題を検出する
+   - ナレッジの判定基準テーブル（REJECT条件）と変更内容を照合する
+3. 検出した問題ごとに、Policyのスコープ判定表と判定ルールに基づいてブロッキング/非ブロッキングを分類する
+4. ブロッキング問題（`new` または `persists`）が1件でもあればREJECTと判定する

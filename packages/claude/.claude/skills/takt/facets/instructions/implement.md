@@ -1,60 +1,60 @@
-Implement according to the plan.
-Refer only to files within the Report Directory shown in the Piece Context. Do not search or reference other report directories.
-Use reports in the Report Directory as the primary source of truth. If additional context is needed, you may consult Previous Response and conversation history as secondary sources (Previous Response may be unavailable). If information conflicts, prioritize reports in the Report Directory and actual file contents.
+計画に従って実装してください。
+Piece Contextに示されたReport Directory内のファイルのみ参照してください。他のレポートディレクトリは検索/参照しないでください。
+Report Directory内のレポートを一次情報として参照してください。不足情報の補完が必要な場合に限り、Previous Responseや会話履歴を補助的に参照して構いません（Previous Responseは提供されない場合があります）。情報が競合する場合は、Report Directory内のレポートと実際のファイル内容を優先してください。
 
-**Important**: Add unit tests alongside the implementation.
-- Add unit tests for newly created classes and functions
-- Update relevant tests when modifying existing code
-- Test file placement: follow the project's conventions
-- Build verification is mandatory. After completing implementation, run the build (type check) and verify there are no type errors
-- Running tests is mandatory. After build succeeds, always run tests and verify results
-- When introducing new contract strings (file names, config key names, etc.), define them as constants in one place
+**重要**: 実装と同時に単体テストを追加してください。
+- 新規作成したクラス・関数には単体テストを追加
+- 既存コードを変更した場合は該当するテストを更新
+- テストファイルの配置: プロジェクトの規約に従う
+- ビルド確認は必須。実装完了後、ビルド（型チェック）を実行し、型エラーがないことを確認
+- テスト実行は必須。ビルド成功後、必ずテストを実行して結果を確認
+- ファイル名・設定キー名などの契約文字列を新規導入する場合は、定数として1箇所で定義すること
 
-**Scope output contract (create at the start of implementation):**
+**Scope出力契約（実装開始時に作成）:**
 ```markdown
-# Change Scope Declaration
+# 変更スコープ宣言
 
-## Task
-{One-line task summary}
+## タスク
+{タスクの1行要約}
 
-## Planned changes
-| Type | File |
-|------|------|
-| Create | `src/example.ts` |
-| Modify | `src/routes.ts` |
+## 変更予定
+| 種別 | ファイル |
+|------|---------|
+| 作成 | `src/example.ts` |
+| 変更 | `src/routes.ts` |
 
-## Estimated size
+## 推定規模
 Small / Medium / Large
 
-## Impact area
-- {Affected modules or features}
+## 影響範囲
+- {影響するモジュールや機能}
 ```
 
-**Decisions output contract (at implementation completion, only if decisions were made):**
+**Decisions出力契約（実装完了時、決定がある場合のみ）:**
 ```markdown
-# Decision Log
+# 決定ログ
 
-## 1. {Decision}
-- **Context**: {Why the decision was needed}
-- **Options considered**: {List of options}
-- **Rationale**: {Reason for the choice}
+## 1. {決定内容}
+- **背景**: {なぜ決定が必要だったか}
+- **検討した選択肢**: {選択肢リスト}
+- **理由**: {選んだ理由}
 ```
 
-**Pre-completion self-check (required):**
-Before running build and tests, verify the following:
-- If new parameters/fields were added, grep to confirm they are actually passed from call sites
-- For any `??`, `||`, `= defaultValue` usage, confirm fallback is truly necessary
-- Verify no replaced code/exports remain after refactoring
-- Verify no features outside the task specification were added
-- Verify no if/else blocks call the same function with only argument differences
-- Verify new code matches existing implementation patterns (API call style, type definition style, etc.)
+**実装完了前の自己チェック（必須）:**
+ビルドとテストを実行する前に、以下を確認してください:
+- 新しいパラメータ/フィールドを追加した場合、grep で呼び出し元から実際に渡されているか確認した
+- `??`, `||`, `= defaultValue` を使った箇所で、フォールバックが本当に必要か確認した
+- リファクタリングで置き換えたコード・エクスポートが残っていないか確認した
+- タスク指示書にない機能を追加していないか確認した
+- if/else で同一関数を呼び出し、引数の差異のみになっていないか確認した
+- 新しいコードが既存の実装パターン（API呼び出し方式、型定義方式等）と一致しているか確認した
 
-**Required output (include headings)**
-## Work results
-- {Summary of actions taken}
-## Changes made
-- {Summary of changes}
-## Build results
-- {Build execution results}
-## Test results
-- {Test command executed and results}
+**必須出力（見出しを含める）**
+## 作業結果
+- {実施内容の要約}
+## 変更内容
+- {変更内容の要約}
+## ビルド結果
+- {ビルド実行結果}
+## テスト結果
+- {テスト実行コマンドと結果}

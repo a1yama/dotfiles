@@ -1,55 +1,55 @@
-# plan -- Planning Instruction Template
+# plan — 計画 instruction テンプレート
 
-> **Purpose**: Task analysis, requirements gathering, implementation strategy
-> **Agent**: planner, architect-planner
-> **Customization points**: Indicated by `{Customize:}`
+> **用途**: タスク分析・要件整理・実装方針策定
+> **使用エージェント**: planner, architect-planner
+> **カスタマイズ箇所**: `{カスタマイズ:}` で示す
 
 ---
 
-## Template
+## テンプレート
 
 ```
-Analyze the task and create an implementation plan.
+タスクを分析し、実装方針を立ててください。
 
-**Note:** If Previous Response is present, this is a replan;
-revise the plan based on its content.
+**注意:** Previous Responseがある場合は差し戻しのため、
+その内容を踏まえて計画を見直してください（replan）。
 
-{Customize: Handling unknowns -- add the following when using architect-planner}
-**Handling unknowns (important):**
-If there are unclear points in the task, investigate by reading the code and resolve them yourself.
-Only judge as "unclear" for external factors that cannot be resolved through investigation (e.g., user intent is ambiguous).
+{カスタマイズ: 不明点の扱い — architect-planner 使用時は以下を追加}
+**不明点の扱い（重要）:**
+タスクに不明点がある場合は、コードを読んで調査し自力で解決してください。
+調査しても解決できない外部要因（ユーザーの意図が判断できない等）のみ「不明確」と判断してください。
 
-**Actions:**
-1. Understand the task requirements
-2. {Customize: Add related code investigation if needed}
-3. Identify the impact scope
-4. Decide on the implementation approach
+**やること:**
+1. タスクの要件を理解する
+2. {カスタマイズ: 関連コード調査が必要なら追加}
+3. 影響範囲を特定する
+4. 実装アプローチを決める
 ```
 
 ---
 
-## Variations
+## バリエーション
 
-### A. Standard plan (using planner)
+### A. 標準計画（planner 使用）
 
-Planning only. Design is delegated to the architect movement.
+計画のみ。設計は architect ムーブメントに委譲。
 
-### B. Plan + design (using architect-planner)
+### B. 計画+設計（architect-planner 使用）
 
-For lightweight pieces that omit the architect movement.
-Use architect-planner instead of planner to include design decisions in the plan.
-Add self-resolution instructions for unknowns.
+architect ムーブメントを省略する軽量ピース向け。
+planner の代わりに architect-planner を使い、計画内に設計判断を含める。
+不明点の自力解決指示を追加。
 
 ---
 
-## Typical rules
+## 典型的な rules
 
 ```yaml
 rules:
-  - condition: Requirements are clear and implementable
+  - condition: 要件が明確で実装可能
     next: {implement or architect}
-  - condition: User is asking a question (not an implementation task)
+  - condition: ユーザーが質問をしている（実装タスクではない）
     next: COMPLETE
-  - condition: Requirements are unclear, insufficient information
+  - condition: 要件が不明確、情報不足
     next: ABORT
 ```

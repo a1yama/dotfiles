@@ -1,5 +1,5 @@
 name: compound-eye
-description: Multi-model review - send the same instruction to Claude and Codex simultaneously, synthesize both responses
+description: 複眼レビュー - 同じ指示を Claude と Codex に同時に投げ、両者の回答を統合する
 piece_config:
   provider_options:
     codex:
@@ -15,7 +15,6 @@ movements:
         edit: false
         persona: coder
         provider: claude
-        session: refresh
         knowledge: architecture
         provider_options:
           claude:
@@ -34,29 +33,28 @@ movements:
             - name: claude-review.md
               format: |
                 ```markdown
-                # Claude Review Result
+                # Claudeレビュー結果
 
-                ## Conclusion
-                {One-line conclusion}
+                ## 結論
+                {1行結論}
 
-                ## Key Findings
+                ## 主要な指摘
                 - {finding 1}
                 - {finding 2}
 
-                ## Evidence
-                - {file:line and rationale}
+                ## 根拠
+                - {file:line と理由}
 
-                ## Risks / Caveats
+                ## リスク / 注意点
                 - {risk}
 
-                ## Recommended Next Step
+                ## 推奨次アクション
                 - {action}
                 ```
       - name: codex-eye
         edit: false
         persona: coder
         provider: codex
-        session: refresh
         knowledge: architecture
         provider_options:
           claude:
@@ -75,22 +73,22 @@ movements:
             - name: codex-review.md
               format: |
                 ```markdown
-                # Codex Review Result
+                # Codexレビュー結果
 
-                ## Conclusion
-                {One-line conclusion}
+                ## 結論
+                {1行結論}
 
-                ## Key Findings
+                ## 主要な指摘
                 - {finding 1}
                 - {finding 2}
 
-                ## Evidence
-                - {file:line and rationale}
+                ## 根拠
+                - {file:line と理由}
 
-                ## Risks / Caveats
+                ## リスク / 注意点
                 - {risk}
 
-                ## Recommended Next Step
+                ## 推奨次アクション
                 - {action}
                 ```
     rules:
@@ -106,79 +104,79 @@ movements:
           - Glob
           - Grep
     rules:
-      - condition: synthesis complete
+      - condition: 統合完了
         next: COMPLETE
     instruction_template: |
-      Two models (Claude / Codex) independently answered the same instruction.
-      Synthesize their responses.
+      2つのモデル（Claude / Codex）が同じ指示に対して独立に回答しました。
+      両者の回答を統合してください。
 
-      **Tasks:**
-      1. Read reports in the Report Directory
-         - `claude-review.md` (Claude's response)
-         - `codex-review.md` (Codex's response)
-         Note: If one report is missing (model failed), synthesize from the available report only
-      2. If both reports exist, compare and clarify:
-         - Points of agreement
-         - Points of disagreement
-         - Points mentioned by only one model
-      3. Produce a synthesized conclusion
+      **やること:**
+      1. Report Directory 内のレポートを読む
+         - `claude-review.md`（Claude の回答）
+         - `codex-review.md`（Codex の回答）
+         ※ 片方が存在しない場合（エラーで失敗した場合）、存在するレポートのみで統合する
+      2. 両方のレポートがある場合は比較し、以下を明示する
+         - 一致している点
+         - 相違している点
+         - 片方だけが指摘・言及している点
+      3. 統合した結論を出す
 
-      **Output format:**
+      **出力フォーマット:**
       ```markdown
-      # Multi-Model Review Synthesis
+      # 複眼レビュー統合
 
-      ## Conclusion
-      {Synthesized conclusion}
+      ## 結論
+      {統合した結論}
 
-      ## Response Status
-      | Model | Status |
-      |-------|--------|
+      ## 回答状況
+      | モデル | 状態 |
+      |--------|------|
       | Claude | ✅ / ❌ |
       | Codex | ✅ / ❌ |
 
-      ## Agreements
-      - {Points where both models agree}
+      ## 一致点
+      - {両モデルが同じ見解を示した点}
 
-      ## Disagreements
-      | Topic | Claude | Codex |
-      |-------|--------|-------|
-      | {topic} | {Claude's view} | {Codex's view} |
+      ## 相違点
+      | 論点 | Claude | Codex |
+      |------|--------|-------|
+      | {論点} | {Claudeの見解} | {Codexの見解} |
 
-      ## Unique Findings
-      - **Claude only:** {Points only Claude mentioned}
-      - **Codex only:** {Points only Codex mentioned}
+      ## 片方のみの指摘
+      - **Claude のみ:** {Claudeだけが言及した点}
+      - **Codex のみ:** {Codexだけが言及した点}
 
-      ## Overall Assessment
-      {Overall assessment considering both responses}
+      ## 総合評価
+      {両者の回答を踏まえた総合的な評価}
       ```
     output_contracts:
       report:
         - name: synthesis.md
           format: |
             ```markdown
-            # Multi-Model Review Synthesis
+            # 複数モデルレビュー統合
 
-            ## Conclusion
-            {Synthesized conclusion}
+            ## 結論
+            {統合結論}
 
-            ## Response Status
-            | Model | Status |
-            |-------|--------|
+            ## 応答状況
+            | モデル | 状態 |
+            |--------|------|
             | Claude | ✅ / ❌ |
             | Codex | ✅ / ❌ |
 
-            ## Agreements
-            - {Points where both models agree}
+            ## 一致点
+            - {両者が一致した点}
 
-            ## Disagreements
-            | Topic | Claude | Codex |
-            |-------|--------|-------|
-            | {topic} | {Claude's view} | {Codex's view} |
+            ## 相違点
+            | 論点 | Claude | Codex |
+            |------|--------|-------|
+            | {topic} | {Claudeの見解} | {Codexの見解} |
 
-            ## Unique Findings
-            - **Claude only:** {Points only Claude mentioned}
-            - **Codex only:** {Points only Codex mentioned}
+            ## 片側のみの指摘
+            - **Claudeのみ:** {Claudeのみが言及}
+            - **Codexのみ:** {Codexのみが言及}
 
-            ## Overall Assessment
-            {Overall assessment considering both responses}
+            ## 総合評価
+            {両者を踏まえた総合評価}
             ```

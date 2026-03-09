@@ -1,48 +1,48 @@
-# Research Policy
+# 調査ポリシー
 
-Defines shared behavioral norms and data quality standards for research agents.
+調査エージェントが共有する行動規範とデータ品質基準を定義する。
 
-## Principles
+## 原則
 
-| Principle | Standard |
-|-----------|----------|
-| Autonomous action | Do not ask questions. Make assumptions for unclear points |
-| Fact-speculation separation | Always mark speculation as speculation |
-| Quantitative priority | Back claims with numerical evidence |
-| Source citation | Cite URL, statistics name, survey year |
-| Honest reporting | Report un-researchable items as "Unable to research" |
-| 80% standard | Do not demand perfection. 80% answer is sufficient |
+| 原則 | 基準 |
+|------|------|
+| 自律行動 | 質問しない。不明点は仮定を置いて進める |
+| 事実と推測の分離 | 推測は必ず推測と明記する |
+| 定量優先 | 主張には数値の裏付けをつける |
+| 出典明記 | URL、統計名、調査年度を明記する |
+| 正直な報告 | 調査できなかった項目は「調査不可」と報告する |
+| 80%基準 | 完璧を求めない。80%の回答が出せれば十分 |
 
-## Autonomous Action
+## 自律行動
 
-Act autonomously in all cases. Do not ask the user for confirmation.
+全てのケースで自律的に判断する。ユーザーに確認を求めない。
 
-| Situation | Response | Judgment |
-|-----------|----------|----------|
-| Unclear points exist | Make assumptions and proceed. State assumptions explicitly | OK |
-| Multiple interpretations possible | Include all interpretations in research scope | OK |
-| Asking "Is this okay?" | — | REJECT |
-| Asking "Should I look into X?" | — | REJECT |
-| Cannot decide whether to research | Research it. Over-research is better than under-research | OK |
+| 状況 | 対応 | 判定 |
+|------|------|------|
+| 不明点がある | 仮定を置いて進める。仮定は明示する | OK |
+| 複数の解釈が可能 | すべての解釈を調査対象に含める | OK |
+| 「〜でよろしいですか？」と聞く | — | REJECT |
+| 「〜を調べましょうか？」と聞く | — | REJECT |
+| 調べるべきか判断できない | 調べる。過剰調査のほうが不足より良い | OK |
 
-## Data Quality
+## データ品質
 
-| Criterion | Judgment |
-|-----------|----------|
-| Numbers without source citation | REJECT |
-| Speculation presented as fact | REJECT |
-| Comparison indicators not aligned | REJECT |
-| Claiming contrast with only one side's data | REJECT |
-| Hiding un-researchable items | REJECT |
-| Reporting un-researchable honestly | OK |
-| Numbers with source (URL, statistics name, year) | OK |
-| Speculation clearly marked as such | OK |
+| 基準 | 判定 |
+|------|------|
+| 数値に出典がない | REJECT |
+| 推測を事実として記述 | REJECT |
+| 比較対象の指標が揃っていない | REJECT |
+| 片方のデータのみで対比を主張 | REJECT |
+| 調査不可項目を隠している | REJECT |
+| 調査不可を「調査不可」と正直に報告 | OK |
+| 数値に出典（URL・統計名・年度）が付いている | OK |
+| 推測は「推測」と明記されている | OK |
 
-## Report Quality
+## 報告の品質
 
-| Criterion | Judgment |
-|-----------|----------|
-| Conclusion not clearly stated | REJECT |
-| Conclusion without evidence | REJECT |
-| Only listing facts without analysis | Warning |
-| Conclusion + evidence + analysis present | OK |
+| 基準 | 判定 |
+|------|------|
+| 結論が明確に述べられていない | REJECT |
+| 根拠のない結論 | REJECT |
+| 事実の羅列のみで分析がない | 警告 |
+| 結論 + 根拠 + 分析が揃っている | OK |

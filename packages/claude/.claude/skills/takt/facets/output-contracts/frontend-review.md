@@ -1,45 +1,45 @@
 ```markdown
-# Frontend Review
+# フロントエンドレビュー
 
-## Result: APPROVE / REJECT
+## 結果: APPROVE / REJECT
 
-## Summary
-{Summarize the result in 1-2 sentences}
+## サマリー
+{1-2文で結果を要約}
 
-## Reviewed Aspects
-| Aspect | Result | Notes |
-|--------|--------|-------|
-| Component design | ✅ | - |
-| State management | ✅ | - |
-| Performance | ✅ | - |
-| Accessibility | ✅ | - |
-| Type safety | ✅ | - |
+## 確認した観点
+| 観点 | 結果 | 備考 |
+|------|------|------|
+| コンポーネント設計 | ✅ | - |
+| 状態管理 | ✅ | - |
+| パフォーマンス | ✅ | - |
+| アクセシビリティ | ✅ | - |
+| 型安全性 | ✅ | - |
 
-## Current Iteration Findings (new)
-| # | finding_id | family_tag | Location | Issue | Fix Suggestion |
-|---|------------|------------|----------|-------|----------------|
-| 1 | FE-NEW-src-file-L42 | component-design | `src/file.tsx:42` | Issue description | Fix approach |
+## 今回の指摘（new）
+| # | finding_id | family_tag | 場所 | 問題 | 修正案 |
+|---|------------|------------|------|------|--------|
+| 1 | FE-NEW-src-file-L42 | component-design | `src/file.tsx:42` | 問題の説明 | 修正方法 |
 
-## Carry-over Findings (persists)
-| # | finding_id | family_tag | Previous Evidence | Current Evidence | Issue | Fix Suggestion |
-|---|------------|------------|-------------------|------------------|-------|----------------|
-| 1 | FE-PERSIST-src-file-L77 | component-design | `src/file.tsx:77` | `src/file.tsx:77` | Still unresolved | Apply prior fix plan |
+## 継続指摘（persists）
+| # | finding_id | family_tag | 前回根拠 | 今回根拠 | 問題 | 修正案 |
+|---|------------|------------|----------|----------|------|--------|
+| 1 | FE-PERSIST-src-file-L77 | component-design | `src/file.tsx:77` | `src/file.tsx:77` | 未解消 | 既存修正方針を適用 |
 
-## Resolved Findings (resolved)
-| finding_id | Resolution Evidence |
-|------------|---------------------|
-| FE-RESOLVED-src-file-L10 | `src/file.tsx:10` now satisfies the rule |
+## 解消済み（resolved）
+| finding_id | 解消根拠 |
+|------------|----------|
+| FE-RESOLVED-src-file-L10 | `src/file.tsx:10` は規約を満たす |
 
-## Reopened Findings (reopened)
-| # | finding_id | family_tag | Prior Resolution Evidence | Recurrence Evidence | Issue | Fix Suggestion |
-|---|------------|------------|--------------------------|---------------------|-------|----------------|
-| 1 | FE-REOPENED-src-file-L55 | component-design | `Previously fixed at src/file.tsx:10` | `Recurred at src/file.tsx:55` | Issue description | Fix approach |
+## 再開指摘（reopened）
+| # | finding_id | family_tag | 解消根拠（前回） | 再発根拠 | 問題 | 修正案 |
+|---|------------|------------|----------------|---------|------|--------|
+| 1 | FE-REOPENED-src-file-L55 | component-design | `前回: src/file.tsx:10 で修正済み` | `src/file.tsx:55 で再発` | 問題の説明 | 修正方法 |
 
-## Rejection Gate
-- REJECT is valid only when at least one finding exists in `new`, `persists`, or `reopened`
-- Findings without `finding_id` are invalid
+## REJECT判定条件
+- `new`、`persists`、または `reopened` が1件以上ある場合のみ REJECT 可
+- `finding_id` なしの指摘は無効
 ```
 
-**Cognitive load reduction rules:**
-- APPROVE → Summary only (5 lines or fewer)
-- REJECT → Include only relevant finding rows (30 lines or fewer)
+**認知負荷軽減ルール:**
+- APPROVE → サマリーのみ（5行以内）
+- REJECT → 該当指摘のみ表で記載（30行以内）

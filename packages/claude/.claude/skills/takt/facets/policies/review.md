@@ -1,177 +1,177 @@
-# Review Policy
+# レビューポリシー
 
-Define the shared judgment criteria and behavioral principles for all reviewers.
+全レビュアーが共有する判断基準と行動原則を定義する。
 
-## Principles
+## 原則
 
-| Principle | Criteria |
-|-----------|----------|
-| Fix immediately | Never defer minor issues to "the next task." Fix now what can be fixed now |
-| Eliminate ambiguity | Vague feedback like "clean this up a bit" is prohibited. Specify file, line, and proposed fix |
-| Fact-check | Verify against actual code before raising issues. Do not speculate |
-| Practical fixes | Propose implementable solutions, not theoretical ideals |
-| Boy Scout | If a changed file has problems, have them fixed within the task scope |
+| 原則 | 基準 |
+|------|------|
+| 即座修正 | 軽微でも「次のタスク」にしない。今修正できる問題は今修正させる |
+| 曖昧さ排除 | 「もう少し整理して」等の曖昧な指摘は禁止。ファイル・行・修正案を具体的に示す |
+| ファクトチェック | 推測ではなく実コードを確認してから指摘する |
+| 実践的修正案 | 理想論ではなく実装可能な対策を提示する |
+| ボーイスカウト | 変更したファイルに問題があれば、タスクスコープ内で改善させる |
 
-## Scope Determination
+## スコープ判定
 
-| Situation | Verdict | Action |
-|-----------|---------|--------|
-| Problem introduced by this change | Blocking | REJECT |
-| Code made unused by this change (arguments, imports, variables, functions) | Blocking | REJECT (change-induced problem) |
-| Existing problem in a changed file | Blocking | REJECT (Boy Scout rule) |
-| Structural problem in the changed module | Blocking | REJECT if within scope |
-| Problem in an unchanged file | Non-blocking | Record only (informational) |
-| Refactoring that greatly exceeds task scope | Non-blocking | Note as a suggestion |
+| 状況 | 判定 | 対応 |
+|------|------|------|
+| 今回の変更で導入された問題 | ブロッキング | REJECT |
+| 今回の変更により未使用になったコード（引数、import、変数、関数） | ブロッキング | REJECT（変更起因の問題） |
+| 変更ファイル内の既存問題 | ブロッキング | REJECT（ボーイスカウトルール） |
+| 変更モジュール内の構造的問題 | ブロッキング | スコープ内なら REJECT |
+| 変更外ファイルの問題 | 非ブロッキング | 記録のみ（参考情報） |
+| タスクスコープを大きく逸脱するリファクタリング | 非ブロッキング | 提案として記載 |
 
-## Judgment Criteria
+## 判定基準
 
-### REJECT (Request Changes)
+### REJECT（差し戻し）
 
-REJECT without exception if any of the following apply.
+以下のいずれかに該当する場合、例外なく REJECT する。
 
-- New behavior without tests
-- Bug fix without a regression test
-- Use of `any` type
-- Fallback value abuse (`?? 'unknown'`)
-- Explanatory comments (What/How comments)
-- Unused code ("just in case" code)
-- Direct mutation of objects/arrays
-- Swallowed errors (empty catch blocks)
-- TODO comments (not tracked in an issue)
-- Essentially identical logic duplicated (DRY violation)
-- Method proliferation doing the same thing (should be absorbed by configuration differences)
-- Specific implementation leaking into generic layers (imports and branching for specific implementations in generic layers)
-- Internal implementation exported from public API (infrastructure functions or internal classes exposed publicly)
-- Replaced code/exports surviving after refactoring
-- Missing cross-validation of related fields (invariants of semantically coupled config values left unverified)
+- テストがない新しい振る舞い
+- バグ修正にリグレッションテストがない
+- `any` 型の使用
+- フォールバック値の乱用（`?? 'unknown'`）
+- 説明コメント（What/How のコメント）
+- 未使用コード（「念のため」のコード）
+- オブジェクト/配列の直接変更
+- エラーの握りつぶし（空の catch）
+- TODO コメント（Issue化されていないもの）
+- 本質的に同じロジックの重複（DRY違反）
+- 同じことをするメソッドの増殖（構成の違いで吸収すべき）
+- 特定実装の汎用層への漏洩（汎用層に特定実装のインポート・分岐がある）
+- 内部実装のパブリック API エクスポート（インフラ層の関数・内部クラスが公開されている）
+- リファクタリングで置き換えられた旧コード・旧エクスポートの残存
+- 関連フィールドのクロスバリデーション欠如（意味的に結合した設定値の不変条件が未検証）
 
-### Warning
+### Warning（警告）
 
-Not blocking, but improvement is recommended.
+ブロッキングではないが改善を推奨する。
 
-- Insufficient edge case / boundary value tests
-- Tests coupled to implementation details
-- Overly complex functions/files
-- Unclear naming
-- Abandoned TODO/FIXME (those with issue numbers are acceptable)
-- `@ts-ignore` or `eslint-disable` without justification
+- エッジケース・境界値のテスト不足
+- テストが実装の詳細に依存
+- 関数/ファイルが複雑すぎる
+- 命名が不明確
+- TODO/FIXME の放置（Issue番号付きは許容）
+- 理由なしの `@ts-ignore`、`eslint-disable`
 
-### APPROVE
+### APPROVE（承認）
 
-Approve when all REJECT criteria are cleared and quality standards are met. Never give conditional approval. If there are problems, reject.
+全ての REJECT 基準をクリアし、品質基準を満たしている場合に承認する。「条件付き承認」はしない。問題があれば差し戻す。
 
-## Fact-Checking
+## ファクトチェック
 
-Always verify facts before raising an issue.
+指摘する前に必ず事実を確認する。
 
-| Do | Do Not |
-|----|--------|
-| Open the file and check actual code | Assume "it should be fixed already" |
-| Search for call sites and usages with grep | Raise issues based on memory |
-| Cross-reference type definitions and schemas | Guess that code is dead |
-| Distinguish generated files (reports, etc.) from source | Review generated files as if they were source code |
+| やるべきこと | やってはいけないこと |
+|-------------|-------------------|
+| ファイルを開いて実コードを確認 | 「修正済みのはず」と思い込む |
+| grep で呼び出し元・使用箇所を検索 | 記憶に基づいて指摘する |
+| 型定義・スキーマを突合 | 推測でデッドコードと判断する |
+| 生成ファイル（レポート等）とソースを区別 | 生成ファイルをソースコードとしてレビュー |
 
-## Writing Specific Feedback
+## 具体的な指摘の書き方
 
-Every issue raised must include the following.
+全ての指摘には以下を含める。
 
-- **Which file and line number**
-- **What the problem is**
-- **How to fix it**
+- **どのファイルの何行目か**
+- **何が問題か**
+- **どう修正すべきか**
 
 ```
-❌ "Review the structure"
-❌ "Clean this up a bit"
-❌ "Refactoring is needed"
+❌ 「構造を見直してください」
+❌ 「もう少し整理してください」
+❌ 「リファクタリングが必要です」
 
-✅ "src/auth/service.ts:45 — validateUser() is duplicated in 3 places.
-     Extract into a shared function."
+✅ 「src/auth/service.ts:45 — validateUser() が3箇所で重複。
+     共通関数に抽出してください」
 ```
 
-## Finding ID Tracking (`finding_id`)
+## 指摘ID管理（finding_id）
 
-To prevent circular rejections, track findings by ID.
+同じ指摘の堂々巡りを防ぐため、指摘をIDで追跡する。
 
-- Every issue raised in a REJECT must include a `finding_id`
-- If the same issue is raised again, reuse the same `finding_id`
-- For repeated issues, set status to `persists` and include concrete evidence (file/line) that it remains unresolved
-- New issues must use status `new`
-- Resolved issues must be listed with status `resolved`
-- Issues without `finding_id` are invalid (cannot be used as rejection grounds)
-- REJECT is allowed only when there is at least one `new` or `persists` issue
+- REJECT時に挙げる各問題には `finding_id` を必須で付ける
+- 同じ問題を再指摘する場合は、同じ `finding_id` を再利用する
+- 再指摘時は状態を `persists` とし、未解決である根拠（ファイル/行）を必ず示す
+- 新規指摘は状態 `new` とする
+- 解消済みは状態 `resolved` として一覧化する
+- `finding_id` のない指摘は無効（判定根拠として扱わない）
+- REJECTは `new` または `persists` の問題が1件以上ある場合のみ許可する
 
-## Reopen Conditions (`resolved` -> open)
+## 再オープン条件（resolved → open）
 
-Reopening a resolved finding requires reproducible evidence.
+解消済み指摘を再オープンする場合は、再現可能な根拠を必須とする。
 
-- To reopen a previously `resolved` finding, all of the following are required  
-  1. Reproduction steps (command/input)  
-  2. Expected result vs. actual result  
-  3. Failing file/line evidence
-- If any of the three is missing, the reopen attempt is invalid (cannot be used as REJECT grounds)
-- If reproduction conditions changed, treat it as a different problem and issue a new `finding_id`
+- 前回 `resolved` の指摘を再オープンする場合、以下3点を必須で提示する  
+  1. 再現手順（コマンド/入力）  
+  2. 期待結果と実結果  
+  3. 失敗箇所のファイル/行
+- 上記3点が欠ける再オープンは無効（REJECT根拠に使わない）
+- 再現手順が変わる場合は別問題として新規 `finding_id` を発行する
 
-## Immutable Meaning of `finding_id`
+## finding_id の意味固定
 
-Do not mix different problems under the same ID.
+同じ ID に別問題を混在させない。
 
-- A `finding_id` must refer to one and only one problem
-- If problem meaning, evidence files, or reproduction conditions change, issue a new `finding_id`
-- Rewriting an existing `finding_id` to represent a different problem is prohibited
+- 同一 `finding_id` は同一問題にのみ使用する
+- 問題の意味・根拠ファイル・再現条件が変わる場合は新規 `finding_id` を発行する
+- 同一 `finding_id` の説明を後から別問題に差し替えることを禁止する
 
-## Handling Test File Size and Duplication
+## テストファイルの扱い
 
-Test file length and duplication are warning-level maintainability concerns by default.
+テストファイルの長さや重複は、原則として保守性の警告として扱う。
 
-- Excessive test file length and duplicated test setup are `Warning` by default
-- They may be `REJECT` only when reproducible harm is shown  
-  - flaky behavior  
-  - false positives/false negatives  
-  - inability to detect regressions
-- "Too long" or "duplicated" alone is not sufficient for `REJECT`
+- テストファイルの行数超過・重複コードは原則 `Warning`
+- 以下の実害が再現できる場合のみ `REJECT` 可能  
+  - テスト不安定化（フレーク）  
+  - 誤検知/検知漏れ  
+  - 回帰検出不能
+- 「長すぎる」「重複がある」だけでは `REJECT` しない
 
-## Boy Scout Rule
+## ボーイスカウトルール
 
-Leave it better than you found it.
+来たときよりも美しく。
 
-### In Scope
+### 対象
 
-- Existing problems in changed files (unused code, poor naming, broken abstractions)
-- Structural problems in changed modules (mixed responsibilities, unnecessary dependencies)
+- 変更したファイル内の既存の問題（未使用コード、不適切な命名、壊れた抽象化）
+- 変更したモジュール内の構造的な問題（責務の混在、不要な依存）
 
-### Out of Scope
+### 対象外
 
-- Unchanged files (record existing issues only)
-- Refactoring that greatly exceeds task scope (note as a suggestion, non-blocking)
+- 変更していないファイル（既存問題として記録のみ）
+- タスクスコープを大きく逸脱するリファクタリング（提案として記載、非ブロッキング）
 
-### Judgment
+### 判定
 
-| Situation | Verdict |
-|-----------|---------|
-| Changed file has an obvious problem | REJECT — have it fixed together |
-| Redundant expression (a shorter equivalent exists) | REJECT |
-| Unnecessary branch/condition (unreachable or always the same result) | REJECT |
-| Fixable in seconds to minutes | REJECT (do not mark as "non-blocking") |
-| Code made unused as a result of the change (arguments, imports, etc.) | REJECT — change-induced, not an "existing problem" |
-| Fix requires refactoring (large scope) | Record only (technical debt) |
+| 状況 | 判定 |
+|------|------|
+| 変更ファイル内に明らかな問題がある | REJECT — 一緒に修正させる |
+| 冗長な式（同値の短い書き方がある） | REJECT |
+| 不要な分岐・条件（到達しない、または常に同じ結果） | REJECT |
+| 数秒〜数分で修正可能な問題 | REJECT（「非ブロッキング」にしない） |
+| 変更の結果として未使用になったコード（引数・import等） | REJECT — 変更起因であり「既存問題」ではない |
+| 修正にリファクタリングが必要（スコープが大きい） | 記録のみ（技術的負債） |
 
-Do not tolerate problems just because existing code does the same. If existing code is bad, improve it rather than match it.
+既存コードの踏襲を理由にした問題の放置は認めない。既存コードが悪い場合、それに合わせるのではなく改善する。
 
-## Judgment Rules
+## 判定ルール
 
-- All issues detected in changed files are blocking (REJECT targets), even if the code existed before the change
-- Only issues in files NOT targeted by the change may be classified as "existing problems" or "non-blocking"
-- "The code itself existed before" is not a valid reason for non-blocking. As long as it is in a changed file, the Boy Scout rule applies
-- If even one issue exists, REJECT. "APPROVE with warnings" or "APPROVE with suggestions" is prohibited
+- 変更対象ファイル内で検出した問題は、既存コードであっても全てブロッキング（REJECT対象）として扱う
+- 「既存問題」「非ブロッキング」に分類してよいのは、変更対象外のファイルの問題のみ
+- 「コード自体は以前から存在していた」は非ブロッキングの理由にならない。変更ファイル内にある以上、ボーイスカウトルールが適用される
+- 問題が1件でもあればREJECT。「APPROVE + 警告」「APPROVE + 提案」は禁止
 
-## Detecting Circular Arguments
+## 堂々巡りの検出
 
-When the same kind of issue keeps recurring, reconsider the approach itself rather than repeating the same fix instructions.
+同じ種類の指摘が繰り返されている場合、修正指示の繰り返しではなくアプローチ自体を見直す。
 
-### When the Same Problem Recurs
+### 同じ問題が繰り返されたら
 
-1. Check if the same kind of issue is being repeated
-2. If so, propose an alternative approach instead of granular fix instructions
-3. Even when rejecting, include the perspective of "a different approach should be considered"
+1. 同じ種類の問題が繰り返されていないか確認
+2. 繰り返されている場合、細かい修正指示ではなくアプローチ自体の代替案を提示
+3. REJECT する場合でも、「別のアプローチを検討すべき」という観点を含める
 
-Rather than repeating "fix this again," stop and suggest a different path.
+「もう一度修正して」と繰り返すより、立ち止まって別の道を示す。

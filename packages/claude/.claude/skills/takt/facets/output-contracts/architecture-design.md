@@ -1,22 +1,22 @@
 ```markdown
-# Architecture Design
+# アーキテクチャ設計
 
-## Task Size
+## タスク規模
 Small / Medium / Large
 
-## Design Decisions
+## 設計判断
 
-### File Structure
-| File | Role |
-|------|------|
-| `src/example.ts` | Overview |
+### ファイル構成
+| ファイル | 役割 |
+|---------|------|
+| `src/example.ts` | 概要 |
 
-### Technology Selection
-- {Selected technologies/libraries and rationale}
+### 技術選定
+- {選定した技術・ライブラリとその理由}
 
-### Design Patterns
-- {Adopted patterns and where they apply}
+### 設計パターン
+- {採用するパターンと適用箇所}
 
-## Implementation Guidelines
-- {Guidelines the Coder should follow during implementation}
+## 実装ガイドライン
+- {Coderが実装時に従うべき指針}
 ```

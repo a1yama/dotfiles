@@ -1,46 +1,46 @@
 ```markdown
-# Architecture Review
+# アーキテクチャレビュー
 
-## Result: APPROVE / IMPROVE / REJECT
+## 結果: APPROVE / IMPROVE / REJECT
 
-## Summary
-{Summarize the result in 1-2 sentences}
+## サマリー
+{1-2文で結果を要約}
 
-## Reviewed Aspects
-- [x] Structure & design
-- [x] Code quality
-- [x] Change scope
-- [x] Test coverage
-- [x] Dead code
-- [x] Call chain verification
+## 確認した観点
+- [x] 構造・設計
+- [x] コード品質
+- [x] 変更スコープ
+- [x] テストカバレッジ
+- [x] デッドコード
+- [x] 呼び出しチェーン検証
 
-## Current Iteration Findings (new)
-| # | finding_id | family_tag | Scope | Location | Issue | Fix Suggestion |
-|---|------------|------------|-------|----------|-------|----------------|
-| 1 | ARCH-NEW-src-file-L42 | design-violation | In-scope | `src/file.ts:42` | Issue description | Fix approach |
+## 今回の指摘（new）
+| # | finding_id | family_tag | スコープ | 場所 | 問題 | 修正案 |
+|---|------------|------------|---------|------|------|--------|
+| 1 | ARCH-NEW-src-file-L42 | design-violation | スコープ内 | `src/file.ts:42` | 問題の説明 | 修正方法 |
 
-Scope: "In-scope" (fixable in this change) / "Out-of-scope" (existing issue, non-blocking)
+スコープ: 「スコープ内」（今回修正可能）/ 「スコープ外」（既存問題・非ブロッキング）
 
-## Carry-over Findings (persists)
-| # | finding_id | family_tag | Previous Evidence | Current Evidence | Issue | Fix Suggestion |
-|---|------------|------------|-------------------|------------------|-------|----------------|
-| 1 | ARCH-PERSIST-src-file-L77 | design-violation | `src/file.ts:77` | `src/file.ts:77` | Still unresolved | Apply prior fix plan |
+## 継続指摘（persists）
+| # | finding_id | family_tag | 前回根拠 | 今回根拠 | 問題 | 修正案 |
+|---|------------|------------|----------|----------|------|--------|
+| 1 | ARCH-PERSIST-src-file-L77 | design-violation | `src/file.ts:77` | `src/file.ts:77` | 未解消 | 既存修正方針を適用 |
 
-## Resolved Findings (resolved)
-| finding_id | Resolution Evidence |
-|------------|---------------------|
-| ARCH-RESOLVED-src-file-L10 | `src/file.ts:10` now satisfies the rule |
+## 解消済み（resolved）
+| finding_id | 解消根拠 |
+|------------|----------|
+| ARCH-RESOLVED-src-file-L10 | `src/file.ts:10` は規約を満たす |
 
-## Reopened Findings (reopened)
-| # | finding_id | family_tag | Prior Resolution Evidence | Recurrence Evidence | Issue | Fix Suggestion |
-|---|------------|------------|--------------------------|---------------------|-------|----------------|
-| 1 | ARCH-REOPENED-src-file-L55 | design-violation | `Previously fixed at src/file.ts:10` | `Recurred at src/file.ts:55` | Issue description | Fix approach |
+## 再開指摘（reopened）
+| # | finding_id | family_tag | 解消根拠（前回） | 再発根拠 | 問題 | 修正案 |
+|---|------------|------------|----------------|---------|------|--------|
+| 1 | ARCH-REOPENED-src-file-L55 | design-violation | `前回: src/file.ts:10 で修正済み` | `src/file.ts:55 で再発` | 問題の説明 | 修正方法 |
 
-## Rejection Gate
-- REJECT is valid only when at least one finding exists in `new`, `persists`, or `reopened`
-- Findings without `finding_id` are invalid
+## REJECT判定条件
+- `new`、`persists`、または `reopened` が1件以上ある場合のみ REJECT 可
+- `finding_id` なしの指摘は無効
 ```
 
-**Cognitive load reduction rules:**
-- APPROVE → Summary only (5 lines or fewer)
-- REJECT → Include only relevant finding rows (30 lines or fewer)
+**認知負荷軽減ルール:**
+- APPROVE → サマリーのみ（5行以内）
+- REJECT → 該当指摘のみ表で記載（30行以内）

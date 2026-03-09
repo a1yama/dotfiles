@@ -1,31 +1,31 @@
-Decompose the research plan (or additional research instructions) into independent subtasks and execute the investigation in parallel.
+調査計画（または追加調査指示）に従って、調査項目を独立したサブタスクに分解し、並列で調査を実行してください。
 
-**What to do:**
-1. Analyze research items from the plan and decompose them into independently executable subtasks
-2. Include clear research scope and expected deliverables in each subtask's instruction
-3. Include the following data saving rules and report structure in each subtask's instruction
+**やること:**
+1. 計画の調査項目を分析し、独立して実行可能なサブタスクに分解する
+2. 各サブタスクには明確な調査範囲と期待する成果物を指示に含める
+3. サブタスクの指示には次のデータ保存ルールと報告構成を必ず含める
 
-**Subtask decomposition guidelines:**
-- Prioritize topic independence (group interdependent items into the same subtask)
-- Avoid spreading high-priority items (P1) across too many subtasks
-- Balance workload evenly across subtasks
+**サブタスク分解の方針:**
+- 調査トピックの独立性を重視する（相互依存のある項目は同じサブタスクにまとめる）
+- 優先度の高い項目（P1）が複数サブタスクに分散しすぎないよう注意する
+- 各サブタスクの作業量が偏らないよう調整する
 
-**Rules to include in each subtask's instruction:**
+**各サブタスクの指示に含めるルール:**
 
-Data saving rules:
-- Write data per research item to `{report_dir}/data-{topic-name}.md`
-- Topic names in lowercase English with hyphens (e.g., `data-market-size.md`)
-- Include source URLs, retrieval dates, and raw data
+データ保存ルール:
+- 調査項目ごとに `{report_dir}/data-{トピック名}.md` に書き出す
+- トピック名は英語小文字ハイフン区切り（例: `data-market-size.md`）
+- 出典URL、取得日、生データを含める
 
-External data downloads:
-- Actively download and utilize CSV, Excel, JSON, and other data files from public institutions and trusted sources
-- Always verify source reliability before downloading
-- Save downloaded files to `{report_dir}/`
-- Never download from suspicious domains or download executable files
+外部データのダウンロード:
+- 公的機関や信頼できるソースの CSV・Excel・JSON 等のデータファイルは積極的にダウンロードして活用する
+- ダウンロード前に必ずソースの信頼性を確認する
+- ダウンロードしたファイルは `{report_dir}/` に保存する
+- 不審なドメインや実行可能ファイルはダウンロードしない
 
-Report structure (per subtask):
-- Results and details per research item
-- Summary of key findings
-- Caveats and risks
-- Items unable to research and reasons
-- Recommendations/conclusions
+報告の構成（サブタスクごと）:
+- 調査項目ごとの結果と詳細
+- 主要な発見のサマリー
+- 注意点・リスク
+- 調査できなかった項目とその理由
+- 推奨/結論

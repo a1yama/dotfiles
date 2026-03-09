@@ -1,86 +1,86 @@
-# fix -- Review Fix Instruction Template
+# fix — レビュー指摘修正 instruction テンプレート
 
-> **Purpose**: Fix issues identified by reviewers
-> **Agent**: coder
-> **Variations**: General fix / Supervise fix
+> **用途**: レビュアーの指摘を修正する
+> **使用エージェント**: coder
+> **バリエーション**: 汎用 fix / supervise fix
 
 ---
 
-## Template (General fix)
+## テンプレート（汎用 fix）
 
 ```
-Address the reviewer feedback.
-Check the session conversation history and fix the issues raised by reviewers.
+レビュアーのフィードバックに対応してください。
+セッションの会話履歴を確認し、レビュアーの指摘事項を修正してください。
 
-{Customize: Add report references for multiple reviews}
-**Review the review results:**
+{カスタマイズ: 複数レビューの場合はレポート参照を追加}
+**レビュー結果を確認してください:**
 - AI Review: {report:ai-review.md}
 - Architecture Review: {report:architecture-review.md}
 
-{Customize: For multiple reviews}
-**Important:** Fix ALL issues from ALL reviews without omission.
+{カスタマイズ: 複数レビューの場合}
+**重要:** 全レビューの指摘を漏れなく修正してください。
 
-**Required output (include headings)**
-## Work results
-- {Summary of work performed}
-## Changes made
-- {Summary of changes}
-## Test results
-- {Command and results}
-## Evidence
-- {List of verified files/searches/diffs/logs}
+**必須出力（見出しを含める）**
+## 作業結果
+- {実施内容の要約}
+## 変更内容
+- {変更内容の要約}
+## テスト結果
+- {実行コマンドと結果}
+## 証拠
+- {確認したファイル/検索/差分/ログの要点を列挙}
 ```
 
 ---
 
-## Template (Supervise fix)
+## テンプレート（supervise fix）
 
 ```
-Fix the issues raised by the supervisor.
+監督者からの指摘を修正してください。
 
-The supervisor identified problems from a holistic perspective.
-Address items in order of priority.
+監督者は全体を俯瞰した視点から問題を指摘しています。
+優先度の高い項目から順に対応してください。
 
-**Required output (include headings)**
-## Work results
-- {Summary of work performed}
-## Changes made
-- {Summary of changes}
-## Test results
-- {Command and results}
-## Evidence
-- {List of verified files/searches/diffs/logs}
+**必須出力（見出しを含める）**
+## 作業結果
+- {実施内容の要約}
+## 変更内容
+- {変更内容の要約}
+## テスト結果
+- {実行コマンドと結果}
+## 証拠
+- {確認したファイル/検索/差分/ログの要点を列挙}
 ```
 
 ---
 
-## Unified required output sections
+## 必須出力セクションの統一
 
-All fix-type movements require these 4 output sections:
+すべての fix 系ムーブメントは以下の 4 セクションを必須出力とする:
 
-| Section | Purpose |
-|---------|---------|
-| Work results | Summary of what was done |
-| Changes made | Specific changes |
-| Test results | Verification results |
-| Evidence | Verified facts (files, searches, diffs) |
+| セクション | 目的 |
+|-----------|------|
+| 作業結果 | 何をしたかの要約 |
+| 変更内容 | 具体的な変更 |
+| テスト結果 | 検証結果 |
+| 証拠 | 確認した事実（ファイル、検索、差分） |
 
 ---
 
-## Typical rules
+## 典型的な rules
 
 ```yaml
-# General fix
+# 汎用 fix
 rules:
-  - condition: Fixes completed
+  - condition: 修正完了
     next: reviewers
-  - condition: Cannot determine, insufficient information
+  - condition: 判断できない、情報不足
     next: plan
 
-# Supervise fix
+# supervise fix
 rules:
-  - condition: Supervisor's issues have been fixed
+  - condition: 監督者の指摘に対する修正が完了した
     next: supervise
-  - condition: Cannot proceed with fixes
+  - condition: 修正を進行できない
     next: plan
 ```

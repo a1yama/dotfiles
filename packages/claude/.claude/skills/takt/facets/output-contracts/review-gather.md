@@ -1,37 +1,37 @@
 ```markdown
-# Review Target
+# レビュー対象
 
-## Overview
-| Field | Details |
-|-------|---------|
-| Mode | PR / Branch / Current Diff |
-| Source | PR #{number} / Branch `{name}` / Working tree |
-| Title | {title or summary from commits} |
-| Labels | {label list, or N/A} |
+## 概要
+| 項目 | 内容 |
+|------|------|
+| モード | PR / ブランチ / 現在の差分 |
+| ソース | PR #{番号} / ブランチ `{名前}` / ワーキングツリー |
+| タイトル | {タイトルまたはコミットの要約} |
+| ラベル | {ラベル一覧、または N/A} |
 
-## Purpose & Requirements
-{Purpose and requirements extracted from PR description, commit messages, or task text}
+## 目的・要件
+{PR説明、コミットメッセージ、またはタスクテキストから抽出した目的と要件}
 
-## Linked Issues
-{State "N/A" if not applicable}
+## リンクされた Issue
+{該当しない場合は「N/A」と記載}
 
-### Issue #{number}: {Issue title}
-- Labels: {label list}
-- Description: {Summary of Issue body}
-- Key comments: {Summary of relevant comments}
+### Issue #{番号}: {Issueタイトル}
+- ラベル: {ラベル一覧}
+- 説明: {Issue本文の要約}
+- 主要コメント: {関連するコメントの要約}
 
-## Commit History
-{Include for Branch/Current Diff modes. State "N/A" for PR mode}
+## コミット履歴
+{ブランチ/現在の差分モードの場合に記載。PRモードの場合は「N/A」}
 
-| Hash | Message |
-|------|---------|
-| `{short hash}` | {commit message} |
+| ハッシュ | メッセージ |
+|---------|-----------|
+| `{short hash}` | {コミットメッセージ} |
 
-## Changed Files
-| File | Type | Lines Changed |
-|------|------|---------------|
-| `{file path}` | Added/Modified/Deleted | +{added} -{removed} |
+## 変更ファイル一覧
+| ファイル | 種別 | 変更行数 |
+|---------|------|---------|
+| `{ファイルパス}` | 追加/変更/削除 | +{追加} -{削除} |
 
-## Diff
-{diff output}
+## 差分
+{差分出力}
 ```

@@ -1,70 +1,72 @@
-Run tests, verify the build, and perform final approval.
+テスト実行、ビルド確認、最終承認を行ってください。
 
-**Overall piece verification:**
-1. Whether the plan and implementation results are consistent
-2. Whether findings from each review movement have been addressed
-3. Whether each task spec requirement has been achieved
-   - Extract requirements one by one from the task spec
-   - For each requirement, identify the implementing code (file:line)
-   - Verify the code actually fulfills the requirement (read the file, run the test)
-   - Do not rely on the plan report's judgment; independently verify each requirement
-   - If any requirement is unfulfilled, REJECT
+**ピース全体の確認:**
+1. レポートディレクトリ内の全レポートを確認し、ピース全体の整合性をチェックする
+   - 計画と実装結果が一致しているか
+   - 各レビュームーブメントの指摘が適切に対応されているか
+   - タスクの本来の目的が達成されているか
+2. タスク指示書の各要件が達成されているか
+   - タスク指示書から要件を1つずつ抽出する
+   - 各要件について、実装されたコード（ファイル:行）を特定する
+   - コードが要件を満たしていることを実際に確認する（ファイルを読む、テストを実行する）
+   - 計画レポートの判断を鵜呑みにせず、要件ごとに独立照合する
+   - 充足していない要件が1つでもあれば REJECT する
 
-**Report verification:** Read all reports in the Report Directory and
-check for any unaddressed improvement suggestions.
+**レポートの確認:** Report Directory内の全レポートを読み、
+未対応の改善提案がないか確認してください。
 
-**Validation output contract:**
+**Validation出力契約:**
 ```markdown
-# Final Verification Results
+# 最終検証結果
 
-## Result: APPROVE / REJECT
+## 結果: APPROVE / REJECT
 
-## Requirements Fulfillment Check
+## 要件充足チェック
 
-Extract requirements from the task spec and verify each one individually against actual code.
+タスク指示書から要件を抽出し、各要件を実コードで個別に検証する。
 
-| # | Requirement (extracted from task spec) | Met | Evidence (file:line) |
-|---|---------------------------------------|-----|---------------------|
-| 1 | {requirement 1} | ✅/❌ | `src/file.ts:42` |
-| 2 | {requirement 2} | ✅/❌ | `src/file.ts:55` |
+| # | 要件（タスク指示書から抽出） | 充足 | 根拠（ファイル:行） |
+|---|---------------------------|------|-------------------|
+| 1 | {要件1} | ✅/❌ | `src/file.ts:42` |
+| 2 | {要件2} | ✅/❌ | `src/file.ts:55` |
 
-- If any ❌ exists, REJECT is mandatory
-- ✅ without evidence is invalid (must verify against actual code)
-- Do not rely on plan report's judgment; independently verify each requirement
+- ❌ が1件でもある場合は REJECT 必須
+- 根拠なしの ✅ は無効（実コードで確認すること）
+- 計画レポートの判断を鵜呑みにせず、要件ごとに独立照合する
 
-## Verification Summary
-| Item | Status | Verification method |
-|------|--------|-------------------|
-| Tests | ✅ | `npm test` (N passed) |
-| Build | ✅ | `npm run build` succeeded |
-| Functional check | ✅ | Main flows verified |
+## 検証サマリー
+| 項目 | 状態 | 確認方法 |
+|------|------|---------|
+| テスト | ✅ | `npm test` (N passed) |
+| ビルド | ✅ | `npm run build` 成功 |
+| 動作確認 | ✅ | 主要フロー確認 |
 
-## Deliverables
-- Created: {Created files}
-- Modified: {Modified files}
+## 成果物
+- 作成: {作成したファイル}
+- 変更: {変更したファイル}
 
-## Outstanding items (if REJECT)
-| # | Item | Reason |
-|---|------|--------|
-| 1 | {Item} | {Reason} |
+## 未完了項目（REJECTの場合）
+| # | 項目 | 理由 |
+|---|------|------|
+| 1 | {項目} | {理由} |
 ```
 
-**Summary output contract (only if APPROVE):**
+**Summary出力契約（APPROVEの場合のみ）:**
 ```markdown
-# Task Completion Summary
+# タスク完了サマリー
 
-## Task
-{Original request in 1-2 sentences}
+## タスク
+{元の要求を1-2文で}
 
-## Result
-Complete
+## 結果
+完了
 
-## Changes
-| Type | File | Summary |
-|------|------|---------|
-| Create | `src/file.ts` | Summary description |
+## 変更内容
+| 種別 | ファイル | 概要 |
+|------|---------|------|
+| 作成 | `src/file.ts` | 概要説明 |
 
-## Verification commands
+## 確認コマンド
 ```bash
 npm test
 npm run build

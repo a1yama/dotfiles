@@ -1,232 +1,248 @@
-# AI Antipattern Detection Criteria
+# AI Antipattern 検出基準
 
-## Assumption Verification
+## 仮定の検証
 
-AI often makes assumptions. Verify them.
+AIはしばしば仮定を行う。それを検証する。
 
-| Check | Question |
-|-------|----------|
-| Requirements | Does the implementation match what was actually requested? |
-| Context | Does it follow the existing codebase conventions? |
-| Domain | Are business rules correctly understood? |
-| Edge Cases | Did the AI consider realistic edge cases? |
+| 確認項目 | 質問 |
+|---------|------|
+| 要件 | 実装は実際に要求されたものと一致しているか? |
+| コンテキスト | 既存のコードベースの規則に合っているか? |
+| ドメイン | ビジネスルールは正しく理解されているか? |
+| エッジケース | AIは現実的なエッジケースを考慮したか? |
 
-Red flags:
-- Implementation appears to answer a different question
-- Uses patterns not found elsewhere in the codebase
-- Overly generic solution for a specific problem
+危険信号:
+- 実装が異なる質問に答えているように見える
+- コードベースの他の場所にないパターンを使用
+- 特定の問題に対して過度に汎用的な解決策
 
-## Plausible-but-Wrong Detection
+## もっともらしいが間違っている検出
 
-AI generates code that looks correct but is wrong.
+AIは正しく見えるが間違っているコードを生成する。
 
-| Pattern | Example |
-|---------|---------|
-| Syntactically correct but semantically wrong | Validation that checks format but misses business rules |
-| Hallucinated APIs | Calling methods that don't exist in the library version being used |
-| Stale patterns | Using deprecated approaches from training data |
-| Over-engineering | Adding unnecessary abstraction layers for the task |
-| Under-engineering | Missing error handling for realistic scenarios |
-| Forgotten wiring | Mechanism is implemented but not passed from entry points |
+| パターン | 例 |
+|---------|-----|
+| 構文は正しいが意味が間違っている | 形式をチェックするがビジネスルールを見落とすバリデーション |
+| 幻覚API | 使用しているライブラリバージョンに存在しないメソッドの呼び出し |
+| 古いパターン | 学習データからの非推奨アプローチの使用 |
+| 過剰エンジニアリング | タスクに不要な抽象化レイヤーの追加 |
+| 過小エンジニアリング | 現実的なシナリオのエラーハンドリングの欠如 |
+| 配線忘れ | 機構は実装されているが、エントリポイントから渡されていない |
 
-Verification approach:
-1. Can this code actually compile/run?
-2. Do the imported modules/functions exist?
-3. Is the API used correctly for this library version?
-4. If new parameters/fields were added, are they actually passed from callers?
-   - AI often implements correctly within individual files but forgets cross-file wiring
-   - Grep to check if `options.xxx ?? fallback` always uses the fallback
+検証アプローチ:
+1. このコードは実際にコンパイル/実行できるか?
+2. インポートされたモジュール/関数は存在するか?
+3. このライブラリバージョンでAPIは正しく使用されているか?
+4. 新しいパラメータ/フィールドが追加された場合、呼び出し元から実際に渡されているか?
+   - AIは個々のファイル内では正しく実装するが、ファイル横断の結合を忘れがち
+   - `options.xxx ?? fallback` で常にフォールバックが使われていないか grep で確認
 
-## Copy-Paste Pattern Detection
+## コピペパターン検出
 
-AI often repeats the same patterns, including mistakes.
+AIは同じパターンを、間違いも含めて繰り返すことが多い。
 
-| Check | Action |
-|-------|--------|
-| Repeated dangerous patterns | Same vulnerability in multiple places |
-| Inconsistent implementation | Same logic implemented differently across files |
-| Boilerplate explosion | Unnecessary repetition that could be abstracted |
+| 確認項目 | アクション |
+|---------|----------|
+| 繰り返される危険なパターン | 複数の場所で同じ脆弱性 |
+| 一貫性のない実装 | ファイル間で異なる方法で実装された同じロジック |
+| ボイラープレートの爆発 | 抽象化できる不要な繰り返し |
 
-## Redundant Conditional Branch Detection
+## 冗長な条件分岐パターン検出
 
-AI tends to generate if/else blocks that call the same function with only argument differences.
+AIは条件分岐で同一関数を引数の差異のみで呼び分けるコードを生成しがちである。
 
-| Pattern | Example | Verdict |
-|---------|---------|---------|
-| Branch differs only in argument presence | `if (x) f(a, b, c) else f(a, b)` | REJECT |
-| Branch differs only in options | `if (x) f(a, {opt: x}) else f(a)` | REJECT |
-| Redundant else without using return value | `if (x) { f(a, x); return; } f(a);` | REJECT |
+| パターン | 例 | 判定 |
+|---------|-----|------|
+| 引数の有無のみの分岐 | `if (x) f(a, b, c) else f(a, b)` | REJECT |
+| オプション有無の分岐 | `if (x) f(a, {opt: x}) else f(a)` | REJECT |
+| 戻り値を使わない冗長な else | `if (x) { f(a, x); return; } f(a);` | REJECT |
 
 ```typescript
-// REJECT - both branches call the same function, differing only in the 3rd argument
+// REJECT - 両ブランチが同一関数を呼び出し、第3引数の有無のみが異なる
 if (options.format !== undefined) {
   await processFile(input, output, { format: options.format });
 } else {
   await processFile(input, output);
 }
 
-// OK - extract the conditional into a variable, then make a single call
+// OK - 三項演算子で統一
 const formatOpt = options.format !== undefined ? { format: options.format } : undefined;
 await processFile(input, output, formatOpt);
 ```
 
-Verification approach:
-1. Find if/else blocks calling the same function
-2. If the only difference is optional argument presence, unify with ternary or spread syntax
-3. If branches have different preprocessing, store results in a variable and make a single call
+検証アプローチ:
+1. if/else ブロックで同一関数を呼び出している箇所を探す
+2. 差異がオプション引数の有無のみなら、三項演算子やスプレッド構文で統一
+3. 分岐ごとに異なる前処理がある場合は、変数に結果を格納してから単一呼び出しに統一
 
-## Context Fitness Assessment
+## コンテキスト適合性評価
 
-Does the code fit this specific project?
+コードはこの特定のプロジェクトに合っているか?
 
-| Aspect | Verification |
-|--------|-------------|
-| Naming conventions | Matches existing codebase style |
-| Error handling style | Consistent with project patterns |
-| Logging approach | Uses project's logging conventions |
-| Test style | Matches existing test patterns |
+| 側面 | 検証 |
+|------|------|
+| 命名規則 | 既存のコードベースのスタイルに一致 |
+| エラーハンドリングスタイル | プロジェクトのパターンと一貫性 |
+| ログ出力アプローチ | プロジェクトのログ規則を使用 |
+| テストスタイル | 既存のテストパターンに一致 |
 
-Questions to ask:
-- Would a developer familiar with this codebase write it this way?
-- Does it feel like it belongs here?
-- Are there unexplained deviations from project conventions?
+確認すべき質問:
+- このコードベースに精通した開発者ならこう書くか?
+- ここに属しているように感じるか?
+- プロジェクト規則からの説明のない逸脱はないか?
 
-## Scope Creep Detection
+## インテグレーションパターンの一貫性
 
-AI tends to over-deliver. Check for unnecessary additions.
+同じ種類のAPI接続（REST呼び出し等）がプロジェクト内で異なる方式で実装されていないか確認する。
 
-| Check | Problem |
-|-------|---------|
-| Extra features | Functionality not requested |
-| Premature abstraction | Interfaces/abstractions for single implementations |
-| Over-configuration | Making things configurable that don't need to be |
-| Gold-plating | "Nice-to-have" additions not asked for |
-| Unnecessary legacy support | Adding mapping/normalization logic for old values without explicit instruction |
+| パターン | 例 | 判定 |
+|---------|-----|------|
+| 生成クライアントと手書きクライアントの混在 | A画面はOrval生成フック、B画面はaxiosInstance直接 | REJECT |
+| 同じデータ取得パターンの異なる実装 | A画面はuseQuery+axios、B画面は生成フック | REJECT |
+| データ型の定義方式の混在 | A画面は生成された型、B画面は手書きの型 | REJECT |
 
-The best code is the minimum code that solves the problem.
+検証アプローチ:
+1. 変更差分のAPI呼び出し方式を確認
+2. 同じ目的の既存コードがどの方式で書かれているか grep で確認
+3. プロジェクトにAPI生成設定（orval.config.ts等）があるか確認
+4. 不整合がある場合、プロジェクトの標準パターンへの統一を指摘する
 
-Legacy support criteria:
-- Unless explicitly instructed to "support legacy values" or "maintain backward compatibility", legacy support is unnecessary
-- Do not add `.transform()` normalization, `LEGACY_*_MAP` mappings, or `@deprecated` type definitions
-- Support only new values and keep it simple
+## スコープクリープ検出
 
-## Dead Code Detection
+AIは過剰に提供する傾向がある。不要な追加をチェック。
 
-AI adds new code but often forgets to remove code that is no longer needed.
+| 確認項目 | 問題 |
+|---------|------|
+| 追加機能 | 要求されていない機能 |
+| 早すぎる抽象化 | 単一実装のためのインターフェース/抽象化 |
+| 過剰設定 | 設定可能にする必要のないものを設定可能に |
+| ゴールドプレーティング | 求められていない「あると良い」追加 |
+| 不要なLegacy対応 | 明示的な指示がないのに旧値のマッピング・正規化ロジックを追加 |
 
-| Pattern | Example |
-|---------|---------|
-| Unused functions/methods | Old implementations remaining after refactoring |
-| Unused variables/constants | Definitions no longer needed after condition changes |
-| Unreachable code | Processing remaining after early returns, always-true/false conditions |
-| Logically unreachable defensive code | Branches that never execute due to caller constraints |
-| Unused imports/dependencies | Import statements or package dependencies for removed features |
-| Orphaned exports/public APIs | Re-exports or index registrations remaining after implementation is removed |
-| Unused interfaces/type definitions | Old types remaining after implementation changes |
-| Disabled code | Code left commented out |
+最良のコードは、問題を解決する最小限のコード。
 
-Logical dead code detection:
+Legacy対応の判定基準:
+- 明示的に「Legacy値をサポートする」「後方互換性を保つ」という指示がない限り、Legacy対応は不要
+- `.transform()` による正規化、`LEGACY_*_MAP` のようなマッピング、`@deprecated` な型定義は追加しない
+- 新しい値のみをサポートし、シンプルに保つ
 
-AI tends to add "just in case" defensive code, but when considering caller constraints, it may be unreachable. Code that is syntactically reachable but logically unreachable due to call chain preconditions should be removed.
+## デッドコード検出
+
+AIは新しいコードを追加するが、不要になったコードの削除を忘れることが多い。
+
+| パターン | 例 |
+|---------|-----|
+| 未使用の関数・メソッド | リファクタリング後に残った旧実装 |
+| 未使用の変数・定数 | 条件変更で不要になった定義 |
+| 到達不能コード | 早期returnの後に残った処理、常に真/偽になる条件分岐 |
+| 論理的に到達不能な防御コード | 呼び出し元の制約で絶対に通らない分岐 |
+| 未使用のインポート・依存 | 削除された機能のimport文やパッケージ依存 |
+| 孤立したエクスポート・公開API | 実体が消えたのにre-exportやindex登録が残っている |
+| 未使用のインターフェース・型定義 | 実装側が変更されたのに残った古い型 |
+| 無効化されたコード | コメントアウトされたまま放置されたコード |
+
+論理的デッドコードの検出:
+
+AIは「念のため」の防御コードを追加しがちだが、呼び出し元の制約を考慮すると到達不能な場合がある。構文的には到達可能でも、呼び出しチェーンの前提条件により論理的に到達しないコードは削除する。
 
 ```typescript
-// REJECT - callers always require interactive input
-// This function is never called from non-interactive environments
+// REJECT - 呼び出し元がインタラクティブ入力を前提としている
+// 非インタラクティブ環境からこの関数が呼ばれることはない
 function displayResult(data: ResultData): void {
   const isInteractive = process.stdin.isTTY === true;
-  // isInteractive is always true (callers assume TTY)
-  const output = isInteractive ? formatRich(data) : formatPlain(data);  // else branch is unreachable
+  // isInteractive は常に true（呼び出し元がTTYを前提としている）
+  const output = isInteractive ? formatRich(data) : formatPlain(data);  // else節は到達不能
 }
 
-// OK - understands caller constraints and removes unnecessary branching
+// OK - 呼び出し元の制約を理解し、不要な分岐を排除
 function displayResult(data: ResultData): void {
-  // Only called from interactive menus, so TTY is always present
+  // インタラクティブメニューからのみ呼ばれるためTTYは常に存在する
   console.log(formatRich(data));
 }
 ```
 
-Verification approach:
-1. When finding defensive branches, grep to check all callers of the function
-2. If all callers already satisfy the condition, the defense is unnecessary
-3. Grep to confirm no references to changed/deleted code remain
-4. Verify that public module (index files, etc.) export lists match actual implementations
-5. Check that no old code remains corresponding to newly added code
+検証アプローチ:
+1. 防御的な分岐を見つけたら、grep でその関数の全呼び出し元を確認
+2. 全呼び出し元が既にその条件を満たしている場合、防御は不要
+3. 変更・削除されたコードを参照している箇所がないか grep で確認
+4. 公開モジュール（index ファイル等）のエクスポート一覧と実体が一致しているか確認
+5. 新規追加されたコードに対応する古いコードが残っていないか確認
 
-## Fallback/Default Argument Overuse Detection
+## フォールバック・デフォルト引数の濫用検出
 
-AI overuses fallbacks and default arguments to hide uncertainty.
+AIは不確実性を隠すためにフォールバックやデフォルト引数を多用する。
 
-| Pattern | Example | Verdict |
-|---------|---------|---------|
-| Fallback on required data | `user?.id ?? 'unknown'` | REJECT |
-| Default argument overuse | `function f(x = 'default')` where all callers omit it | REJECT |
-| Nullish coalescing with no input path | `options?.cwd ?? process.cwd()` with no way to pass from above | REJECT |
-| try-catch returning empty | `catch { return ''; }` | REJECT |
-| Multi-level fallback | `a ?? b ?? c ?? d` | REJECT |
-| Silent ignore in conditionals | `if (!x) return;` silently skipping what should be an error | REJECT |
+| パターン | 例 | 判定 |
+|---------|-----|------|
+| 必須データへのフォールバック | `user?.id ?? 'unknown'` | REJECT |
+| デフォルト引数の濫用 | `function f(x = 'default')` で全呼び出し元が省略 | REJECT |
+| null合体で渡す口がない | `options?.cwd ?? process.cwd()` で上位から渡す経路なし | REJECT |
+| try-catch で空値返却 | `catch { return ''; }` | REJECT |
+| 多段フォールバック | `a ?? b ?? c ?? d` | REJECT |
+| 条件分岐でサイレント無視 | `if (!x) return;` で本来エラーをスキップ | REJECT |
 
-Verification approach:
-1. Grep the diff for `??`, `||`, `= defaultValue`, `catch`
-2. For each fallback/default argument:
-   - Is it required data? -> REJECT
-   - Do all callers omit it? -> REJECT
-   - Is there a path to pass the value from above? -> If not, REJECT
-3. REJECT if any fallback/default argument exists without justification
+検証アプローチ:
+1. 変更差分で `??`、`||`、`= defaultValue`、`catch` を grep
+2. 各フォールバック・デフォルト引数について:
+   - 必須データか? → REJECT
+   - 全呼び出し元が省略しているか? → REJECT
+   - 上位から値を渡す経路があるか? → なければ REJECT
+3. 理由なしのフォールバック・デフォルト引数が1つでもあれば REJECT
 
-## Unused Code Detection
+## 未使用コードの検出
 
-AI tends to generate unnecessary code for "future extensibility", "symmetry", or "just in case". Code not currently called from anywhere should be removed.
+AIは「将来の拡張性」「対称性」「念のため」で不要なコードを生成しがちである。現時点で呼ばれていないコードは削除する。
 
-| Verdict | Criteria |
-|---------|----------|
-| REJECT | Public functions/methods not called from anywhere currently |
-| REJECT | Setters/getters created "for symmetry" but not used |
-| REJECT | Interfaces or options prepared for future extension |
-| REJECT | Exported but no usage found via grep |
-| OK | Implicitly called by framework (lifecycle hooks, etc.) |
+| 判定 | 基準 |
+|------|------|
+| REJECT | 現在どこからも呼ばれていないpublic関数・メソッド |
+| REJECT | 「対称性のため」に作られたが使われていないsetter/getter |
+| REJECT | 将来の拡張のために用意されたインターフェースやオプション |
+| REJECT | exportされているが、grep で使用箇所が見つからない |
+| OK | フレームワークが暗黙的に呼び出す（ライフサイクルフック等） |
 
-Verification approach:
-1. Grep to confirm no references to changed/deleted code remain
-2. Verify that public module (index files, etc.) export lists match actual implementations
-3. Check that no old code remains corresponding to newly added code
+検証アプローチ:
+1. 変更・削除されたコードを参照している箇所がないか grep で確認
+2. 公開モジュール（index ファイル等）のエクスポート一覧と実体が一致しているか確認
+3. 新規追加されたコードに対応する古いコードが残っていないか確認
 
-## Unnecessary Backward Compatibility Code Detection
+## 不要な後方互換コードの検出
 
-AI tends to leave unnecessary code "for backward compatibility". Don't miss this.
+AIは「後方互換のために」不要なコードを残しがちである。これを見逃さない。
 
-Code to remove:
+削除すべき後方互換コード:
 
-| Pattern | Example | Verdict |
-|---------|---------|---------|
-| deprecated + no usage | `@deprecated` annotation with no one using it | Remove immediately |
-| Both old and new APIs exist | Old function remains alongside new function | Remove old, unless both have active usage sites |
-| Completed migration wrapper | Wrapper created for compatibility but migration is complete | Remove |
-| Comment says "remove later" | `// TODO: remove after migration` left abandoned | Remove now |
-| Excessive proxy/adapter usage | Complexity added solely for backward compatibility | Replace simply |
+| パターン | 例 | 判定 |
+|---------|-----|------|
+| deprecated + 使用箇所なし | `@deprecated` アノテーション付きで誰も使っていない | 即削除 |
+| 新APIと旧API両方存在 | 新関数があるのに旧関数も残っている | 両方に使用箇所がある場合を除き、旧を削除 |
+| 移行済みのラッパー | 互換のために作ったが移行完了済み | 削除 |
+| コメントで「将来削除」 | `// TODO: remove after migration` が放置 | 今すぐ削除 |
+| Proxy/アダプタの過剰使用 | 後方互換のためだけに複雑化 | シンプルに置換 |
 
-Code to keep:
+残すべき後方互換コード:
 
-| Pattern | Example | Verdict |
-|---------|---------|---------|
-| Externally published API | npm package exports | Consider carefully |
-| Config file compatibility | Can read old format config | Maintain until major version |
-| During data migration | In the middle of DB schema migration | Maintain until complete |
+| パターン | 例 | 判定 |
+|---------|-----|------|
+| 外部公開API | npm パッケージのエクスポート | 慎重に検討 |
+| 設定ファイル互換 | 旧形式の設定を読める | メジャーバージョンまで維持 |
+| データ移行中 | DBスキーマ移行の途中 | 移行完了まで維持 |
 
-Decision criteria:
-1. Are there usage sites? -> Verify with grep/search. Remove if none
-2. Do both old and new have usage sites? -> If both are currently in use, this may be intentional coexistence rather than backward compatibility. Check callers
-3. Is it externally published? -> Can remove immediately if internal only
-4. Is migration complete? -> Remove if complete
+判断基準:
+1. 使用箇所があるか? → grep/検索で確認。なければ削除
+2. 新旧両方に使用箇所があるか? → 両方が現在使われているなら、後方互換ではなく並存設計の可能性がある。呼び出し元を確認
+3. 外部に公開しているか? → 内部のみなら即削除可能
+4. 移行は完了したか? → 完了なら削除
 
-When AI says "for backward compatibility", be skeptical. Verify if it's truly necessary.
+AIが「後方互換のため」と言ったら疑う。本当に必要か確認せよ。
 
-## Decision Traceability Review
+## 決定トレーサビリティレビュー
 
-Verify that the Coder's decision log is valid.
+Coderの決定ログが妥当か検証する。
 
-| Check | Question |
-|-------|----------|
-| Decision is documented | Are non-obvious choices explained? |
-| Rationale is sound | Does the reasoning make sense? |
-| Alternatives considered | Were other approaches evaluated? |
-| Assumptions explicit | Are assumptions explicit and reasonable? |
+| 確認項目 | 質問 |
+|---------|------|
+| 決定が文書化されている | 自明でない選択は説明されているか? |
+| 理由が妥当 | 理由は理にかなっているか? |
+| 代替案が検討されている | 他のアプローチは評価されたか? |
+| 仮定が明示されている | 仮定は明示的で合理的か? |

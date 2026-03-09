@@ -1,5 +1,5 @@
 name: takt-default-review-fix
-description: "TAKT development code review + fix loop (5 parallel reviewers: architecture, security, QA, testing, requirements — with iterative fixes)"
+description: TAKT開発コードレビュー＋修正ループ（アーキテクチャ・セキュリティ・QA・テスト・要件の5観点から並列レビューし、指摘を修正する）
 piece_config:
   provider_options:
     codex:
@@ -17,9 +17,9 @@ loop_monitors:
       persona: supervisor
       instruction_template: loop-monitor-reviewers-fix
       rules:
-        - condition: Healthy (progress being made)
+        - condition: 健全（進捗あり）
           next: reviewers
-        - condition: Unproductive (repeated findings, fixes not applied)
+        - condition: 非生産的（同じ指摘の反復・修正未反映）
           next: supervise
 
 movements:
@@ -41,14 +41,14 @@ movements:
         - name: review-target.md
           format: review-gather
     rules:
-      - condition: Review target information gathered
+      - condition: レビュー対象の情報収集完了
         next: reviewers
-      - condition: Cannot identify review target, insufficient info
+      - condition: レビュー対象を特定できない、情報不足
         next: ABORT
         appendix: |
-          Clarifications needed:
-          - {Question 1}
-          - {Question 2}
+          確認事項:
+          - {質問1}
+          - {質問2}
 
   - name: reviewers
     parallel:
@@ -201,9 +201,9 @@ movements:
     pass_previous_response: false
     instruction: fix
     rules:
-      - condition: Fix complete
+      - condition: 修正完了
         next: reviewers
-      - condition: Cannot proceed, insufficient info
+      - condition: 判断できない、情報不足
         next: ABORT
 
   - name: supervise
@@ -222,9 +222,9 @@ movements:
     instruction: supervise
     pass_previous_response: false
     rules:
-      - condition: All checks passed
+      - condition: すべて問題なし
         next: COMPLETE
-      - condition: Requirements unmet, tests failing, build errors
+      - condition: 要求未達成、テスト失敗、ビルドエラー
         next: ABORT
     output_contracts:
       report:

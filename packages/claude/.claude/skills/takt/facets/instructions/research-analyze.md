@@ -1,23 +1,23 @@
-Analyze the research results and determine whether additional investigation is needed.
+調査結果を分析し、追加調査の必要性を判断してください。
 
-**What to do:**
-1. Organize the major findings from the research results
-2. Identify unexplained phenomena, unverified hypotheses, and missing data
-3. Save analysis results to `{report_dir}/analysis-{N}.md` as files
-4. Make one of the following judgments:
-   - **New questions exist** → Create additional research instructions for the Digger
-   - **Sufficiently investigated** → Create an overall summary
+**やること:**
+1. 調査結果の主要な発見を整理する
+2. 未解明の現象、検証されていない仮説、欠損データを特定する
+3. 分析結果を `{report_dir}/analysis-{N}.md` にファイルとして保存する
+4. 以下のいずれかを判断する
+   - **新たな問いがある** → Digger への追加調査指示を作成する
+   - **十分に掘り下げた** → 全体サマリーを作成する
 
-**Data saving rules:**
-- Write to `{report_dir}/analysis-{N}.md` (N is sequential number) for each analysis
-- Include analysis perspective, synthesized findings, and identified gaps
+**データ保存ルール:**
+- 分析のたびに `{report_dir}/analysis-{N}.md`（N は連番）に書き出す
+- 分析の観点、統合した発見、特定したギャップを含める
 
-**Additional research instruction format:**
-- What to investigate (specific data or information)
-- Why it's needed (which gap it fills)
-- Where it might be found (hints for data sources)
+**追加調査指示の書き方:**
+- 何を調べるか（具体的なデータ・情報）
+- なぜ必要か（どのギャップを埋めるため）
+- どこで見つかりそうか（データソースのヒント）
 
-**Overall summary structure:**
-- Summary of findings so far
-- Organization of findings
-- Identified gaps and their importance (if remaining)
+**全体サマリーの構成:**
+- 現時点での発見サマリー
+- 発見の整理
+- 特定したギャップとその重要度（残存する場合）

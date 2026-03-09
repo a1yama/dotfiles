@@ -1,48 +1,48 @@
 ```markdown
-# Final Validation Results
+# 最終検証結果
 
-## Result: APPROVE / REJECT
+## 結果: APPROVE / REJECT
 
-## Requirements Fulfillment Check
+## 要件充足チェック
 
-Extract requirements from the task spec and verify each one individually against actual code.
+タスク指示書から要件を抽出し、各要件を実コードで個別に検証する。
 
-| # | Requirement (extracted from task spec) | Met | Evidence (file:line) |
-|---|---------------------------------------|-----|---------------------|
-| 1 | {requirement 1} | ✅/❌ | `src/file.ts:42` |
-| 2 | {requirement 2} | ✅/❌ | `src/file.ts:55` |
+| # | 要件（タスク指示書から抽出） | 充足 | 根拠（ファイル:行） |
+|---|---------------------------|------|-------------------|
+| 1 | {要件1} | ✅/❌ | `src/file.ts:42` |
+| 2 | {要件2} | ✅/❌ | `src/file.ts:55` |
 
-- If any ❌ exists, REJECT is mandatory
-- ✅ without evidence is invalid (must verify against actual code)
-- Do not rely on plan report's judgment; independently verify each requirement
+- ❌ が1件でもある場合は REJECT 必須
+- 根拠なしの ✅ は無効（実コードで確認すること）
+- 計画レポートの判断を鵜呑みにせず、要件ごとに独立照合する
 
-## Validation Summary
-| Item | Status | Verification Method |
-|------|--------|-------------------|
-| Tests | ✅ | `npm test` (N passed) |
-| Build | ✅ | `npm run build` succeeded |
-| Functional check | ✅ | Main flow verified |
+## 検証サマリー
+| 項目 | 状態 | 確認方法 |
+|------|------|---------|
+| テスト | ✅ | `npm test` (N passed) |
+| ビルド | ✅ | `npm run build` 成功 |
+| 動作確認 | ✅ | 主要フロー確認 |
 
-## Current Iteration Findings (new)
-| # | finding_id | Item | Evidence | Reason | Required Action |
-|---|------------|------|----------|--------|-----------------|
-| 1 | VAL-NEW-src-file-L42 | Requirement mismatch | `file:line` | Description | Fix required |
+## 今回の指摘（new）
+| # | finding_id | 項目 | 根拠 | 理由 | 必要アクション |
+|---|------------|------|------|------|----------------|
+| 1 | VAL-NEW-src-file-L42 | 要求不一致 | `file:line` | 説明 | 修正が必要 |
 
-## Carry-over Findings (persists)
-| # | finding_id | Previous Evidence | Current Evidence | Reason | Required Action |
-|---|------------|-------------------|------------------|--------|-----------------|
-| 1 | VAL-PERSIST-src-file-L77 | `file:line` | `file:line` | Still unresolved | Apply fix |
+## 継続指摘（persists）
+| # | finding_id | 前回根拠 | 今回根拠 | 理由 | 必要アクション |
+|---|------------|----------|----------|------|----------------|
+| 1 | VAL-PERSIST-src-file-L77 | `file:line` | `file:line` | 未解消 | 修正継続 |
 
-## Resolved Findings (resolved)
-| finding_id | Resolution Evidence |
-|------------|---------------------|
-| VAL-RESOLVED-src-file-L10 | `file:line` now passes validation |
+## 解消済み（resolved）
+| finding_id | 解消根拠 |
+|------------|----------|
+| VAL-RESOLVED-src-file-L10 | `file:line` は検証条件を満たす |
 
-## Deliverables
-- Created: {Created files}
-- Modified: {Modified files}
+## 成果物
+- 作成: {作成したファイル}
+- 変更: {変更したファイル}
 
-## Rejection Gate
-- REJECT is valid only when at least one finding exists in `new` or `persists`
-- Findings without `finding_id` are invalid
+## REJECT判定条件
+- `new` または `persists` が1件以上ある場合のみ REJECT 可
+- `finding_id` なしの指摘は無効
 ```

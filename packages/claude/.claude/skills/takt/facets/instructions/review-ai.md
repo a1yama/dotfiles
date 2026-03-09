@@ -1,11 +1,11 @@
-Review the code for AI-specific issues:
-- Verification of assumptions
-- Plausible but incorrect patterns
-- Compatibility with the existing codebase
-- Scope creep detection
+AI特有の問題についてコードをレビューしてください:
+- 仮定の検証
+- もっともらしいが間違っているパターン
+- 既存コードベースとの適合性
+- スコープクリープの検出
 
-## Judgment Procedure
+## 判定手順
 
-1. Review the change diff and detect issues based on the AI-specific criteria above
-2. For each detected issue, classify as blocking/non-blocking based on Policy's scope determination table and judgment rules
-3. If there is even one blocking issue, judge as REJECT
+1. 変更差分を確認し、AI特有の問題の観点に基づいて問題を検出する
+2. 検出した問題ごとに、Policyのスコープ判定表と判定ルールに基づいてブロッキング/非ブロッキングを分類する
+3. ブロッキング問題が1件でもあればREJECTと判定する

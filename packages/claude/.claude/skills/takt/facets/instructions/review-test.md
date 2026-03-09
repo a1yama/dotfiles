@@ -1,20 +1,20 @@
-Review the changes from a test quality perspective.
+テスト品質の観点から変更をレビューしてください。
 
-**Review criteria:**
-- Whether all test plan items are covered
-- Test quality (Given-When-Then structure, independence, reproducibility)
-- Test naming conventions
-- Completeness (unnecessary tests, missing cases)
-- Appropriateness of mocks and fixtures
+**レビュー観点:**
+- テスト計画の観点がすべてカバーされているか
+- テスト品質（Given-When-Then構造、独立性、再現性）
+- テスト命名規約
+- 過不足（不要なテスト、足りないケース）
+- モック・フィクスチャの適切さ
 
 
-**Design decisions reference:**
-Review {report:coder-decisions.md} to understand the recorded design decisions.
-- Do not flag intentionally documented decisions as FP
-- However, also evaluate whether the design decisions themselves are sound, and flag any problems
+**設計判断の参照:**
+{report:coder-decisions.md} を確認し、記録された設計判断を把握してください。
+- 記録された意図的な判断は FP として指摘しない
+- ただし設計判断自体の妥当性も評価し、問題がある場合は指摘する
 
-## Judgment Procedure
+## 判定手順
 
-1. Cross-reference the test plan/test scope reports in the Report Directory with the implemented tests
-2. For each detected issue, classify as blocking/non-blocking based on Policy's scope determination table and judgment rules
-3. If there is even one blocking issue, judge as REJECT
+1. Report Directory内のテスト計画・テストスコープに関するレポートと実装されたテストを突合する
+2. 検出した問題ごとに、Policyのスコープ判定表と判定ルールに基づいてブロッキング/非ブロッキングを分類する
+3. ブロッキング問題が1件でもあればREJECTと判定する

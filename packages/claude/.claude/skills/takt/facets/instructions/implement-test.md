@@ -1,52 +1,52 @@
-Implement unit tests according to the test plan.
-Refer only to files within the Report Directory shown in the Piece Context. Do not search or reference other report directories.
+テスト計画に従って単体テストを実装してください。
+Piece Contextに示されたReport Directory内のファイルのみ参照してください。他のレポートディレクトリは検索/参照しないでください。
 
-**Important: Do NOT modify production code. Only test files may be edited.**
+**重要: プロダクションコードは変更しないでください。テストファイルのみ編集可能です。**
 
-**Actions:**
-1. Review the test plan report
-2. Implement the planned test cases
-3. Run tests and verify all pass
-4. Confirm existing tests are not broken
+**やること:**
+1. テスト計画のレポートを確認する
+2. 計画されたテストケースを実装する
+3. テストを実行して全パスを確認する
+4. 既存テストが壊れていないことを確認する
 
-**Test implementation constraints:**
-- Follow the project's existing test patterns (naming conventions, directory structure, helpers)
-- Write tests in Given-When-Then structure
-- One concept per test. Do not mix multiple concerns in a single test
+**テスト実装の制約:**
+- プロジェクトの既存テストパターン（命名規約、ディレクトリ構成、ヘルパー）に従う
+- Given-When-Then 構造で記述する
+- 1テスト1概念。複数の関心事を1テストに混ぜない
 
-**Scope output contract (create at the start of implementation):**
+**Scope出力契約（実装開始時に作成）:**
 ```markdown
-# Change Scope Declaration
+# 変更スコープ宣言
 
-## Task
-{One-line task summary}
+## タスク
+{タスクの1行要約}
 
-## Planned changes
-| Type | File |
-|------|------|
-| Create | `src/__tests__/example.test.ts` |
+## 変更予定
+| 種別 | ファイル |
+|------|---------|
+| 作成 | `src/__tests__/example.test.ts` |
 
-## Estimated size
+## 推定規模
 Small / Medium / Large
 
-## Impact area
-- {Affected modules or features}
+## 影響範囲
+- {影響するモジュールや機能}
 ```
 
-**Decisions output contract (at implementation completion, only if decisions were made):**
+**Decisions出力契約（実装完了時、決定がある場合のみ）:**
 ```markdown
-# Decision Log
+# 決定ログ
 
-## 1. {Decision}
-- **Context**: {Why the decision was needed}
-- **Options considered**: {List of options}
-- **Rationale**: {Reason for the choice}
+## 1. {決定内容}
+- **背景**: {なぜ決定が必要だったか}
+- **検討した選択肢**: {選択肢リスト}
+- **理由**: {選んだ理由}
 ```
 
-**Required output (include headings)**
-## Work results
-- {Summary of actions taken}
-## Changes made
-- {Summary of changes}
-## Test results
-- {Command executed and results}
+**必須出力（見出しを含める）**
+## 作業結果
+- {実施内容の要約}
+## 変更内容
+- {変更内容の要約}
+## テスト結果
+- {実行コマンドと結果}

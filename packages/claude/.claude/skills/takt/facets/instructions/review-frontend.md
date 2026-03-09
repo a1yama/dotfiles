@@ -1,25 +1,25 @@
-Review the changes from a frontend development perspective.
+フロントエンド開発の観点から変更をレビューしてください。
 
-**Review criteria:**
-- Component design (separation of concerns, granularity)
-- State management (local vs. global decisions)
-- Performance (re-renders, memoization)
-- Accessibility (keyboard navigation, ARIA)
-- Data fetching patterns
-- TypeScript type safety
+**レビュー観点:**
+- コンポーネント設計（責務分離、粒度）
+- 状態管理（ローカル/グローバルの判断）
+- パフォーマンス（再レンダリング、メモ化）
+- アクセシビリティ（キーボード操作、ARIA）
+- データフェッチパターン
+- TypeScript型安全性
 
-**Note**: If this project does not include a frontend,
-proceed as no issues found.
+**注意**: このプロジェクトがフロントエンドを含まない場合は、
+問題なしとして次に進んでください。
 
 
-**Design decisions reference:**
-Review {report:coder-decisions.md} to understand the recorded design decisions.
-- Do not flag intentionally documented decisions as FP
-- However, also evaluate whether the design decisions themselves are sound, and flag any problems
+**設計判断の参照:**
+{report:coder-decisions.md} を確認し、記録された設計判断を把握してください。
+- 記録された意図的な判断は FP として指摘しない
+- ただし設計判断自体の妥当性も評価し、問題がある場合は指摘する
 
-## Judgment Procedure
+## 判定手順
 
-1. Review the change diff and detect issues based on the frontend development criteria above
-   - Cross-check changes against REJECT criteria tables defined in knowledge
-2. For each detected issue, classify as blocking/non-blocking based on Policy's scope determination table and judgment rules
-3. If there is even one blocking issue, judge as REJECT
+1. 変更差分を確認し、フロントエンド開発の観点に基づいて問題を検出する
+   - ナレッジの判定基準テーブル（REJECT条件）と変更内容を照合する
+2. 検出した問題ごとに、Policyのスコープ判定表と判定ルールに基づいてブロッキング/非ブロッキングを分類する
+3. ブロッキング問題が1件でもあればREJECTと判定する

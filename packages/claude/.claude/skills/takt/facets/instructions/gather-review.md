@@ -1,42 +1,42 @@
-Gather information about the review target and produce a report for reviewers to reference.
+レビュー対象の情報を収集し、レビュアーが参照するレポートを作成してください。
 
-## Auto-detect review mode
+## レビューモードの自動判定
 
-Analyze the task text and determine which mode to use.
+タスクテキストを分析し、適切なモードを判定してください。
 
-### Mode 1: PR mode
-**Trigger:** Task contains PR references like `#42`, `PR #42`, `pull/42`, or a URL with `/pull/`
-**Steps:**
-1. Extract the PR number
-2. Run `gh pr view {number}` to get title, description, labels
-3. Run `gh pr diff {number}` to get the diff
-4. Compile the changed files list
-5. Extract purpose and requirements from the PR description
-6. If linked Issues exist, retrieve them with `gh issue view {number}`
-   - Extract Issue numbers from "Closes #N", "Fixes #N", "Resolves #N"
-   - Collect Issue title, description, labels, and comments
+### モード1: PRモード
+**判定条件:** タスクに `#42`、`PR #42`、`pull/42`、または `/pull/` を含むURL がある
+**手順:**
+1. PR番号を抽出する
+2. `gh pr view {番号}` でタイトル・説明・ラベルを取得
+3. `gh pr diff {番号}` で差分を取得
+4. 変更ファイル一覧をまとめる
+5. PRの説明から要件・目的を抽出する
+6. リンクされた Issue があれば `gh issue view {番号}` で取得する
+   - "Closes #N"、"Fixes #N"、"Resolves #N" 等からIssue番号を抽出
+   - Issue のタイトル・説明・ラベル・コメントを収集する
 
-### Mode 2: Branch mode
-**Trigger:** Task text matches a branch name found in `git branch -a`. This includes names with `/` (e.g., `feature/auth`) as well as simple names (e.g., `develop`, `release-v2`, `hotfix-login`). When unsure, verify with `git branch -a | grep {text}`.
-**Steps:**
-1. Determine the base branch (default: `main`, fallback: `master`)
-2. Run `git log {base}..{branch} --oneline` to get commit history
-3. Run `git diff {base}...{branch}` to get the diff
-4. Compile the changed files list
-5. Extract purpose from commit messages
-6. If a PR exists for the branch, fetch it with `gh pr list --head {branch}`
+### モード2: ブランチモード
+**判定条件:** タスクテキストが `git branch -a` の出力に含まれるブランチ名と一致する場合。`feature/auth` のように `/` を含むものだけでなく、`develop`、`release-v2`、`hotfix-login` 等のブランチ名も対象。判定に迷ったら `git branch -a | grep {テキスト}` で確認する。
+**手順:**
+1. ベースブランチを特定する（デフォルト: `main`、フォールバック: `master`）
+2. `git log {base}..{branch} --oneline` でコミット履歴を取得
+3. `git diff {base}...{branch}` で差分を取得
+4. 変更ファイル一覧をまとめる
+5. コミットメッセージから目的を抽出する
+6. ブランチに対応するPRがあれば `gh pr list --head {branch}` で取得する
 
-### Mode 3: Current diff mode
-**Trigger:** Task does not match Mode 1 or Mode 2 (e.g., "review current changes", "last 3 commits", "current diff")
-**Steps:**
-1. If the task specifies a count (e.g., "last N commits"), extract N. Otherwise default to N=1
-2. Run `git diff` for unstaged changes and `git diff --staged` for staged changes
-3. If both are empty, run `git diff HEAD~{N}` to get the diff for the last N commits
-4. Run `git log --oneline -{N+10}` for commit context
-5. Compile the changed files list
-6. Extract purpose from recent commit messages
+### モード3: 現在の差分モード
+**判定条件:** モード1・モード2に該当しない場合（例: "今の差分を見て"、"現在の変更をレビュー"、"直近のコミット"、"直近3コミット"）
+**手順:**
+1. タスクテキストに件数指定がある場合（"直近Nコミット"、"last N commits"等）はNを抽出する。なければ N=1
+2. `git diff` でステージされていない変更、`git diff --staged` でステージ済み変更を取得
+3. 両方とも空の場合は `git diff HEAD~{N}` で直近Nコミット分の差分を取得
+4. `git log --oneline -{N+10}` でコミットコンテキストを取得
+5. 変更ファイル一覧をまとめる
+6. 直近のコミットメッセージから目的を抽出する
 
-## Report requirements
-- Regardless of mode, the output report must follow the same format
-- Fill in what is available; mark unavailable sections as "N/A"
-- Always include: review target overview, purpose, changed files, and the diff
+## レポート要件
+- モードに関わらず、出力レポートは同じフォーマットに従う
+- 取得可能な項目を埋め、取得できない項目は「N/A」と記載する
+- 必須項目: レビュー対象概要、目的、変更ファイル一覧、差分

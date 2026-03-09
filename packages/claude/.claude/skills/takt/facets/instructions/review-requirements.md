@@ -1,27 +1,27 @@
-Review the changes from a requirements fulfillment perspective.
+要件充足の観点から変更をレビューしてください。
 
-**Review criteria:**
-- Whether each requested requirement has been implemented
-- Whether implicit requirements (naturally expected behaviors) are satisfied
-- Whether changes outside the scope (scope creep) have crept in
-- Whether there are any partial or missing implementations
+**レビュー観点:**
+- 要求された各要件が実装されているか
+- 暗黙の要求（当然期待される動作）が満たされているか
+- 要求にない変更（スコープクリープ）が紛れていないか
+- 部分実装や未実装がないか
 
 
-**Design decisions reference:**
-Review {report:coder-decisions.md} to understand the recorded design decisions.
-- Do not flag intentionally documented decisions as FP
-- However, also evaluate whether the design decisions themselves are sound, and flag any problems
+**設計判断の参照:**
+{report:coder-decisions.md} を確認し、記録された設計判断を把握してください。
+- 記録された意図的な判断は FP として指摘しない
+- ただし設計判断自体の妥当性も評価し、問題がある場合は指摘する
 
-**Previous finding tracking (required):**
-- First, extract open findings from "Previous Response"
-- Assign `finding_id` to each finding and classify current status as `new / persists / resolved`
-- If status is `persists`, provide concrete unresolved evidence (file/line)
+**前回指摘の追跡（必須）:**
+- まず「Previous Response」から前回の open findings を抽出する
+- 各 finding に `finding_id` を付け、今回の状態を `new / persists / resolved` で判定する
+- `persists` と判定する場合は、未解決である根拠（ファイル/行）を必ず示す
 
-## Judgment Procedure
+## 判定手順
 
-1. Extract requirements one by one from the review target report and task
-2. For each requirement, identify the implementing code (file:line)
-3. Confirm that the code satisfies the requirement
-4. Check for any changes not covered by the requirements
-5. For each detected issue, classify as blocking/non-blocking based on Policy's scope determination table and judgment rules
-6. If there is even one blocking issue (`new` or `persists`), judge as REJECT
+1. レビュー対象レポート・タスクから要件を1つずつ抽出する
+2. 各要件について、実装されたコード（ファイル:行）を特定する
+3. コードが要件を満たしていることを確認する
+4. 要求にない変更がないかチェックする
+5. 検出した問題ごとに、Policy のスコープ判定表と判定ルールに基づいてブロッキング/非ブロッキングを分類する
+6. ブロッキング問題（`new` または `persists`）が1件でもあれば REJECT と判定する

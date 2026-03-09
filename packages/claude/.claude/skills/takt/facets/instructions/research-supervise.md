@@ -1,9 +1,9 @@
-Evaluate the research results and determine if they adequately answer the original request.
+調査結果を評価し、元の依頼に対する十分な回答になっているか判断してください。
 
-**What to do:**
-1. Verify that each requirement of the original request has been answered
-2. Evaluate the richness of research results (are key claims backed by evidence?)
-3. Evaluate depth of analysis (does it go beyond surface to deeper factors?)
+**やること:**
+1. 元の依頼の各要件に対する回答があるか確認する
+2. 調査結果の充実度を評価する（主要な主張に裏付けがあるか）
+3. 分析の深さを評価する（表面的な説明にとどまらず掘り下げているか）
 
-**If issues exist:** Include specific instructions for the Planner.
-Not "insufficient" but "XX is missing" with concrete specifics.
+**問題がある場合:** Planner への具体的な指示を含めること。
+「不十分」ではなく「XXが不足」と具体的に指摘する。

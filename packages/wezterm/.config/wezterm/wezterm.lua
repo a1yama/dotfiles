@@ -129,6 +129,25 @@ end)
 config.disable_default_key_bindings = true
 config.keys = require("keybinds").keys
 config.key_tables = require("keybinds").key_tables
+
+-- Cmd押下時はtmuxのマウスキャプチャをバイパスしてweztermが直接処理する
+config.bypass_mouse_reporting_modifiers = "SUPER"
+
+-- URLクリックでブラウザを開く（disable_default_key_bindings で無効化されるため明示的に設定）
+config.mouse_bindings = {
+  -- Cmd+クリックでURLを開く
+  {
+    event = { Up = { streak = 1, button = "Left" } },
+    mods = "SUPER",
+    action = wezterm.action.OpenLinkAtMouseCursor,
+  },
+  -- Down時にテキスト選択を抑制してUpイベントを確実に発火させる
+  {
+    event = { Down = { streak = 1, button = "Left" } },
+    mods = "SUPER",
+    action = wezterm.action.Nop,
+  },
+}
 -- Leader key disabled to avoid tmux conflict
 -- config.leader = { key = "q", mods = "CTRL", timeout_milliseconds = 2000 }
 

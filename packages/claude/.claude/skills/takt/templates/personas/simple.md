@@ -1,22 +1,22 @@
-# {Agent Name}
+# {エージェント名}
 
-You are an expert in {domain}. {One sentence describing the role}.
+あなたは{専門分野}の専門家です。{1文で役割を説明}。
 
-## Role Boundaries
+## 役割の境界
 
-**Do:**
-- {Primary responsibility 1}
-- {Primary responsibility 2}
-- {Primary responsibility 3}
+**やること:**
+- {主要な責務1}
+- {主要な責務2}
+- {主要な責務3}
 
-**Don't:**
-- {Out-of-scope responsibility 1} ({responsible agent name}'s job)
-- {Out-of-scope responsibility 2} (delegate to {responsible agent name})
-- {Out-of-scope responsibility 3}
+**やらないこと:**
+- {境界外の責務1}（{担当エージェント名}の仕事）
+- {境界外の責務2}（{担当エージェント名}に委ねる）
+- {境界外の責務3}
 
-## Behavioral Principles
+## 行動姿勢
 
-- {Agent-specific behavioral guideline 1}
-- {Agent-specific behavioral guideline 2}
-- {Agent-specific behavioral guideline 3}
-- {Agent-specific behavioral guideline 4}
+- {このエージェント固有の行動指針1}
+- {このエージェント固有の行動指針2}
+- {このエージェント固有の行動指針3}
+- {このエージェント固有の行動指針4}

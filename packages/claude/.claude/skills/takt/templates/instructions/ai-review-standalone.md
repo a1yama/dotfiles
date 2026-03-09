@@ -1,47 +1,47 @@
-# ai-review-standalone -- AI Review (Standalone) Instruction Template
+# ai-review-standalone — AIレビュー（standalone）instruction テンプレート
 
-> **Purpose**: Specialized review of AI-generated code (runs as an independent movement with iteration tracking)
-> **Agent**: ai-antipattern-reviewer
-> **For parallel sub-step use, see variation B in `review.md`**
-
----
-
-## Template
-
-```
-**This is AI Review round {movement_iteration}.**
-
-On the first round, review comprehensively and report all issues.
-On round 2 and later, prioritize verifying whether previously REJECTed items have been fixed.
-
-Review the code for AI-specific issues:
-- Assumption verification
-- Plausible but incorrect patterns
-- Compatibility with the existing codebase
-- Scope creep detection
-```
+> **用途**: AI生成コードの専門レビュー（独立ムーブメントとして実行、iteration tracking 付き）
+> **使用エージェント**: ai-antipattern-reviewer
+> **parallel sub-step 用は `review.md` のバリエーションBを使用**
 
 ---
 
-## Differences from parallel sub-step
+## テンプレート
+
+```
+**これは {movement_iteration} 回目のAI Reviewです。**
+
+初回は網羅的にレビューし、指摘すべき問題をすべて出し切ってください。
+2回目以降は、前回REJECTした項目が修正されたかの確認を優先してください。
+
+AI特有の問題についてコードをレビューしてください:
+- 仮定の検証
+- もっともらしいが間違っているパターン
+- 既存コードベースとの適合性
+- スコープクリープの検出
+```
+
+---
+
+## parallel sub-step との違い
 
 | | standalone | parallel sub-step |
 |--|-----------|-------------------|
-| Iteration tracking | Yes (`{movement_iteration}`) | No |
-| First/subsequent instruction branching | Yes | No |
-| Next movement | ai_fix or reviewers | Parent movement decides |
+| iteration tracking | あり（`{movement_iteration}`） | なし |
+| 初回/2回目の指示分岐 | あり | なし |
+| 次のムーブメント | ai_fix or reviewers | 親ムーブメントが決定 |
 
-Standalone is for pieces that form an ai_review -> ai_fix loop.
-Parallel sub-steps use variation B from review.md.
+standalone は ai_review → ai_fix のループを形成するピース向け。
+parallel sub-step は review.md のバリエーションBを使う。
 
 ---
 
-## Typical rules
+## 典型的な rules
 
 ```yaml
 rules:
-  - condition: No AI-specific issues
+  - condition: AI特有の問題なし
     next: reviewers
-  - condition: AI-specific issues found
+  - condition: AI特有の問題あり
     next: ai_fix
 ```

@@ -1,0 +1,93 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+echo "リモートブランチ情報を同期中..." >&2
+git fetch --prune >/dev/null 2>&1
+
+main_branch=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@' || echo "main")
+
+# リモートブランチ一覧を取得（origin/を含むもののみ、HEAD・メインブランチは除外）
+branches=$(git branch -r --format="%(refname:short)" | grep "^origin/" | grep -v HEAD | grep -v "^origin/${main_branch}$" || true)
+
+if [ -z "$branches" ]; then
+    echo "削除対象のリモートブランチがありません"
+    exit 0
+fi
+
+# マージ済みブランチを一括取得
+merged_branches=$(git branch -r --merged "origin/${main_branch}" 2>/dev/null | sed 's/^[[:space:]]*//' || true)
+
+branch_count=$(echo "$branches" | wc -l | tr -d ' ')
+current=0
+
+# 各ブランチの状態を取得してラベル付き一覧を作成
+labeled_branches=""
+while IFS= read -r branch; do
+    short="${branch#origin/}"
+    current=$((current + 1))
+    printf "\r\033[Kブランチ情報を取得中... (%d/%d) %s" "$current" "$branch_count" "$short" >&2
+
+    # マージ状態チェック
+    if echo "$merged_branches" | grep -q "origin/${short}$"; then
+        merge_status="[merged]"
+    else
+        merge_status="[unmerged]"
+    fi
+
+    # PR状態チェック（gh CLI）
+    pr_info=$(gh pr list --head "$short" --state all --json number,state --jq 'if length > 0 then "#\(.[0].number) \(.[0].state)" else "" end' 2>/dev/null || echo "")
+    if [ -z "$pr_info" ]; then
+        pr_status="[no PR]"
+    else
+        pr_status="[PR ${pr_info}]"
+    fi
+
+    labeled_branches+="${short}	${merge_status}	${pr_status}"$'\n'
+done <<< "$branches"
+
+printf "\r\033[K" >&2
+
+# fzfで選択（タブ区切りをcolumnで整形）
+selected=$(echo -n "$labeled_branches" | column -t -s $'\t' | fzf --multi --header="Tab: 複数選択 / Enter: 決定 / open PRのブランチはスキップされます") || exit 0
+
+if [ -z "$selected" ]; then
+    exit 0
+fi
+
+# 選択されたブランチを処理
+echo "$selected" | while IFS= read -r line; do
+    branch_name=$(echo "$line" | awk '{print $1}')
+
+    # open PRチェック → スキップ
+    if echo "$line" | grep -qi "\[PR #[0-9]* OPEN\]"; then
+        echo "⏭  スキップ: ${branch_name} (open PRがあります)"
+        continue
+    fi
+
+    # 要注意パターンの確認プロンプト
+    needs_confirm=false
+    reason=""
+    if echo "$line" | grep -q "\[unmerged\]" && echo "$line" | grep -qi "\[PR #[0-9]* CLOSED\]"; then
+        needs_confirm=true
+        reason="未マージ & PRがcloseされています"
+    elif echo "$line" | grep -q "\[unmerged\]" && echo "$line" | grep -q "\[no PR\]"; then
+        needs_confirm=true
+        reason="未マージ & PRが作成されていません"
+    fi
+
+    if [ "$needs_confirm" = true ]; then
+        printf "\n\033[1;31m⚠️  %s (%s)\033[0m\n\033[1;31m   削除しますか？ (y/N): \033[0m" "$branch_name" "$reason"
+        read -r confirm < /dev/tty
+        if [ "$confirm" != "y" ] && [ "$confirm" != "Y" ]; then
+            echo "⏭  スキップ: ${branch_name}"
+            continue
+        fi
+    fi
+
+    echo "🗑  削除中: origin/${branch_name}"
+    if git push origin --delete "$branch_name"; then
+        echo "✅ 削除完了: origin/${branch_name}"
+    else
+        echo "❌ 削除失敗: origin/${branch_name}"
+    fi
+done

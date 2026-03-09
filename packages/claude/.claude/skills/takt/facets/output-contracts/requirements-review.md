@@ -1,49 +1,49 @@
 ```markdown
-# Requirements Review
+# 要件充足レビュー
 
-## Result: APPROVE / REJECT
+## 結果: APPROVE / REJECT
 
-## Summary
-{Summarize the result in 1-2 sentences}
+## サマリー
+{1-2文で結果を要約}
 
-## Requirements Cross-Reference
-| # | Requirement (from task) | Satisfied | Evidence (file:line) |
-|---|----------------------|-----------|----------------------|
-| 1 | {requirement 1} | ✅/❌ | `src/file.ts:42` |
+## 要件照合
+| # | 要件（タスクから抽出） | 充足 | 根拠（ファイル:行） |
+|---|-------------------|------|-------------------|
+| 1 | {要件1} | ✅/❌ | `src/file.ts:42` |
 
-- If even one ❌ exists, REJECT is mandatory
-- A ✅ without evidence is invalid (must be verified in actual code)
+- ❌ が1件でもある場合は REJECT 必須
+- 根拠なしの ✅ は無効（実コードで確認すること）
 
-## Scope Check
-| # | Out-of-scope Change | File | Justification |
-|---|---------------------|------|---------------|
-| 1 | {change not in requirements} | `src/file.ts` | Justified/Unnecessary |
+## スコープチェック
+| # | 要求外の変更 | ファイル | 妥当性 |
+|---|-------------|---------|--------|
+| 1 | {要求にない変更} | `src/file.ts` | 妥当/不要 |
 
-## Current Iteration Findings (new)
-| # | finding_id | family_tag | Category | Location | Issue | Fix Suggestion |
-|---|------------|------------|----------|----------|-------|----------------|
-| 1 | REQ-NEW-src-file-L42 | req-gap | Unimplemented | `src/file.ts:42` | Issue description | Fix suggestion |
+## 今回の指摘（new）
+| # | finding_id | family_tag | カテゴリ | 場所 | 問題 | 修正案 |
+|---|------------|------------|---------|------|------|--------|
+| 1 | REQ-NEW-src-file-L42 | req-gap | 未実装 | `src/file.ts:42` | 問題の説明 | 修正方法 |
 
-## Carry-over Findings (persists)
-| # | finding_id | family_tag | Previous Evidence | Current Evidence | Issue | Fix Suggestion |
-|---|------------|------------|-------------------|------------------|-------|----------------|
-| 1 | REQ-PERSIST-src-file-L77 | req-gap | `file:line` | `file:line` | Unresolved | Fix suggestion |
+## 継続指摘（persists）
+| # | finding_id | family_tag | 前回根拠 | 今回根拠 | 問題 | 修正案 |
+|---|------------|------------|----------|----------|------|--------|
+| 1 | REQ-PERSIST-src-file-L77 | req-gap | `file:line` | `file:line` | 未解消 | 修正方法 |
 
-## Resolved Findings (resolved)
-| finding_id | Resolution Evidence |
-|------------|---------------------|
-| REQ-RESOLVED-src-file-L10 | `file:line` now satisfies the requirement |
+## 解消済み（resolved）
+| finding_id | 解消根拠 |
+|------------|----------|
+| REQ-RESOLVED-src-file-L10 | `file:line` は要件を充足 |
 
-## Reopened Findings (reopened)
-| # | finding_id | family_tag | Prior Resolution Evidence | Recurrence Evidence | Issue | Fix Suggestion |
-|---|------------|------------|--------------------------|---------------------|-------|----------------|
-| 1 | REQ-REOPENED-src-file-L55 | req-gap | `Previously fixed at file:line` | `Recurred at file:line` | Issue description | Fix approach |
+## 再開指摘（reopened）
+| # | finding_id | family_tag | 解消根拠（前回） | 再発根拠 | 問題 | 修正案 |
+|---|------------|------------|----------------|---------|------|--------|
+| 1 | REQ-REOPENED-src-file-L55 | req-gap | `前回: file:line で修正済み` | `file:line で再発` | 問題の説明 | 修正方法 |
 
-## Rejection Gate
-- REJECT is valid only when at least one finding exists in `new`, `persists`, or `reopened`
-- Findings without `finding_id` are invalid
+## REJECT判定条件
+- `new`、`persists`、または `reopened` が1件以上ある場合のみ REJECT 可
+- `finding_id` なしの指摘は無効
 ```
 
-**Cognitive load reduction rules:**
-- APPROVE: Summary only (5 lines or fewer)
-- REJECT: Only relevant findings in tables (30 lines or fewer)
+**認知負荷軽減ルール:**
+- APPROVE → サマリーのみ（5行以内）
+- REJECT → 該当指摘のみ表で記載（30行以内）

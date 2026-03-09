@@ -1,5 +1,5 @@
 name: unit-test
-description: Unit test focused piece (test analysis → test implementation → review → fix)
+description: 単体テスト追加に特化したピース（テスト分析→テスト実装→レビュー→修正）
 piece_config:
   provider_options:
     codex:
@@ -16,22 +16,22 @@ loop_monitors:
     judge:
       persona: supervisor
       instruction_template: |
-        The ai_review ↔ ai_fix loop has repeated {cycle_count} times.
+        ai_review と ai_fix のループが {cycle_count} 回繰り返されました。
 
-        Review the reports from each cycle and determine whether this loop
-        is healthy (making progress) or unproductive (repeating the same issues).
+        各サイクルのレポートを確認し、このループが健全（進捗がある）か、
+        非生産的（同じ問題を繰り返している）かを判断してください。
 
-        **Reports to reference:**
-        - AI Review results: {report:ai-review.md}
+        **参照するレポート:**
+        - AIレビュー結果: {report:ai-review.md}
 
-        **Judgment criteria:**
-        - Are new issues being found/fixed in each cycle?
-        - Are the same findings being repeated?
-        - Are fixes actually being applied?
+        **判断基準:**
+        - 各サイクルで新しい問題が発見・修正されているか
+        - 同じ指摘が繰り返されていないか
+        - 修正が実際に反映されているか
       rules:
-        - condition: Healthy (making progress)
+        - condition: 健全（進捗あり）
           next: ai_review
-        - condition: Unproductive (no improvement)
+        - condition: 非生産的（改善なし）
           next: review_test
 movements:
   - name: plan_test
@@ -51,16 +51,16 @@ movements:
           - WebSearch
           - WebFetch
     rules:
-      - condition: Test plan complete
+      - condition: テスト計画が完了
         next: implement_test
-      - condition: User is asking a question (not a test task)
+      - condition: ユーザーが質問をしている（テスト追加タスクではない）
         next: COMPLETE
-      - condition: Requirements unclear, insufficient info
+      - condition: 要件が不明確、情報不足
         next: ABORT
         appendix: |
-          Clarifications needed:
-          - {Question 1}
-          - {Question 2}
+          確認事項:
+          - {質問1}
+          - {質問2}
     instruction: plan-test
     output_contracts:
       report:
@@ -89,13 +89,13 @@ movements:
           - WebFetch
     required_permission_mode: edit
     rules:
-      - condition: Test implementation complete
+      - condition: テスト実装完了
         next: ai_review
-      - condition: No implementation (report only)
+      - condition: 実装未着手（レポートのみ）
         next: ai_review
-      - condition: Cannot proceed, insufficient info
+      - condition: 判断できない、情報不足
         next: ai_review
-      - condition: User input required
+      - condition: ユーザー入力が必要
         next: implement_test
         requires_user_input: true
         interactive_only: true
@@ -121,9 +121,9 @@ movements:
           - WebSearch
           - WebFetch
     rules:
-      - condition: No AI-specific issues
+      - condition: AI特有の問題なし
         next: review_test
-      - condition: AI-specific issues found
+      - condition: AI特有の問題あり
         next: ai_fix
     instruction: ai-review
     output_contracts:
@@ -154,11 +154,11 @@ movements:
     required_permission_mode: edit
     pass_previous_response: false
     rules:
-      - condition: AI issues fixed
+      - condition: AI問題の修正完了
         next: ai_review
-      - condition: No fix needed (verified target files/spec)
+      - condition: 修正不要（指摘対象ファイル/仕様の確認済み）
         next: ai_no_fix
-      - condition: Cannot proceed, insufficient info
+      - condition: 判断できない、情報不足
         next: ai_no_fix
     instruction: ai-fix
   - name: ai_no_fix
@@ -172,9 +172,9 @@ movements:
           - Glob
           - Grep
     rules:
-      - condition: ai_review's findings are valid (fix required)
+      - condition: ai_reviewの指摘が妥当（修正すべき）
         next: ai_fix
-      - condition: ai_fix's judgment is valid (no fix needed)
+      - condition: ai_fixの判断が妥当（修正不要）
         next: review_test
     instruction: arbitrate
   - name: review_test
@@ -225,9 +225,9 @@ movements:
     required_permission_mode: edit
     pass_previous_response: false
     rules:
-      - condition: Fix complete
+      - condition: 修正完了
         next: review_test
-      - condition: Cannot proceed, insufficient info
+      - condition: 判断できない、情報不足
         next: plan_test
     instruction: fix
   - name: supervise
@@ -245,9 +245,9 @@ movements:
           - WebFetch
     pass_previous_response: false
     rules:
-      - condition: All checks passed
+      - condition: すべて問題なし
         next: COMPLETE
-      - condition: Requirements unmet, tests failing, build errors
+      - condition: 要求未達成、テスト失敗、ビルドエラー
         next: plan_test
     instruction: supervise
     output_contracts:
