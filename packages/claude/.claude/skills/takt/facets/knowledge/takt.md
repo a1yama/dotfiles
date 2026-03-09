@@ -1,151 +1,151 @@
-# TAKT Architecture Knowledge
+# TAKT アーキテクチャ知識
 
-## Core Structure
+## コア構造
 
-PieceEngine is a state machine. It manages movement transitions via EventEmitter.
+PieceEngine は状態機械。movement 間の遷移を EventEmitter ベースで管理する。
 
 ```
-CLI → PieceEngine → Runner (4 types) → RuleEvaluator → next movement
+CLI → PieceEngine → Runner（4種） → RuleEvaluator → 次の movement
 ```
 
-| Runner | Purpose | When to Use |
-|--------|---------|-------------|
-| MovementExecutor | Standard 3-phase execution | Default |
-| ParallelRunner | Concurrent sub-movements | parallel block |
-| ArpeggioRunner | Data-driven batch processing | arpeggio block |
-| TeamLeaderRunner | Task decomposition → parallel sub-agents | team_leader block |
+| Runner | 用途 | 使い分け |
+|--------|------|---------|
+| MovementExecutor | 通常の3フェーズ実行 | デフォルト |
+| ParallelRunner | 並列サブムーブメント | parallel ブロック |
+| ArpeggioRunner | データ駆動バッチ処理 | arpeggio ブロック |
+| TeamLeaderRunner | タスク分解 → サブエージェント並列 | team_leader ブロック |
 
-Runners are mutually exclusive. Do not specify multiple runner types on a single movement.
+各 Runner は排他。1つの movement に複数の Runner タイプを指定しない。
 
-### 3-Phase Execution Model
+### 3フェーズ実行モデル
 
-Normal movements execute in up to 3 phases. Sessions persist across phases.
+通常 movement は最大3フェーズで実行される。セッションはフェーズ間で維持される。
 
-| Phase | Purpose | Tools | Condition |
-|-------|---------|-------|-----------|
-| Phase 1 | Main work | Movement's allowed_tools | Always |
-| Phase 2 | Report output | Write only | When output_contracts defined |
-| Phase 3 | Status judgment | None (judgment only) | When tag-based rules exist |
+| フェーズ | 目的 | ツール | 条件 |
+|---------|------|--------|------|
+| Phase 1 | メイン作業 | movement の allowed_tools | 常に |
+| Phase 2 | レポート出力 | Write のみ | output_contracts 定義時 |
+| Phase 3 | ステータス判定 | なし（判定のみ） | タグベースルール時 |
 
-## Rule Evaluation
+## ルール評価
 
-RuleEvaluator determines the next movement via 5-stage fallback. Earlier match takes priority.
+RuleEvaluator は5段階フォールバックで遷移先を決定する。先にマッチした方法が優先される。
 
-| Priority | Method | Target |
-|----------|--------|--------|
-| 1 | aggregate | parallel parent (all/any) |
-| 2 | Phase 3 tag | `[STEP:N]` output |
-| 3 | Phase 1 tag | `[STEP:N]` output (fallback) |
-| 4 | ai() judge | ai("condition") rules |
-| 5 | AI fallback | AI evaluates all conditions |
+| 優先度 | 方法 | 対象 |
+|--------|------|------|
+| 1 | aggregate | parallel 親（all/any） |
+| 2 | Phase 3 タグ | `[STEP:N]` 出力 |
+| 3 | Phase 1 タグ | `[STEP:N]` 出力（フォールバック） |
+| 4 | ai() judge | ai("条件") ルール |
+| 5 | AI fallback | 全条件を AI が判定 |
 
-When multiple tags appear in output, the **last match** wins.
+タグが複数出現した場合は**最後のマッチ**が採用される。
 
-### Condition Syntax
+### Condition の記法
 
-| Syntax | Parsing | Regex |
-|--------|---------|-------|
-| `ai("...")` | AI condition evaluation | `AI_CONDITION_REGEX` |
-| `all("...")` / `any("...")` | Aggregate condition | `AGGREGATE_CONDITION_REGEX` |
-| Plain string | Tag or AI fallback | — |
+| 記法 | パース | 正規表現 |
+|------|--------|---------|
+| `ai("...")` | AI 条件評価 | `AI_CONDITION_REGEX` |
+| `all("...")` / `any("...")` | 集約条件 | `AGGREGATE_CONDITION_REGEX` |
+| 文字列 | タグまたは AI フォールバック | — |
 
-Adding new special syntax requires updating both pieceParser.ts regex and RuleEvaluator.
+新しい特殊構文を追加する場合は pieceParser.ts の正規表現と RuleEvaluator の両方を更新する。
 
-## Provider Integration
+## プロバイダー統合
 
-Abstracted through the Provider interface. SDK-specific details are encapsulated within each provider.
+Provider インターフェースで抽象化。具体的な SDK の差異は各プロバイダー内に閉じ込める。
 
 ```
 Provider.setup(AgentSetup) → ProviderAgent
 ProviderAgent.call(prompt, options) → AgentResponse
 ```
 
-| Criteria | Judgment |
-|----------|----------|
-| SDK-specific error handling leaking outside Provider | REJECT |
-| Errors not propagated to AgentResponse.error | REJECT |
-| Session key collision between providers | REJECT |
-| Session key format `{persona}:{provider}` | OK |
+| 基準 | 判定 |
+|------|------|
+| SDK 固有のエラーハンドリングが Provider 外に漏れている | REJECT |
+| AgentResponse.error にエラーを伝播していない | REJECT |
+| プロバイダー間でセッションキーが衝突する | REJECT |
+| セッションキー形式 `{persona}:{provider}` | OK |
 
-### Model Resolution
+### モデル解決
 
-Models resolve through 5-level priority. Higher takes precedence.
+5段階の優先順位でモデルを解決する。上位が優先。
 
-1. persona_providers model specification
-2. Movement model field
-3. CLI `--model` override
-4. config.yaml (when resolved provider matches)
-5. Provider default
+1. persona_providers のモデル指定
+2. movement の model フィールド
+3. CLI `--model` オーバーライド
+4. config.yaml（プロバイダー一致時）
+5. プロバイダーデフォルト
 
-## Facet Assembly
+## ファセット組み立て
 
-The faceted-prompting module is independent from TAKT core.
+faceted-prompting モジュールは TAKT 本体に依存しない独立モジュール。
 
 ```
 compose(facets, options) → ComposedPrompt { systemPrompt, userMessage }
 ```
 
-| Criteria | Judgment |
-|----------|----------|
-| Import from faceted-prompting to TAKT core | REJECT |
-| TAKT core depending on faceted-prompting | OK |
-| Facet path resolution logic outside faceted-prompting | Warning |
+| 基準 | 判定 |
+|------|------|
+| faceted-prompting から TAKT コアへの import | REJECT |
+| TAKT コアから faceted-prompting への依存 | OK |
+| ファセットパス解決のロジックが faceted-prompting 外にある | 警告 |
 
-### 3-Layer Facet Resolution Priority
+### ファセット解決の3層優先順位
 
-Project `.takt/` → User `~/.takt/` → Builtin `builtins/{lang}/`
+プロジェクト `.takt/` → ユーザー `~/.takt/` → ビルトイン `builtins/{lang}/`
 
-Same-named facets are overridden by higher-priority layers. Customize builtins by overriding in upper layers.
+同名ファセットは上位が優先。ビルトインのカスタマイズは上位層でオーバーライドする。
 
-## Testing Patterns
+## テストパターン
 
-Uses vitest. Test file naming conventions distinguish test types.
+vitest を使用。テストファイルの命名規約で種別を区別する。
 
-| Prefix | Type | Content |
-|--------|------|---------|
-| None | Unit test | Individual function/class verification |
-| `it-` | Integration test | Piece execution simulation |
-| `engine-` | Engine test | PieceEngine scenario verification |
+| プレフィックス | 種別 | 内容 |
+|--------------|------|------|
+| なし | ユニットテスト | 個別関数・クラスの検証 |
+| `it-` | 統合テスト | ピース実行のシミュレーション |
+| `engine-` | エンジンテスト | PieceEngine シナリオ検証 |
 
-### Mock Provider
+### Mock プロバイダー
 
-`--provider mock` returns deterministic responses. Scenario queues compose multi-turn tests.
+`--provider mock` でテスト用の決定論的レスポンスを返す。シナリオキューで複数ターンのテストを構成する。
 
 ```typescript
-// NG - Calling real API in tests
+// NG - テストでリアル API を呼ぶ
 const response = await callClaude(prompt)
 
-// OK - Set up scenario with mock provider
+// OK - Mock プロバイダーでシナリオを設定
 setMockScenario([
   { persona: 'coder', status: 'done', content: '[STEP:1]\nDone.' },
   { persona: 'reviewer', status: 'done', content: '[STEP:1]\napproved' },
 ])
 ```
 
-### Test Isolation
+### テストの分離
 
-| Criteria | Judgment |
-|----------|----------|
-| Tests sharing global state | REJECT |
-| Environment variables not cleared in test setup | Warning |
-| E2E tests assuming real API | Isolate via `provider` config |
+| 基準 | 判定 |
+|------|------|
+| テスト間でグローバル状態を共有 | REJECT |
+| 環境変数をテストセットアップでクリアしていない | 警告 |
+| E2E テストで実 API を前提としている | `provider` 指定の config で分離 |
 
-## Error Propagation
+## エラー伝播
 
-Provider errors propagate through: `AgentResponse.error` → session log → console output.
+プロバイダーエラーは `AgentResponse.error` → セッションログ → コンソール出力の経路で伝播する。
 
-| Criteria | Judgment |
-|----------|----------|
-| SDK error results in empty `blocked` status | REJECT |
-| Error details not recorded in session log | REJECT |
-| No ABORT transition defined for error cases | Warning |
+| 基準 | 判定 |
+|------|------|
+| SDK エラーが空の `blocked` ステータスになる | REJECT |
+| エラー詳細がセッションログに記録されない | REJECT |
+| エラー時に ABORT 遷移が定義されていない | 警告 |
 
-## Session Management
+## セッション管理
 
-Agent sessions are stored per-cwd. Session resume is skipped during worktree/clone execution.
+エージェントセッションは cwd ごとに保存される。worktree/clone 実行時はセッション再開をスキップする。
 
-| Criteria | Judgment |
-|----------|----------|
-| Session resuming when `cwd !== projectCwd` | REJECT (cross-project contamination) |
-| Session key missing provider identifier | REJECT (cross-provider contamination) |
-| Session broken between phases | REJECT (context loss) |
+| 基準 | 判定 |
+|------|------|
+| `cwd !== projectCwd` でセッション再開している | REJECT |
+| セッションキーにプロバイダーが含まれない | REJECT（クロスプロバイダー汚染） |
+| Phase 間でセッションが切れている | REJECT（コンテキスト喪失） |

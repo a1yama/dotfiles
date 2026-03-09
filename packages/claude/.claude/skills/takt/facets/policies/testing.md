@@ -1,101 +1,102 @@
-# Testing Policy
+# テストポリシー
 
-Every behavior change requires a corresponding test, and every bug fix requires a regression test.
+全ての振る舞いの変更には対応するテストが必要であり、全てのバグ修正にはリグレッションテストが必要。
 
-## Principles
+## 原則
 
-| Principle | Criteria |
-|-----------|----------|
-| Given-When-Then | Structure tests in 3 phases |
-| One test, one concept | Do not mix multiple concerns in a single test |
-| Test behavior | Test behavior, not implementation details |
-| Independence | Do not depend on other tests or execution order |
-| Type safety | Code must pass the build (type check) |
-| Reproducibility | Do not depend on time or randomness. Same result every run |
+| 原則 | 基準 |
+|------|------|
+| Given-When-Then | テストは3段階で構造化する |
+| 1テスト1概念 | 複数の関心事を1テストに混ぜない |
+| 振る舞いを検証 | 実装の詳細ではなく振る舞いをテストする |
+| 独立性 | 他のテストや実行順序に依存しない |
+| 再現性 | 時間やランダム性に依存せず、毎回同じ結果 |
 
-## Coverage Criteria
+## カバレッジ基準
 
-| Target | Criteria |
-|--------|----------|
-| New behavior | Test required. REJECT if missing |
-| Bug fix | Regression test required. REJECT if missing |
-| Behavior change | Test update required. REJECT if missing |
-| Build (type check) | Build must succeed. REJECT if it fails |
-| Edge cases / boundary values | Test recommended (Warning) |
+| 対象 | 基準 |
+|------|------|
+| 新しい振る舞い | テスト必須。テストがなければ REJECT |
+| バグ修正 | リグレッションテスト必須。テストがなければ REJECT |
+| 振る舞いの変更 | テストの更新必須。更新がなければ REJECT |
+| ビルド（型チェック） | ビルド成功必須。失敗は REJECT |
+| エッジケース・境界値 | テスト推奨（Warning） |
 
-## Test Priority
+## テスト優先度
 
-| Priority | Target |
-|----------|--------|
-| High | Business logic, state transitions |
-| Medium | Edge cases, error handling |
-| Low | Simple CRUD, UI appearance |
+| 優先度 | 対象 |
+|--------|------|
+| 高 | ビジネスロジック、状態遷移 |
+| 中 | エッジケース、エラーハンドリング |
+| 低 | 単純なCRUD、UIの見た目 |
 
-## Test Structure: Given-When-Then
+## テスト構造: Given-When-Then
 
 ```typescript
-test('should return NotFound error when user does not exist', async () => {
-  // Given: A non-existent user ID
+test('ユーザーが存在しない場合、NotFoundエラーを返す', async () => {
+  // Given: 存在しないユーザーID
   const nonExistentId = 'non-existent-id'
 
-  // When: Attempt to fetch the user
+  // When: ユーザー取得を試みる
   const result = await getUser(nonExistentId)
 
-  // Then: NotFound error is returned
+  // Then: NotFoundエラーが返る
   expect(result.error).toBe('NOT_FOUND')
 })
 ```
 
-## Test Quality
+## テスト品質
 
-| Aspect | Good | Bad |
-|--------|------|-----|
-| Independence | No dependency on other tests | Depends on execution order |
-| Reproducibility | Same result every time | Depends on time or randomness |
-| Clarity | Failure cause is obvious | Failure cause is unclear |
-| Focus | One test, one concept | Multiple concerns mixed |
+| 観点 | 良い | 悪い |
+|------|------|------|
+| 独立性 | 他のテストに依存しない | 実行順序に依存 |
+| 型安全 | コードはビルド（型チェック）が通ること |
+| 再現性 | 毎回同じ結果 | 時間やランダム性に依存 |
+| 明確性 | 失敗時に原因が分かる | 失敗しても原因不明 |
+| 焦点 | 1テスト1概念 | 複数の関心事が混在 |
 
-### Naming
+### 命名
 
-Test names describe expected behavior. Use the `should {expected behavior} when {condition}` pattern.
+テスト名は期待される振る舞いを記述する。`should {期待する振る舞い} when {条件}` パターンを使う。
 
-### Structure
+### 構造
 
-- Arrange-Act-Assert pattern (equivalent to Given-When-Then)
-- Avoid magic numbers and magic strings
+- Arrange-Act-Assert パターン（Given-When-Then と同義）
+- マジックナンバー・マジックストリングを避ける
 
-## Test Strategy
+## テスト戦略
 
-- Prefer unit tests for logic, integration tests for boundaries
-- Do not overuse E2E tests for what unit tests can cover
-- If new logic only has E2E tests, propose adding unit tests
+- ロジックにはユニットテスト、境界にはインテグレーションテストを優先
+- ユニットテストでカバーできるものにE2Eテストを使いすぎない
+- 新しいロジックにE2Eテストしかない場合、ユニットテストの追加を提案する
 
-### When Integration Tests Are Required
+### インテグレーションテストが必須な場面
 
-Verify data flow coupling that unit tests alone cannot cover.
+ユニットテストだけでは検証できないデータフローの結合を検証する。
 
-| Condition | Verdict |
-|-----------|---------|
-| Data flow crossing 3+ modules | Integration test required |
-| New status/state merging into an existing workflow | Integration test for the full transition flow required |
-| New option propagating through a call chain to the endpoint | End-to-end chain coupling test required |
-| All module-level unit tests pass | Unit tests alone are sufficient (when none of the above apply) |
+| 条件 | 判定 |
+|------|------|
+| 3つ以上のモジュールを横断するデータフロー | インテグレーションテスト必須 |
+| 新しいステータス／状態が既存のワークフローに合流する | 遷移フロー全体のインテグレーションテスト必須 |
+| 新しいオプションが呼び出しチェーンを通じて末端まで伝搬する | チェーン全体の結合テスト必須 |
+| 各モジュールのユニットテストが全てパスしている | ユニットテストのみで十分（上記に該当しない場合） |
 
-## Test Environment Isolation
+## テスト環境の分離
 
-Tie test infrastructure configuration to test scenario parameters. Hardcoded assumptions break under different scenarios.
+テストインフラの設定はテストシナリオのパラメータに連動させる。ハードコードされた前提は別シナリオで壊れる。
 
-| Principle | Criteria |
-|-----------|----------|
-| Parameter-driven | Generate fixtures and configuration based on test input parameters |
-| No implicit assumptions | Do not depend on a specific environment (e.g., user's personal settings) |
-| Consistency | Related values within test configuration must not contradict each other |
+| 原則 | 基準 |
+|------|------|
+| パラメータ連動 | テストの入力パラメータに応じてフィクスチャ・設定を生成する |
+| 暗黙の前提排除 | 特定の環境（ユーザーの個人設定等）に依存しない |
+| 整合性 | テスト設定内の関連する値は互いに矛盾しない |
+| プロセス終了保証 | テストランナーにタイムアウトと強制終了を設定し、プロセスリークを防ぐ |
 
 ```typescript
-// ❌ Hardcoded assumptions — breaks when testing with a different backend
+// ❌ ハードコードされた前提 — 別のバックエンドでテストすると不整合になる
 writeConfig({ backend: 'postgres', connectionPool: 10 })
 
-// ✅ Parameter-driven
+// ✅ パラメータに連動
 const backend = process.env.TEST_BACKEND ?? 'postgres'
 writeConfig({ backend, connectionPool: backend === 'sqlite' ? 1 : 10 })
 ```

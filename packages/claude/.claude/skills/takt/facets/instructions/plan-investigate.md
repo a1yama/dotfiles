@@ -1,13 +1,13 @@
-Analyze the task and formulate an implementation plan.
+タスクを分析し、実装方針を立ててください。
 
-**Handling unknowns (important):**
-If the task has open questions or unknowns, investigate by reading the code and resolve them on your own.
-Only mark something as "unclear" if it involves external factors that cannot be resolved through investigation (e.g., the user's intent cannot be determined).
-If it can be understood by reading the code, it is not "unclear".
+**不明点の扱い（重要）:**
+タスクに Open Questions や不明点がある場合は、コードを読んで調査し自力で解決してください。
+調査しても解決できない外部要因（ユーザーの意図が判断できない等）のみ「不明確」と判断してください。
+コードを読めば分かることは「不明確」ではありません。
 
-**Actions:**
-1. Understand the task requirements
-2. Read the relevant code to grasp the current state
-3. Investigate any unknowns through code analysis
-4. Identify the impact area
-5. Decide on the implementation approach
+**やること:**
+1. タスクの要件を理解する
+2. 関連するコードを読んで現状を把握する
+3. 不明点があればコード調査で解決する
+4. 影響範囲を特定する
+5. 実装アプローチを決める

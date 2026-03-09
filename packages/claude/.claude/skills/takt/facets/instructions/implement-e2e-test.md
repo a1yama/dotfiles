@@ -1,51 +1,51 @@
-Implement E2E tests according to the test plan.
-Refer only to files within the Report Directory shown in the Piece Context. Do not search or reference other report directories.
+テスト計画に従ってE2Eテストを実装してください。
+Piece Contextに示されたReport Directory内のファイルのみ参照してください。他のレポートディレクトリは検索/参照しないでください。
 
-**Actions:**
-1. Review the test plan report
-2. Implement or update tests following existing E2E layout (e.g., `e2e/specs/`)
-3. Run E2E tests (minimum: `npm run test:e2e:mock`, and targeted spec runs when needed)
-4. If tests fail, analyze root cause, fix test or code, and rerun
-5. Confirm related existing tests are not broken
+**やること:**
+1. テスト計画のレポートを確認する
+2. `e2e/specs/` など既存E2E配置に従ってテストを実装・更新する
+3. E2Eテストを実行する（最低: `npm run test:e2e:mock`、必要に応じて対象specの単体実行）
+4. 失敗時は原因を特定し、テストまたは対象コードを修正して再実行する
+5. 既存の関連テストが壊れていないことを確認する
 
-**Constraints:**
-- Keep the current E2E framework (Vitest) unchanged
-- Keep one scenario per test and make assertions explicit
-- Reuse existing fixtures/helpers/mock strategy for external dependencies
+**実装の制約:**
+- 既存のE2Eフレームワーク（Vitest）を変更しない
+- テストは1シナリオ1関心で記述し、期待結果を明確にする
+- 外部依存があるケースは既存のfixture/helper/mock方針に合わせる
 
-**Scope output contract (create at the start of implementation):**
+**Scope出力契約（実装開始時に作成）:**
 ```markdown
-# Change Scope Declaration
+# 変更スコープ宣言
 
-## Task
-{One-line task summary}
+## タスク
+{タスクの1行要約}
 
-## Planned changes
-| Type | File |
-|------|------|
-| Create | `e2e/specs/example.e2e.ts` |
+## 変更予定
+| 種別 | ファイル |
+|------|---------|
+| 作成 | `e2e/specs/example.e2e.ts` |
 
-## Estimated size
+## 推定規模
 Small / Medium / Large
 
-## Impact area
-- {Affected modules or features}
+## 影響範囲
+- {影響するモジュールや機能}
 ```
 
-**Decisions output contract (at implementation completion, only if decisions were made):**
+**Decisions出力契約（実装完了時、決定がある場合のみ）:**
 ```markdown
-# Decision Log
+# 決定ログ
 
-## 1. {Decision}
-- **Context**: {Why the decision was needed}
-- **Options considered**: {List of options}
-- **Rationale**: {Reason for the choice}
+## 1. {決定内容}
+- **背景**: {なぜ決定が必要だったか}
+- **検討した選択肢**: {選択肢リスト}
+- **理由**: {選んだ理由}
 ```
 
-**Required output (include headings)**
-## Work results
-- {Summary of actions taken}
-## Changes made
-- {Summary of changes}
-## Test results
-- {Command executed and results}
+**必須出力（見出しを含める）**
+## 作業結果
+- {実施内容の要約}
+## 変更内容
+- {変更内容の要約}
+## テスト結果
+- {実行コマンドと結果}

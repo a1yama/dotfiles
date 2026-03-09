@@ -1,5 +1,5 @@
 name: dual-review
-description: Frontend + backend focused review (structure, modularization, component design, security, QA)
+description: フロントエンド＋バックエンド特化レビュー（構造・モジュール化・コンポーネント設計・セキュリティ・QA）
 piece_config:
   provider_options:
     codex:
@@ -28,9 +28,9 @@ movements:
         - name: review-target.md
           format: review-gather
     rules:
-      - condition: Review target information gathered
+      - condition: レビュー対象の情報収集完了
         next: reviewers
-      - condition: Unable to identify review target, insufficient information
+      - condition: レビュー対象を特定できない、情報不足
         next: ABORT
 
   - name: reviewers
@@ -155,5 +155,5 @@ movements:
           format: summary
           use_judge: false
     rules:
-      - condition: Review integration complete
+      - condition: レビュー統合完了
         next: COMPLETE

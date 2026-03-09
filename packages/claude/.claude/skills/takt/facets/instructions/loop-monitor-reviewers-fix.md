@@ -1,9 +1,9 @@
-The reviewers → fix loop has repeated {cycle_count} times.
+reviewers → fix のループが {cycle_count} 回繰り返されました。
 
-Review the latest review reports in the Report Directory and determine
-whether this loop is healthy (converging) or unproductive (diverging or oscillating).
+Report Directory 内の最新レビューレポートを確認し、
+このループが健全（収束傾向）か非生産的（発散・振動）かを判断してください。
 
-**Judgment criteria:**
-- Is the number of new / reopened findings decreasing each cycle?
-- Are the same family_tag findings not repeating (is persists not growing)?
-- Are fixes actually being applied to the code?
+**判断基準:**
+- 各サイクルで new / reopened の指摘件数が減少しているか
+- 同じ family_tag の指摘が繰り返されていないか（persists が増えていないか）
+- 修正が実際にコードに反映されているか

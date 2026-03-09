@@ -1,8 +1,8 @@
 ```markdown
-# Decision Log
+# 決定ログ
 
-## 1. {Decision}
-- **Context**: {Why the decision was needed}
-- **Options considered**: {List of options}
-- **Rationale**: {Why this option was chosen}
+## 1. {決定内容}
+- **背景**: {なぜ決定が必要だったか}
+- **検討した選択肢**: {選択肢リスト}
+- **理由**: {選んだ理由}
 ```

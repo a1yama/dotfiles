@@ -1,53 +1,53 @@
-# Research Methodology Knowledge
+# 調査方法論知識
 
-## Data Reliability Evaluation
+## データの信頼性評価
 
-Data quality is determined by source reliability and clarity of documentation.
+データの品質は、出典の信頼性と記載の明確さで決まる。
 
-| Criterion | Judgment |
-|-----------|----------|
-| Numbers from official statistics (government, municipality) | High reliability |
-| Numbers in news articles (with source) | Medium reliability |
-| Numbers from personal blogs/SNS (no source) | Low reliability |
-| Year/date of numbers is specified | OK |
-| Year/date of numbers is unknown | Warning |
-| Based on primary sources (official documents, originals) | OK |
-| Secondary sources only, primary source unverifiable | Warning |
+| 基準 | 判定 |
+|------|------|
+| 公的統計（政府・自治体）からの数値 | 信頼度高 |
+| 報道記事内の数値（出典あり） | 信頼度中 |
+| 個人ブログ・SNSの数値（出典なし） | 信頼度低 |
+| 数値の年度・時点が明記されている | OK |
+| 数値の年度・時点が不明 | 警告 |
+| 一次情報（公式文書、原典）に基づく | OK |
+| 二次情報のみで一次情報が確認できない | 警告 |
 
-### Data Source Priority
+### データソースの優先順位
 
-| Priority | Data Source | Examples |
-|----------|------------|---------|
-| 1 | Government statistics/white papers | Census, ministry statistics |
-| 2 | Municipal open data | City statistical reports, open data portals |
-| 3 | Industry groups/research institutions | Think tanks, academic research |
-| 4 | News (with primary source reference) | Newspapers, specialized media |
-| 5 | News (without primary source) | Secondary reports, aggregation articles |
+| 優先度 | データソース | 例 |
+|--------|-------------|-----|
+| 1 | 政府統計・白書 | e-Stat、国勢調査、厚労省統計 |
+| 2 | 自治体公開データ | 市区町村の統計書、オープンデータ |
+| 3 | 業界団体・研究機関 | 民間シンクタンク、大学研究 |
+| 4 | 報道（一次情報あり） | 新聞記事、専門メディア |
+| 5 | 報道（一次情報なし） | 二次報道、まとめ記事 |
 
-## Qualitative Analysis Evaluation
+## 定性分析の評価
 
-Quality of qualitative analysis is evaluated by logical causality and concrete evidence.
+定性的な分析は、因果関係の論理性と具体的事例の裏付けで評価する。
 
-| Criterion | Judgment |
-|-----------|----------|
-| Claims causation with mechanism explanation | OK |
-| Claims causation but only correlation exists | Warning |
-| Digs into structural factors | OK |
-| Stops at surface-level explanation | Insufficient |
-| Backed by concrete examples, system names | OK |
-| Abstract explanation only | Insufficient |
+| 基準 | 判定 |
+|------|------|
+| 因果関係を主張し、メカニズムの説明がある | OK |
+| 因果関係を主張するが、実際は相関のみ | 警告 |
+| 構造的要因まで掘り下げている | OK |
+| 表面的な説明で止まっている | 不十分 |
+| 具体的な事例・制度名で裏付けている | OK |
+| 抽象的な説明のみ | 不十分 |
 
-### Distinguishing Causation from Correlation
+### 因果と相関の区別
 
-"A and B occur together" is correlation. "A causes B" is causation. Claiming causation requires mechanism explanation or elimination of alternative factors.
+「AとBが同時に起きている」は相関。「AがBを引き起こす」は因果。因果を主張するには、メカニズムの説明か他の要因の排除が必要。
 
-## Handling Un-researchable Items
+## 調査不可項目の扱い
 
-Report honestly when items cannot be researched. Do not fill gaps with speculation.
+調査できない項目は正直に報告する。推測で埋めない。
 
-| Situation | Response |
-|-----------|----------|
-| Data is not public | Report "Unable to research" with reason |
-| Data exists but not found | Report "Not found" with locations searched |
-| Only partial data available | Report what was found, note gaps |
-| Want to supplement with speculation | Clearly mark as speculation with reasoning |
+| 状況 | 対応 |
+|------|------|
+| データが非公開 | 「調査不可」と報告、理由を明記 |
+| データが存在するが見つからなかった | 「未発見」と報告、探した場所を明記 |
+| 部分的にしかデータがない | 取得できた分を報告、欠損を明記 |
+| 推測で補完する場合 | 推測であることを明示し、根拠を添える |

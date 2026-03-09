@@ -1,15 +1,15 @@
-Fix the issues raised by the supervisor.
-Use reports in the Report Directory as the primary source of truth. If additional context is needed, you may consult Previous Response and conversation history as secondary sources (Previous Response may be unavailable). If information conflicts, prioritize reports in the Report Directory and actual file contents.
+監督者からの指摘を修正してください。
+Report Directory内のレポートを一次情報として参照してください。不足情報の補完が必要な場合に限り、Previous Responseや会話履歴を補助的に参照して構いません（Previous Responseは提供されない場合があります）。情報が競合する場合は、Report Directory内のレポートと実際のファイル内容を優先してください。
 
-The supervisor has flagged problems from an overall perspective.
-Address items in order of priority, starting with the highest.
+監督者は全体を俯瞰した視点から問題を指摘しています。
+優先度の高い項目から順に対応してください。
 
-**Required output (include headings)**
-## Work results
-- {Summary of actions taken}
-## Changes made
-- {Summary of changes}
-## Test results
-- {Command executed and results}
-## Evidence
-- {List key points from files checked/searches/diffs/logs}
+**必須出力（見出しを含める）**
+## 作業結果
+- {実施内容の要約}
+## 変更内容
+- {変更内容の要約}
+## テスト結果
+- {実行コマンドと結果}
+## 証拠
+- {確認したファイル/検索/差分/ログの要点を列挙}

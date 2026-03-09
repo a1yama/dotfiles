@@ -1,11 +1,11 @@
-Analyze the target code and identify missing unit tests.
+対象コードを分析し、不足している単体テストを洗い出してください。
 
-**Note:** If a Previous Response exists, this is a replan due to rejection.
-Revise the test plan taking that feedback into account.
+**注意:** Previous Responseがある場合は差し戻しのため、
+その内容を踏まえてテスト計画を見直してください。
 
-**Actions:**
-1. Read the target module source code and understand its behavior, branches, and state transitions
-2. Read existing tests and identify what is already covered
-3. Identify missing test cases (happy path, error cases, boundary values, edge cases)
-4. Determine test strategy (mock approach, existing test helper usage, fixture design)
-5. Provide concrete guidelines for the test implementer
+**やること:**
+1. 対象モジュールのソースコードを読み、振る舞い・分岐・状態遷移を理解する
+2. 既存テストを読み、カバーされている観点を把握する
+3. 不足しているテストケース（正常系・異常系・境界値・エッジケース）を洗い出す
+4. テスト方針（モック戦略、既存テストヘルパーの活用、フィクスチャ設計）を決める
+5. テスト実装者向けの具体的なガイドラインを出す

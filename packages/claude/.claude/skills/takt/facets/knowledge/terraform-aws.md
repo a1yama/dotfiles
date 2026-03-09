@@ -1,41 +1,41 @@
-# Terraform AWS Knowledge
+# Terraform AWS 知識
 
-## Module Design
+## モジュール設計
 
-Split modules by domain (network, database, application layer). Do not create generic utility modules.
+モジュールはドメイン（ネットワーク、データベース、アプリケーション層）単位で分割する。汎用ユーティリティモジュールは作らない。
 
-| Criteria | Judgment |
-|----------|----------|
-| Domain-based module splitting | OK |
-| Generic "utils" module | REJECT |
-| Unrelated resources mixed in one module | REJECT |
-| Implicit inter-module dependencies | REJECT (connect explicitly via outputs→inputs) |
+| 基準 | 判定 |
+|------|------|
+| ドメイン単位のモジュール分割 | OK |
+| 汎用 "utils" モジュール | REJECT |
+| 1モジュールに無関係なリソースが混在 | REJECT |
+| モジュール間の暗黙的依存 | REJECT（出力→入力で明示的に接続） |
 
-### Inter-Module Dependencies
+### モジュール間の依存
 
-Pass dependencies explicitly via outputs→inputs. Avoid implicit references (using `data` sources to look up other module resources).
+モジュール間の依存は出力→入力で明示的に渡す。暗黙的な参照（`data` ソースで他モジュールのリソースを引く）は避ける。
 
 ```hcl
-# OK - Explicit dependency
+# OK - 明示的な依存
 module "database" {
   source     = "../../modules/database"
   vpc_id     = module.network.vpc_id
   subnet_ids = module.network.private_subnet_ids
 }
 
-# NG - Implicit dependency
+# NG - 暗黙的な依存
 module "database" {
   source = "../../modules/database"
-  # vpc_id not passed; module uses data "aws_vpc" internally
+  # vpc_id を渡さず、module 内で data "aws_vpc" で引いている
 }
 ```
 
-### Identification Variable Passthrough
+### 識別変数のパススルー
 
-Pass identification variables (environment, service name) explicitly from root to child modules. Do not rely on globals or hardcoding.
+環境名・サービス名などの識別変数は、ルートモジュールから子モジュールへ明示的に渡す。グローバル変数やハードコードに頼らない。
 
 ```hcl
-# OK - Explicit passthrough
+# OK - 明示的なパススルー
 module "database" {
   environment      = var.environment
   service          = var.service
@@ -43,19 +43,19 @@ module "database" {
 }
 ```
 
-## Resource Naming Convention
+## リソース命名規約
 
-Compute `name_prefix` in `locals` and apply consistently to all resources. Append resource-specific suffixes.
+`locals` で `name_prefix` を計算し、全リソースに一貫して適用する。リソース固有のサフィックスを付加する。
 
-| Criteria | Judgment |
-|----------|----------|
-| Unified naming with `name_prefix` pattern | OK |
-| Inconsistent naming across resources | REJECT |
-| Name exceeds AWS character limits | REJECT |
-| Tag names not in PascalCase | Warning |
+| 基準 | 判定 |
+|------|------|
+| `name_prefix` パターンで統一命名 | OK |
+| 各リソースでバラバラに命名 | REJECT |
+| AWS 文字数制限を超える名前 | REJECT |
+| タグ名が PascalCase でない | 警告 |
 
 ```hcl
-# OK - Unified with name_prefix
+# OK - name_prefix で統一
 locals {
   name_prefix = "${var.environment}-${var.service}-${var.application_name}"
 }
@@ -64,34 +64,34 @@ resource "aws_ecs_cluster" "main" {
   name = "${local.name_prefix}-cluster"
 }
 
-# NG - Inconsistent naming
+# NG - 各リソースでバラバラに命名
 resource "aws_ecs_cluster" "main" {
   name = "${var.environment}-app-cluster"
 }
 ```
 
-### Character Limit Handling
+### 文字数制限への対応
 
-AWS services have name character limits. Use shortened forms when approaching limits.
+AWS サービスには名前の文字数制限がある。制限に近い場合は短縮形を使う。
 
-| Service | Limit | Example |
-|---------|-------|---------|
-| Target Group | 32 chars | `${var.environment}-${var.service}-backend-tg` |
-| Lambda Function | 64 chars | Full prefix OK |
-| S3 Bucket | 63 chars | Full prefix OK |
+| サービス | 制限 | 例 |
+|---------|------|-----|
+| Target Group | 32文字 | `${var.environment}-${var.service}-backend-tg` |
+| Lambda 関数 | 64文字 | フルプレフィックス可 |
+| S3 バケット | 63文字 | フルプレフィックス可 |
 
-## Tagging Strategy
+## タグ戦略
 
-Use provider `default_tags` for common tags. No duplicate tagging on individual resources.
+provider の `default_tags` で共通タグを一括設定する。個別リソースでの重複タグ付けは不要。
 
-| Criteria | Judgment |
-|----------|----------|
-| Centralized via provider `default_tags` | OK |
-| Duplicate tags matching `default_tags` on individual resources | Warning |
-| Only `Name` tag added on individual resources | OK |
+| 基準 | 判定 |
+|------|------|
+| provider `default_tags` で一括設定 | OK |
+| 個別リソースで `default_tags` と同じタグを重複設定 | 警告 |
+| 個別リソースで `Name` タグのみ追加 | OK |
 
 ```hcl
-# OK - Centralized, individual gets Name only
+# OK - provider で一括、個別は Name のみ
 provider "aws" {
   default_tags {
     tags = {
@@ -107,7 +107,7 @@ resource "aws_instance" "main" {
   }
 }
 
-# NG - Duplicates default_tags
+# NG - default_tags と重複
 resource "aws_instance" "main" {
   tags = {
     Environment = var.environment
@@ -117,51 +117,51 @@ resource "aws_instance" "main" {
 }
 ```
 
-## File Organization Patterns
+## ファイル構成パターン
 
-### Environment Directory Structure
+### 環境ディレクトリ構造
 
-Separate environments into directories, each with independent state management.
+環境ごとにディレクトリを分離し、各環境が独立した状態管理を持つ。
 
 ```
 environments/
 ├── production/
-│   ├── terraform.tf       # Version constraints
-│   ├── providers.tf       # Provider config (default_tags)
-│   ├── backend.tf         # S3 backend
-│   ├── variables.tf       # Environment variables
-│   ├── main.tf            # Module invocations
-│   └── outputs.tf         # Outputs
+│   ├── terraform.tf       # バージョン制約
+│   ├── providers.tf       # プロバイダ設定（default_tags）
+│   ├── backend.tf         # S3 バックエンド
+│   ├── variables.tf       # 環境変数
+│   ├── main.tf            # モジュール呼び出し
+│   └── outputs.tf         # 出力
 └── staging/
     └── ...
 ```
 
-### Module File Structure
+### モジュール内ファイル構成
 
-| File | Contents |
-|------|----------|
-| `main.tf` | `locals` and `data` sources only |
-| `variables.tf` | Input variable definitions only (no resources) |
-| `outputs.tf` | Output definitions only (no resources) |
-| `{resource_type}.tf` | One file per resource category |
-| `templates/` | user_data scripts and other templates |
+| ファイル | 内容 |
+|---------|------|
+| `main.tf` | `locals`、`data` ソースのみ |
+| `variables.tf` | 入力変数定義のみ（リソースなし） |
+| `outputs.tf` | 出力定義のみ（リソースなし） |
+| `{resource_type}.tf` | リソースカテゴリごとに1ファイル |
+| `templates/` | user_data スクリプト等のテンプレート |
 
-## Security Best Practices
+## セキュリティベストプラクティス
 
-### EC2 Instance Security
+### EC2 インスタンスセキュリティ
 
-| Setting | Recommended | Reason |
-|---------|-------------|--------|
-| `http_tokens` | `"required"` | Enforce IMDSv2 (SSRF prevention) |
-| `http_put_response_hop_limit` | `1` | Prevent container escapes |
-| `root_block_device.encrypted` | `true` | Data-at-rest encryption |
+| 設定 | 推奨値 | 理由 |
+|------|--------|------|
+| `http_tokens` | `"required"` | IMDSv2 強制（SSRF 防止） |
+| `http_put_response_hop_limit` | `1` | コンテナエスケープ防止 |
+| `root_block_device.encrypted` | `true` | 保存データ暗号化 |
 
-### S3 Bucket Security
+### S3 バケットセキュリティ
 
-Block all public access with all four settings. Use OAC (Origin Access Control) for CloudFront distributions.
+パブリックアクセスは4項目すべてブロックする。CloudFront 経由の場合は OAC（Origin Access Control）を使用する。
 
 ```hcl
-# OK - Complete block
+# OK - 完全ブロック
 resource "aws_s3_bucket_public_access_block" "this" {
   block_public_acls       = true
   block_public_policy     = true
@@ -170,61 +170,61 @@ resource "aws_s3_bucket_public_access_block" "this" {
 }
 ```
 
-### IAM Design
+### IAM 設計
 
-| Pattern | Recommendation |
-|---------|---------------|
-| Per-service role separation | Separate execution role (for ECS Agent) and task role (for app) |
-| CI/CD authentication | OIDC federation (avoid long-lived credentials) |
-| Policy scope | Specify resource ARNs explicitly (avoid `"*"`) |
+| パターン | 推奨 |
+|---------|------|
+| 用途別ロール分離 | 実行ロール（ECS Agent 用）とタスクロール（アプリ用）を分ける |
+| CI/CD 認証 | OIDC フェデレーション（長期認証情報を使わない） |
+| ポリシースコープ | リソース ARN を明示的に指定（`"*"` を避ける） |
 
-### Secret Management
+### 機密情報管理
 
-| Method | Recommendation |
-|--------|---------------|
-| SSM Parameter Store (SecureString) | Recommended |
-| Secrets Manager | Recommended (when rotation needed) |
-| Direct in `.tfvars` | Conditional OK (gitignore required) |
-| Hardcoded in `.tf` files | REJECT |
+| 方法 | 推奨度 |
+|------|--------|
+| SSM Parameter Store（SecureString） | 推奨 |
+| Secrets Manager | 推奨（ローテーション必要時） |
+| `.tfvars` に直接記載 | 条件付きOK（gitignore 必須） |
+| `.tf` ファイルにハードコード | REJECT |
 
-Set SSM Parameter initial values to placeholders and use `lifecycle { ignore_changes = [value] }` to manage outside Terraform.
+SSM Parameter の初期値はプレースホルダーにし、`lifecycle { ignore_changes = [value] }` で Terraform 管理外にする。
 
-## Cost Optimization Patterns
+## コスト最適化パターン
 
-Document trade-offs with inline comments for cost-impacting choices.
+コスト影響のある選択にはインラインコメントでトレードオフを文書化する。
 
-| Choice | Cost Effect | Trade-off |
-|--------|------------|-----------|
-| NAT Instance vs NAT Gateway | Instance ~$3-4/mo vs Gateway ~$32/mo | Lower availability and throughput |
-| Public subnet placement | No VPC Endpoints needed | Weaker network isolation |
-| EC2 + EBS vs RDS | EC2 ~$15-20/mo vs RDS ~$50+/mo | Higher operational burden |
+| 選択 | コスト効果 | トレードオフ |
+|------|-----------|------------|
+| NAT Instance vs NAT Gateway | NAT Instance は月額 ~$3-4 vs Gateway ~$32 | 可用性・スループットが劣る |
+| パブリックサブネット配置 | VPC Endpoint 不要 | ネットワーク分離が弱まる |
+| EC2 + EBS vs RDS | EC2 は月額 ~$15-20 vs RDS ~$50+ | 運用負荷が増える |
 
 ```hcl
-# OK - Trade-off documented
-# Using t3.nano instead of NAT Gateway (~$3-4/mo vs ~$32/mo)
-# Trade-off: single-AZ availability, throughput limits
+# OK - トレードオフを文書化
+# NAT Gateway の代わりに t3.nano を使用（約 $3-4/月 vs $32/月）
+# トレードオフ: 可用性は単一AZ、スループット上限あり
 resource "aws_instance" "nat" {
   instance_type = "t3.nano"
 }
 ```
 
-## Lifecycle Rule Usage
+## Lifecycle ルールの使い分け
 
-| Rule | Purpose | Target |
-|------|---------|--------|
-| `prevent_destroy` | Prevent accidental deletion | Databases, EBS volumes |
-| `ignore_changes` | Allow external changes | `desired_count` (Auto Scaling), SSM `value` |
-| `create_before_destroy` | Prevent downtime | Load balancers, security groups |
+| ルール | 用途 | 適用対象 |
+|--------|------|---------|
+| `prevent_destroy` | 誤削除防止 | データベース、EBS ボリューム |
+| `ignore_changes` | 外部変更を許容 | `desired_count`（Auto Scaling）、SSM の `value` |
+| `create_before_destroy` | ダウンタイム防止 | ロードバランサー、セキュリティグループ |
 
 ```hcl
-# OK - Prevent accidental database deletion
+# OK - データベースの誤削除防止
 resource "aws_instance" "database" {
   lifecycle {
     prevent_destroy = true
   }
 }
 
-# OK - Let Auto Scaling manage desired_count
+# OK - Auto Scaling の desired_count を Terraform 管理外にする
 resource "aws_ecs_service" "main" {
   lifecycle {
     ignore_changes = [desired_count]
@@ -232,10 +232,10 @@ resource "aws_ecs_service" "main" {
 }
 ```
 
-## Version Management
+## バージョン管理
 
-| Setting | Recommendation |
-|---------|---------------|
-| `required_version` | `">= 1.5.0"` or higher (`default_tags` support) |
-| Provider version | Pin minor version with `~>` (e.g., `~> 5.80`) |
-| State locking | `use_lockfile = true` required |
+| 設定 | 推奨 |
+|------|------|
+| `required_version` | `">= 1.5.0"` 以上（`default_tags` サポート） |
+| プロバイダバージョン | `~>` でマイナーバージョン固定（例: `~> 5.80`） |
+| 状態ロック | `use_lockfile = true` 必須 |

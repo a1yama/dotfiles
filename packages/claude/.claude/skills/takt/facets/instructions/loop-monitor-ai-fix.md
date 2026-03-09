@@ -1,12 +1,12 @@
-The ai_review ↔ ai_fix loop has repeated {cycle_count} times.
+ai_review と ai_fix のループが {cycle_count} 回繰り返されました。
 
-Review the reports from each cycle and determine whether this loop
-is healthy (making progress) or unproductive (repeating the same issues).
+各サイクルのレポートを確認し、このループが健全（進捗がある）か、
+非生産的（同じ問題を繰り返している）かを判断してください。
 
-**Reports to reference:**
-- AI Review results: {report:ai-review.md}
+**参照するレポート:**
+- AIレビュー結果: {report:ai-review.md}
 
-**Judgment criteria:**
-- Are new issues being found/fixed in each cycle?
-- Are the same findings being repeated?
-- Are fixes actually being applied?
+**判断基準:**
+- 各サイクルで新しい問題が発見・修正されているか
+- 同じ指摘が繰り返されていないか
+- 修正が実際に反映されているか

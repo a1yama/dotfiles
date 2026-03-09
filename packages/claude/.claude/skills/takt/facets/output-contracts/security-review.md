@@ -1,47 +1,47 @@
 ```markdown
-# Security Review
+# セキュリティレビュー
 
-## Result: APPROVE / REJECT
+## 結果: APPROVE / REJECT
 
-## Severity: None / Low / Medium / High / Critical
+## 重大度: None / Low / Medium / High / Critical
 
-## Check Results
-| Category | Result | Notes |
-|----------|--------|-------|
-| Injection | ✅ | - |
-| Authentication & Authorization | ✅ | - |
-| Data Protection | ✅ | - |
-| Dependencies | ✅ | - |
+## チェック結果
+| カテゴリ | 結果 | 備考 |
+|---------|------|------|
+| インジェクション | ✅ | - |
+| 認証・認可 | ✅ | - |
+| データ保護 | ✅ | - |
+| 依存関係 | ✅ | - |
 
-## Current Iteration Findings (new)
-| # | finding_id | family_tag | Severity | Type | Location | Issue | Fix Suggestion |
-|---|------------|------------|----------|------|----------|-------|----------------|
-| 1 | SEC-NEW-src-db-L42 | injection-risk | High | SQLi | `src/db.ts:42` | Raw query string | Use parameterized queries |
+## 今回の指摘（new）
+| # | finding_id | family_tag | 重大度 | 種類 | 場所 | 問題 | 修正案 |
+|---|------------|------------|--------|------|------|------|--------|
+| 1 | SEC-NEW-src-db-L42 | injection-risk | High | SQLi | `src/db.ts:42` | 生SQL文字列 | パラメータ化クエリを使用 |
 
-## Carry-over Findings (persists)
-| # | finding_id | family_tag | Previous Evidence | Current Evidence | Issue | Fix Suggestion |
-|---|------------|------------|-------------------|------------------|-------|----------------|
-| 1 | SEC-PERSIST-src-auth-L18 | injection-risk | `src/auth.ts:18` | `src/auth.ts:18` | Weak validation persists | Harden validation |
+## 継続指摘（persists）
+| # | finding_id | family_tag | 前回根拠 | 今回根拠 | 問題 | 修正案 |
+|---|------------|------------|----------|----------|------|--------|
+| 1 | SEC-PERSIST-src-auth-L18 | injection-risk | `src/auth.ts:18` | `src/auth.ts:18` | 未解消 | バリデーションを強化 |
 
-## Resolved Findings (resolved)
-| finding_id | Resolution Evidence |
-|------------|---------------------|
-| SEC-RESOLVED-src-db-L10 | `src/db.ts:10` now uses bound parameters |
+## 解消済み（resolved）
+| finding_id | 解消根拠 |
+|------------|----------|
+| SEC-RESOLVED-src-db-L10 | `src/db.ts:10` はバインド変数化済み |
 
-## Reopened Findings (reopened)
-| # | finding_id | family_tag | Prior Resolution Evidence | Recurrence Evidence | Issue | Fix Suggestion |
-|---|------------|------------|--------------------------|---------------------|-------|----------------|
-| 1 | SEC-REOPENED-src-auth-L55 | injection-risk | `Previously fixed at src/auth.ts:20` | `Recurred at src/auth.ts:55` | Issue description | Fix approach |
+## 再開指摘（reopened）
+| # | finding_id | family_tag | 解消根拠（前回） | 再発根拠 | 問題 | 修正案 |
+|---|------------|------------|----------------|---------|------|--------|
+| 1 | SEC-REOPENED-src-auth-L55 | injection-risk | `前回: src/auth.ts:20 で修正済み` | `src/auth.ts:55 で再発` | 問題の説明 | 修正方法 |
 
-## Warnings (non-blocking)
-- {Security recommendations}
+## 警告（非ブロッキング）
+- {セキュリティに関する推奨事項}
 
-## Rejection Gate
-- REJECT is valid only when at least one finding exists in `new`, `persists`, or `reopened`
-- Findings without `finding_id` are invalid
+## REJECT判定条件
+- `new`、`persists`、または `reopened` が1件以上ある場合のみ REJECT 可
+- `finding_id` なしの指摘は無効
 ```
 
-**Cognitive load reduction rules:**
-- No issues → Checklist only (10 lines or fewer)
-- Warnings only → + Warnings in 1-2 lines (15 lines or fewer)
-- Vulnerabilities found → + finding tables (30 lines or fewer)
+**認知負荷軽減ルール:**
+- 問題なし → チェック表のみ（10行以内）
+- 警告のみ → + 警告1-2行（15行以内）
+- 脆弱性あり → + 指摘表（30行以内）

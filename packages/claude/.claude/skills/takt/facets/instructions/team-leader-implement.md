@@ -1,27 +1,29 @@
-Decompose the implementation task into subtasks by file ownership and execute them in parallel. Assign files exclusively to each part to prevent conflicts.
+実装タスクを分析し、分解が適切なら複数パートに分けて並列実行してください。
 
-**Important:** Reference the plan report: {report:plan.md}
+**重要:** 計画レポートを参照してください: {report:plan.md}
 
-**Steps:**
+**やること:**
 
-1. Identify files to create/modify
-   - Reference the plan report and test scope to list all files to change
-   - Review the actual codebase to fill in any missing information
+1. 分解の可否を判断する
+   - 変更対象ファイルを特定し、ファイル間の依存関係を確認する
+   - 横断的関心事（共有型・ID・イベント）がある場合は分解せず1パートで実装する
+   - 変更ファイル数が少ない場合、リファクタ・リネーム系の場合も1パートで実装する
 
-2. Group files by layer/module
-   - Create groups based on high cohesion (e.g., Domain layer / Infrastructure layer / API layer)
-   - If there are type or interface dependencies, keep both sides in the same group
-   - Never assign the same file to multiple parts
+2. 分解する場合: ファイルをレイヤー/モジュール単位でグループ化する
+   - 凝集度の高い単位でグループを作る（例: ドメイン層 / インフラ層 / API層）
+   - 型・インターフェースの依存がある場合は、依存元と依存先を同じグループにまとめる
+   - 1つのファイルを複数のパートに割り当てない
+   - テストファイルと実装ファイルは同じパートにまとめる
 
-3. Assign file ownership exclusively to each part
-   - Each part's instruction must clearly state:
-     - **Responsible files** (list of files to create/modify)
-     - **Reference-only files** (read-only, modification prohibited)
-     - **Implementation task** (what and how to implement)
-     - **Completion criteria** (implementation of responsible files is complete)
-   - If tests are already written, instruct parts to implement so existing tests pass
-   - Do not include build checks (all parts complete first, then build is verified together)
+3. 各パートに排他的なファイル担当を割り当てる
+   - 各パートの instruction に以下を必ず明記する：
+     - **担当ファイル**（作成・変更する対象ファイルのパス一覧）
+     - **参照専用ファイル**（変更禁止、読み取りのみ可）
+     - **実装内容**（何をどのように実装するか）
+     - **完了基準**（担当ファイルの実装が完了したこと）
+   - テスト済みの場合は「既存テストがパスするよう実装する」と明記する
+   - ビルドチェックは指示しない（他パートのファイルが揃ってから全体でまとめて確認するため）
 
-**Constraints:**
-- Parts do not run tests (handled by subsequent movements)
-- Do not modify files outside your responsibility (causes conflicts)
+**制約:**
+- 各パートはテスト実行を行わない（後続ムーブメントで実施する）
+- 担当外のファイルを変更しない（コンフリクトの原因になる）

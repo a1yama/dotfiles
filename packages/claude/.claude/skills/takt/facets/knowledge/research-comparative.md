@@ -1,30 +1,30 @@
-# Comparative Research Knowledge
+# 比較調査知識
 
-## Comparative Research Principles
+## 比較調査の原則
 
-When comparing two or more subjects, align same indicators under same conditions.
+2つ以上の対象を比較する場合、同じ指標を同じ条件で揃える。
 
-| Criterion | Judgment |
-|-----------|----------|
-| Both subjects' data aligned on same indicator and year | OK |
-| Only one side has data | REJECT |
-| Indicator definitions differ between subjects | Warning (note the differences) |
-| Comparing absolute values without considering scale | Warning (add per-capita ratios) |
+| 基準 | 判定 |
+|------|------|
+| 両者のデータが同じ指標・同じ年度で揃っている | OK |
+| 片方のデータしかない | REJECT |
+| 指標の定義が対象間で異なる | 警告（定義の違いを明記） |
+| 規模差を考慮せず絶対値で比較 | 警告（率・人口比を追加） |
 
-### Aligning Comparison Axes
+### 比較の軸を揃える
 
-When subjects differ in scale or background, direct comparison can be misleading. Normalize (per capita, per area, etc.) and explicitly state condition differences.
+比較対象が異なる規模・背景を持つ場合、直接比較が誤解を生む。正規化（人口あたり、面積あたり等）を行い、条件の違いを明示する。
 
-## Comparative Data Collection
+## 比較データの収集
 
-In comparative research, data for only one side halves the value.
+比較調査では、片方だけのデータでは価値が半減する。
 
-| Criterion | Judgment |
-|-----------|----------|
-| Collected from the same data source for all subjects | OK |
-| Collected from different data sources per subject | Warning (verify comparability) |
-| Data missing for some subjects | Note gaps, limit comparison to available range |
+| 基準 | 判定 |
+|------|------|
+| 全対象について同一のデータソースから収集した | OK |
+| 対象ごとに異なるデータソースから収集した | 警告（比較可能性を検証） |
+| 一部の対象のデータが欠損している | 欠損を明記し、比較可能な範囲を限定 |
 
-### Determining Non-comparability
+### 比較不能の判断
 
-When indicator definitions fundamentally differ, report "not comparable" rather than forcing comparison. Identify partially comparable items and state the comparable scope.
+指標の定義が根本的に異なる場合、無理に比較せず「比較不能」と報告する。部分的に比較可能な項目を特定し、比較可能な範囲を明示する。

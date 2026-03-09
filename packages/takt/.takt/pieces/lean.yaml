@@ -13,11 +13,13 @@ movements:
     edit: false
     persona: planner
     knowledge: architecture
-    allowed_tools:
-      - Read
-      - Glob
-      - Grep
-      - Bash
+    provider_options:
+      claude:
+        allowed_tools:
+          - Read
+          - Glob
+          - Grep
+          - Bash
     rules:
       - condition: 要件が明確で実装可能
         next: implement
@@ -37,13 +39,15 @@ movements:
     policy:
       - coding
       - testing
-    allowed_tools:
-      - Read
-      - Glob
-      - Grep
-      - Edit
-      - Write
-      - Bash
+    provider_options:
+      claude:
+        allowed_tools:
+          - Read
+          - Glob
+          - Grep
+          - Edit
+          - Write
+          - Bash
     required_permission_mode: edit
     instruction: implement
     rules:
@@ -64,11 +68,13 @@ movements:
     model: opus
     persona: supervisor
     policy: review
-    allowed_tools:
-      - Read
-      - Glob
-      - Grep
-      - Bash
+    provider_options:
+      claude:
+        allowed_tools:
+          - Read
+          - Glob
+          - Grep
+          - Bash
     pass_previous_response: false
     instruction: supervise
     rules:
@@ -88,13 +94,15 @@ movements:
     policy:
       - coding
       - testing
-    allowed_tools:
-      - Read
-      - Glob
-      - Grep
-      - Edit
-      - Write
-      - Bash
+    provider_options:
+      claude:
+        allowed_tools:
+          - Read
+          - Glob
+          - Grep
+          - Edit
+          - Write
+          - Bash
     required_permission_mode: edit
     pass_previous_response: false
     rules:

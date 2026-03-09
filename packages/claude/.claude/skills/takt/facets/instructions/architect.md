@@ -1,21 +1,21 @@
-Read the plan report ({report:plan.md}) and design the architecture.
+計画レポート（{report:plan.md}）を読み、アーキテクチャ設計を行ってください。
 
-**Criteria for small tasks:**
-- Only 1-2 file changes
-- No design decisions needed
-- No technology selection needed
+**小規模タスクの判断基準:**
+- 1-2ファイルの変更のみ
+- 設計判断が不要
+- 技術選定が不要
 
-For small tasks, skip creating a design report and match the rule for "small task (no design needed)".
+小規模タスクの場合は設計レポートを作成せず、「小規模タスク（設計不要）」のルールに対応してください。
 
-**Tasks requiring design:**
-- Changes to 3 or more files
-- Adding new modules or features
-- Technology selection required
-- Architecture pattern decisions needed
+**設計が必要なタスク:**
+- 3ファイル以上の変更
+- 新しいモジュール・機能の追加
+- 技術選定が必要
+- アーキテクチャパターンの決定が必要
 
-**Actions:**
-1. Assess the task scope
-2. Determine file structure
-3. Select technologies (if needed)
-4. Choose design patterns
-5. Create implementation guidelines for the Coder
+**やること:**
+1. タスクの規模を評価
+2. ファイル構成を決定
+3. 技術選定（必要な場合）
+4. 設計パターンの選択
+5. Coderへの実装ガイドライン作成

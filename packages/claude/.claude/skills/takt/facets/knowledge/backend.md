@@ -1,44 +1,44 @@
-# Backend Expertise
+# バックエンド専門知識
 
-## Hexagonal Architecture (Ports and Adapters)
+## ヘキサゴナルアーキテクチャ（ポートとアダプター）
 
-Dependency direction flows from outer to inner layers. Reverse dependencies are prohibited.
+依存方向は外側から内側へ。逆方向の依存は禁止。
 
 ```
-adapter (external) → application (use cases) → domain (business logic)
+adapter（外部） → application（ユースケース） → domain（ビジネスロジック）
 ```
 
-Directory structure:
+ディレクトリ構成:
 
 ```
 {domain-name}/
-├── domain/                  # Domain layer (framework-independent)
+├── domain/                  # ドメイン層（フレームワーク非依存）
 │   ├── model/
-│   │   └── aggregate/       # Aggregate roots, value objects
-│   └── service/             # Domain services
-├── application/             # Application layer (use cases)
-│   ├── usecase/             # Orchestration
-│   └── query/               # Query handlers
-├── adapter/                 # Adapter layer (external connections)
-│   ├── inbound/             # Input adapters
-│   │   └── rest/            # REST Controller, Request/Response DTOs
-│   └── outbound/            # Output adapters
-│       └── persistence/     # Entity, Repository implementations
-└── api/                     # Public interface (referenceable by other domains)
-    └── events/              # Domain events
+│   │   └── aggregate/       # 集約ルート、値オブジェクト
+│   └── service/             # ドメインサービス
+├── application/             # アプリケーション層（ユースケース）
+│   ├── usecase/             # オーケストレーション
+│   └── query/               # クエリハンドラ
+├── adapter/                 # アダプター層（外部接続）
+│   ├── inbound/             # 入力アダプター
+│   │   └── rest/            # REST Controller, Request/Response DTO
+│   └── outbound/            # 出力アダプター
+│       └── persistence/     # Entity, Repository実装
+└── api/                     # 公開インターフェース（他ドメインから参照可能）
+    └── events/              # ドメインイベント
 ```
 
-Layer responsibilities:
+各層の責務:
 
-| Layer | Responsibility | May Depend On | Must Not Depend On |
-|-------|---------------|---------------|-------------------|
-| domain | Business logic, invariants | Standard library only | Frameworks, DB, external APIs |
-| application | Use case orchestration | domain | Concrete adapter implementations |
-| adapter/inbound | HTTP request handling, DTO conversion | application, domain | outbound adapter |
-| adapter/outbound | DB persistence, external API calls | domain (interfaces) | application |
+| 層 | 責務 | 依存してよいもの | 依存してはいけないもの |
+|----|------|----------------|---------------------|
+| domain | ビジネスロジック、不変条件 | 標準ライブラリのみ | フレームワーク、DB、外部API |
+| application | ユースケースのオーケストレーション | domain | adapter の具体実装 |
+| adapter/inbound | HTTPリクエスト受信、DTO変換 | application, domain | outbound adapter |
+| adapter/outbound | DB永続化、外部API呼び出し | domain（インターフェース） | application |
 
 ```kotlin
-// CORRECT - Domain layer is framework-independent
+// CORRECT - ドメイン層はフレームワーク非依存
 data class Order(val orderId: String, val status: OrderStatus) {
     fun confirm(confirmedBy: String): OrderConfirmedEvent {
         require(status == OrderStatus.PENDING)
@@ -46,7 +46,7 @@ data class Order(val orderId: String, val status: OrderStatus) {
     }
 }
 
-// WRONG - Spring annotations in domain layer
+// WRONG - ドメイン層にSpringアノテーション
 @Entity
 data class Order(
     @Id val orderId: String,
@@ -56,26 +56,26 @@ data class Order(
 }
 ```
 
-| Criteria | Judgment |
-|----------|----------|
-| Framework dependencies in domain layer (@Entity, @Component, etc.) | REJECT |
-| Controller directly referencing Repository | REJECT. Must go through UseCase layer |
-| Outward dependencies from domain layer (DB, HTTP, etc.) | REJECT |
-| Direct dependencies between adapters (inbound → outbound) | REJECT |
+| 基準 | 判定 |
+|------|------|
+| ドメイン層にフレームワーク依存（@Entity, @Component等） | REJECT |
+| Controller から Repository を直接参照 | REJECT。UseCase層を経由 |
+| ドメイン層から外向きの依存（DB, HTTP等） | REJECT |
+| adapter 間の直接依存（inbound → outbound） | REJECT |
 
-## API Layer Design (Controller)
+## API層設計（Controller）
 
-Keep Controllers thin. Their only job: receive request → delegate to UseCase → return response.
+Controller は薄く保つ。リクエスト受信 → UseCase委譲 → レスポンス返却のみ。
 
 ```kotlin
-// CORRECT - Thin Controller
+// CORRECT - Controller は薄い
 @RestController
 @RequestMapping("/api/orders")
 class OrdersController(
     private val placeOrderUseCase: PlaceOrderUseCase,
     private val queryGateway: QueryGateway
 ) {
-    // Command: state change
+    // Command: 状態変更
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     fun post(@Valid @RequestBody request: OrderPostRequest): OrderPostResponse {
@@ -83,7 +83,7 @@ class OrdersController(
         return OrderPostResponse(output.orderId)
     }
 
-    // Query: read
+    // Query: 参照
     @GetMapping("/{id}")
     fun get(@PathVariable id: String): ResponseEntity<OrderGetResponse> {
         val detail = queryGateway.query(FindOrderQuery(id), OrderDetail::class.java).join()
@@ -92,38 +92,38 @@ class OrdersController(
     }
 }
 
-// WRONG - Business logic in Controller
+// WRONG - Controller にビジネスロジック
 @PostMapping
 fun post(@RequestBody request: OrderPostRequest): ResponseEntity<Any> {
-    // Validation, stock check, calculation... should NOT be in Controller
+    // バリデーション、在庫チェック、計算... Controller に書いてはいけない
     val stock = inventoryRepository.findByProductId(request.productId)
     if (stock.quantity < request.quantity) {
-        return ResponseEntity.badRequest().body("Insufficient stock")
+        return ResponseEntity.badRequest().body("在庫不足")
     }
-    val total = request.quantity * request.unitPrice * 1.1  // Tax calculation
+    val total = request.quantity * request.unitPrice * 1.1  // 税計算
     orderRepository.save(OrderEntity(...))
     return ResponseEntity.ok(...)
 }
 ```
 
-### Request/Response DTO Design
+### Request/Response DTO 設計
 
-Define Request and Response as separate types. Never expose domain models directly via API.
+Request と Response は別の型として定義する。ドメインモデルをそのままAPIに露出しない。
 
 ```kotlin
-// Request: validation annotations + init block
+// Request: バリデーションアノテーション + init ブロック
 data class OrderPostRequest(
     @field:NotBlank val customerId: String,
     @field:NotNull val items: List<OrderItemRequest>
 ) {
     init {
-        require(items.isNotEmpty()) { "Order must contain at least one item" }
+        require(items.isNotEmpty()) { "注文には1つ以上の商品が必要です" }
     }
 
     fun toInput() = PlaceOrderInput(customerId = customerId, items = items.map { it.toItem() })
 }
 
-// Response: factory method from() for conversion
+// Response: ファクトリメソッド from() で変換
 data class OrderGetResponse(
     val orderId: String,
     val status: String,
@@ -139,89 +139,89 @@ data class OrderGetResponse(
 }
 ```
 
-| Criteria | Judgment |
-|----------|----------|
-| Returning domain model directly as response | REJECT |
-| Business logic in Request DTO | REJECT. Only validation is allowed |
-| Domain logic (calculations, etc.) in Response DTO | REJECT |
-| Same type for Request and Response | REJECT |
+| 基準 | 判定 |
+|------|------|
+| ドメインモデルをそのままレスポンスに返す | REJECT |
+| Request DTOにビジネスロジック | REJECT。バリデーションのみ許容 |
+| Response DTOにドメインロジック（計算等） | REJECT |
+| Request/Responseが同一の型 | REJECT |
 
-### RESTful Action Design
+### RESTful なアクション設計
 
-Express state transitions as verb sub-resources.
+状態遷移は動詞をサブリソースとして表現する。
 
 ```
-POST   /api/orders              → Create order
-GET    /api/orders/{id}         → Get order
-GET    /api/orders              → List orders
-POST   /api/orders/{id}/approve → Approve (state transition)
-POST   /api/orders/{id}/cancel  → Cancel (state transition)
+POST   /api/orders              → 注文作成
+GET    /api/orders/{id}         → 注文取得
+GET    /api/orders              → 注文一覧
+POST   /api/orders/{id}/approve → 承認（状態遷移）
+POST   /api/orders/{id}/cancel  → キャンセル（状態遷移）
 ```
 
-| Criteria | Judgment |
-|----------|----------|
-| PUT/PATCH for domain operations (approve, cancel, etc.) | REJECT. Use POST + verb sub-resource |
-| Single endpoint branching into multiple operations | REJECT. Separate endpoints per operation |
-| DELETE for soft deletion | REJECT. Use POST + explicit operation like cancel |
+| 基準 | 判定 |
+|------|------|
+| PUT/PATCH でドメイン操作（approve, cancel等） | REJECT。POST + 動詞サブリソース |
+| 1つのエンドポイントで複数の操作を分岐 | REJECT。操作ごとにエンドポイントを分ける |
+| DELETE で論理削除 | REJECT。POST + cancel 等の明示的操作 |
 
-## Validation Strategy
+## バリデーション戦略
 
-Validation has different roles at each layer. Do not centralize everything in one place.
+バリデーションは層ごとに役割が異なる。すべてを1箇所に集めない。
 
-| Layer | Responsibility | Mechanism | Example |
-|-------|---------------|-----------|---------|
-| API layer | Structural validation | `@NotBlank`, `init` block | Required fields, types, format |
-| UseCase layer | Business rule verification | Read Model queries | Duplicate checks, precondition existence |
-| Domain layer | State transition invariants | `require` | "Cannot approve unless PENDING" |
+| 層 | 責務 | 手段 | 例 |
+|----|------|------|-----|
+| API層 | 構造的バリデーション | `@NotBlank`, `init` ブロック | 必須項目、型、フォーマット |
+| UseCase層 | ビジネスルール検証 | Read Modelへの問い合わせ | 重複チェック、前提条件の存在確認 |
+| ドメイン層 | 状態遷移の不変条件 | `require` | 「PENDINGでないと承認できない」 |
 
 ```kotlin
-// API layer: "Is the input structurally correct?"
+// API層: 「入力の形が正しいか」
 data class OrderPostRequest(
     @field:NotBlank val customerId: String,
     val from: LocalDateTime,
     val to: LocalDateTime
 ) {
     init {
-        require(!to.isBefore(from)) { "End date must be on or after start date" }
+        require(!to.isBefore(from)) { "終了日時は開始日時以降でなければなりません" }
     }
 }
 
-// UseCase layer: "Is this business-wise allowed?" (Read Model reference)
+// UseCase層: 「ビジネス的に許可されるか」（Read Model参照）
 fun execute(input: PlaceOrderInput) {
     customerRepository.findById(input.customerId)
-        ?: throw CustomerNotFoundException("Customer does not exist")
-    validateNoOverlapping(input)  // Duplicate check
+        ?: throw CustomerNotFoundException("顧客が存在しません")
+    validateNoOverlapping(input)  // 重複チェック
     commandGateway.send(buildCommand(input))
 }
 
-// Domain layer: "Is this operation allowed in current state?"
+// ドメイン層: 「今の状態でこの操作は許されるか」
 fun confirm(confirmedBy: String): OrderConfirmedEvent {
-    require(status == OrderStatus.PENDING) { "Cannot confirm in current state" }
+    require(status == OrderStatus.PENDING) { "確定できる状態ではありません" }
     return OrderConfirmedEvent(orderId, confirmedBy)
 }
 ```
 
-| Criteria | Judgment |
-|----------|----------|
-| Domain state transition rules in API layer | REJECT |
-| Business rule verification in Controller | REJECT. Belongs in UseCase layer |
-| Structural validation (@NotBlank, etc.) in domain | REJECT. Belongs in API layer |
-| UseCase-level validation inside Aggregate | REJECT. Read Model queries belong in UseCase layer |
+| 基準 | 判定 |
+|------|------|
+| ドメインの状態遷移ルールがAPI層にある | REJECT |
+| ビジネスルール検証がControllerにある | REJECT。UseCase層に |
+| 構造バリデーション（@NotBlank等）がドメインにある | REJECT。API層で |
+| UseCase層のバリデーションがAggregate内にある | REJECT。Read Model参照はUseCase層 |
 
-## Error Handling
+## エラーハンドリング
 
-### Exception Hierarchy Design
+### 例外階層設計
 
-Domain exceptions are hierarchized using sealed classes. HTTP status code mapping is done at the Controller layer.
+ドメイン例外は sealed class で階層化する。HTTP ステータスコードへのマッピングは Controller 層で行う。
 
 ```kotlin
-// Domain exceptions: sealed class ensures exhaustiveness
+// ドメイン例外: sealed class で網羅性を保証
 sealed class OrderException(message: String) : RuntimeException(message)
 class OrderNotFoundException(message: String) : OrderException(message)
 class InvalidOrderStateException(message: String) : OrderException(message)
 class InsufficientStockException(message: String) : OrderException(message)
 
-// Controller layer maps to HTTP status codes
+// Controller 層でHTTPステータスにマッピング
 @RestControllerAdvice
 class OrderExceptionHandler {
     @ExceptionHandler(OrderNotFoundException::class)
@@ -238,25 +238,25 @@ class OrderExceptionHandler {
 }
 ```
 
-| Criteria | Judgment |
-|----------|----------|
-| HTTP status codes in domain exceptions | REJECT. Domain must not know about HTTP |
-| Throwing generic Exception or RuntimeException | REJECT. Use specific exception types |
-| Empty try-catch blocks | REJECT |
-| Controller swallowing exceptions and returning 200 | REJECT |
+| 基準 | 判定 |
+|------|------|
+| ドメイン例外にHTTPステータスコードが含まれる | REJECT。ドメインはHTTPを知らない |
+| 汎用的な Exception や RuntimeException を throw | REJECT。具体的な例外型を使う |
+| try-catch の空 catch | REJECT |
+| Controller 内で例外を握りつぶして 200 を返す | REJECT |
 
-## Domain Model Design
+## ドメインモデル設計
 
-### Immutable + require
+### イミュータブル + require
 
-Domain models are designed as `data class` (immutable), with invariants enforced via `init` blocks and `require`.
+ドメインモデルは `data class`（イミュータブル）で設計し、`init` ブロックと `require` で不変条件を保証する。
 
 ```kotlin
 data class Order(
     val orderId: String,
     val status: OrderStatus = OrderStatus.PENDING
 ) {
-    // Static factory method via companion object
+    // companion object の static メソッドで生成
     companion object {
         fun place(orderId: String, customerId: String): OrderPlacedEvent {
             require(customerId.isNotBlank()) { "Customer ID cannot be blank" }
@@ -264,13 +264,13 @@ data class Order(
         }
     }
 
-    // Instance method for state transition → returns event
+    // インスタンスメソッドで状態遷移 → イベント返却
     fun confirm(confirmedBy: String): OrderConfirmedEvent {
-        require(status == OrderStatus.PENDING) { "Cannot confirm in current state" }
+        require(status == OrderStatus.PENDING) { "確定できる状態ではありません" }
         return OrderConfirmedEvent(orderId, confirmedBy, LocalDateTime.now())
     }
 
-    // Immutable state update
+    // イミュータブルな状態更新
     fun apply(event: OrderEvent): Order = when (event) {
         is OrderPlacedEvent -> Order(orderId = event.orderId)
         is OrderConfirmedEvent -> copy(status = OrderStatus.CONFIRMED)
@@ -279,51 +279,51 @@ data class Order(
 }
 ```
 
-| Criteria | Judgment |
-|----------|----------|
-| `var` fields in domain model | REJECT. Use `copy()` for immutable updates |
-| Factory without validation | REJECT. Enforce invariants with `require` |
-| Domain model calling external services | REJECT. Pure functions only |
-| Direct field mutation via setters | REJECT |
+| 基準 | 判定 |
+|------|------|
+| ドメインモデルに var フィールド | REJECT。`copy()` でイミュータブルに更新 |
+| バリデーションなしのファクトリ | REJECT。`require` で不変条件を保証 |
+| ドメインモデルが外部サービスを呼ぶ | REJECT。純粋な関数のみ |
+| setter でフィールドを直接変更 | REJECT |
 
-### Value Objects
+### 値オブジェクト
 
-Wrap primitive types (String, Int) with domain meaning.
+プリミティブ型（String, Int）をドメインの意味でラップする。
 
 ```kotlin
-// ID types: prevent mix-ups via type safety
+// ID系: 型で取り違えを防止
 data class OrderId(@get:JsonValue val value: String) {
     init { require(value.isNotBlank()) { "Order ID cannot be blank" } }
     override fun toString(): String = value
 }
 
-// Range types: enforce compound invariants
+// 範囲系: 複合的な不変条件を保証
 data class DateRange(val from: LocalDateTime, val to: LocalDateTime) {
-    init { require(!to.isBefore(from)) { "End date must be on or after start date" } }
+    init { require(!to.isBefore(from)) { "終了日は開始日以降でなければなりません" } }
 }
 
-// Metadata types: ancillary information in event payloads
+// メタ情報系: イベントペイロード内の付随情報
 data class ApprovalInfo(val approvedBy: String, val approvalTime: LocalDateTime)
 ```
 
-| Criteria | Judgment |
-|----------|----------|
-| Same-typed IDs that can be mixed up (orderId and customerId both String) | Consider wrapping in value objects |
-| Same field combinations (from/to, etc.) appearing in multiple places | Extract to value object |
-| Value object without init block | REJECT. Enforce invariants |
+| 基準 | 判定 |
+|------|------|
+| 同じ型のIDが取り違えられる（orderId と customerId が両方 String） | 値オブジェクト化を検討 |
+| 同じフィールドの組み合わせ（from/to等）が複数箇所に | 値オブジェクトに抽出 |
+| 値オブジェクトに init ブロックがない | REJECT。不変条件を保証する |
 
-## Repository Pattern
+## リポジトリパターン
 
-Define interface in domain layer, implement in adapter/outbound.
+ドメイン層でインターフェースを定義し、adapter/outbound で実装する。
 
 ```kotlin
-// domain/: Interface (port)
+// domain/: インターフェース（ポート）
 interface OrderRepository {
     fun findById(orderId: String): Order?
     fun save(order: Order)
 }
 
-// adapter/outbound/persistence/: Implementation (adapter)
+// adapter/outbound/persistence/: 実装（アダプター）
 @Repository
 class JpaOrderRepository(
     private val jpaRepository: OrderJpaRepository
@@ -337,9 +337,9 @@ class JpaOrderRepository(
 }
 ```
 
-### Read Model Entity (JPA Entity)
+### Read Model Entity（JPA Entity）
 
-Read Model JPA Entities are defined separately from domain models. `var` (mutable) fields are acceptable here.
+Read Model 用の JPA Entity はドメインモデルとは別に定義する。var（mutable）が許容される。
 
 ```kotlin
 @Entity
@@ -352,64 +352,64 @@ data class OrderEntity(
 )
 ```
 
-| Criteria | Judgment |
-|----------|----------|
-| Domain model doubling as JPA Entity | REJECT. Separate them |
-| Business logic in Entity | REJECT. Entity is data structure only |
-| Repository implementation in domain layer | REJECT. Belongs in adapter/outbound |
+| 基準 | 判定 |
+|------|------|
+| ドメインモデルを JPA Entity として兼用 | REJECT。分離する |
+| Entity に ビジネスロジック | REJECT。Entity はデータ構造のみ |
+| Repository 実装がドメイン層にある | REJECT。adapter/outbound に |
 
-## Authentication & Authorization Placement
+## 認証・認可の配置
 
-Authentication and authorization are cross-cutting concerns handled at the appropriate layer.
+認証・認可は横断的関心事として適切な層で処理する。
 
-| Concern | Placement | Mechanism |
-|---------|-----------|-----------|
-| Authentication (who) | Filter / Interceptor layer | JWT verification, session validation |
-| Authorization (permissions) | Controller layer | `@PreAuthorize("hasRole('ADMIN')")` |
-| Data access control (own data only) | UseCase layer | Verified as business rule |
+| 関心事 | 配置 | 手段 |
+|-------|------|------|
+| 認証（誰か） | Filter / Interceptor層 | JWT検証、セッション確認 |
+| 認可（権限） | Controller層 | `@PreAuthorize("hasRole('ADMIN')")` |
+| データアクセス制御（自分のデータのみ） | UseCase層 | ビジネスルールとして検証 |
 
 ```kotlin
-// Controller layer: role-based authorization
+// Controller層: ロールベースの認可
 @PostMapping("/{id}/approve")
 @PreAuthorize("hasRole('FACILITY_ADMIN')")
 fun approve(@PathVariable id: String, @RequestBody request: ApproveRequest) { ... }
 
-// UseCase layer: data access control
+// UseCase層: データアクセス制御
 fun execute(input: DeleteInput, currentUserId: String) {
     val entity = repository.findById(input.id)
-        ?: throw NotFoundException("Not found")
-    require(entity.ownerId == currentUserId) { "Cannot operate on another user's data" }
+        ?: throw NotFoundException("見つかりません")
+    require(entity.ownerId == currentUserId) { "他のユーザーのデータは操作できません" }
     // ...
 }
 ```
 
-| Criteria | Judgment |
-|----------|----------|
-| Authorization logic in UseCase or domain layer | REJECT. Belongs in Controller layer |
-| Data access control in Controller | REJECT. Belongs in UseCase layer |
-| Authentication processing inside Controller | REJECT. Belongs in Filter/Interceptor |
+| 基準 | 判定 |
+|------|------|
+| 認可ロジックが UseCase 層やドメイン層にある | REJECT。Controller層で |
+| データアクセス制御が Controller にある | REJECT。UseCase層で |
+| 認証処理が Controller 内にある | REJECT。Filter/Interceptor で |
 
-## Test Strategy
+## テスト戦略
 
-### Test Pyramid
+### テストピラミッド
 
 ```
         ┌─────────────┐
-        │   E2E Test  │  ← Few: verify full API flow
+        │   E2E Test  │  ← 少数: API全体フロー確認
         ├─────────────┤
-        │ Integration │  ← Repository, Controller integration verification
+        │ Integration │  ← Repository, Controller の統合確認
         ├─────────────┤
-        │  Unit Test  │  ← Many: independent tests for domain models, UseCases
+        │  Unit Test  │  ← 多数: ドメインモデル、UseCase の独立テスト
         └─────────────┘
 ```
 
-### Domain Model Testing
+### ドメインモデルのテスト
 
-Domain models are framework-independent, enabling pure unit tests.
+ドメインモデルはフレームワーク非依存なので、純粋なユニットテストが書ける。
 
 ```kotlin
 class OrderTest {
-    // Helper: build aggregate in specific state
+    // ヘルパー: 特定の状態の集約を構築
     private fun pendingOrder(): Order {
         val event = Order.place("order-1", "customer-1")
         return Order.from(event)
@@ -418,14 +418,14 @@ class OrderTest {
     @Nested
     inner class Confirm {
         @Test
-        fun `can confirm from PENDING state`() {
+        fun `PENDING状態から確定できる`() {
             val order = pendingOrder()
             val event = order.confirm("admin-1")
             assertEquals("order-1", event.orderId)
         }
 
         @Test
-        fun `cannot confirm from CONFIRMED state`() {
+        fun `CONFIRMED状態からは確定できない`() {
             val order = pendingOrder().let { it.apply(it.confirm("admin-1")) }
             assertThrows<IllegalArgumentException> {
                 order.confirm("admin-2")
@@ -435,15 +435,15 @@ class OrderTest {
 }
 ```
 
-Testing rules:
-- Build state transitions via helper methods (each test is independent)
-- Group by operation using `@Nested`
-- Test both happy path and error cases (invalid state transitions)
-- Verify exception types with `assertThrows`
+テストのルール:
+- 状態遷移をヘルパーメソッドで構築（テストごとに独立）
+- `@Nested` で操作単位にグループ化
+- 正常系と異常系（不正な状態遷移）を両方テスト
+- `assertThrows` で例外の型を検証
 
-### UseCase Testing
+### UseCase のテスト
 
-Test UseCases with mocks. Inject external dependencies.
+UseCase はモックを使ってテスト。外部依存を注入する。
 
 ```kotlin
 class PlaceOrderUseCaseTest {
@@ -452,7 +452,7 @@ class PlaceOrderUseCaseTest {
     private val useCase = PlaceOrderUseCase(commandGateway, customerRepository)
 
     @Test
-    fun `throws error when customer does not exist`() {
+    fun `顧客が存在しない場合はエラー`() {
         every { customerRepository.findById("unknown") } returns null
 
         assertThrows<CustomerNotFoundException> {
@@ -462,24 +462,24 @@ class PlaceOrderUseCaseTest {
 }
 ```
 
-| Criteria | Judgment |
-|----------|----------|
-| Using mocks for domain model tests | REJECT. Test domain purely |
-| UseCase tests connecting to real DB | REJECT. Use mocks |
-| Tests requiring framework startup | REJECT for unit tests |
-| Missing error case tests for state transitions | REJECT |
+| 基準 | 判定 |
+|------|------|
+| ドメインモデルのテストにモックを使用 | REJECT。ドメインは純粋にテスト |
+| UseCase テストで実DBに接続 | REJECT。モックを使う |
+| テストがフレームワークの起動を必要とする | ユニットテストなら REJECT |
+| 状態遷移の異常系テストがない | REJECT |
 
-## Anti-Pattern Detection
+## アンチパターン検出
 
-REJECT when these patterns are found:
+以下を見つけたら REJECT:
 
-| Anti-Pattern | Problem |
-|--------------|---------|
-| Smart Controller | Business logic concentrated in Controller |
-| Anemic Domain Model | Domain model is just a data structure with setters/getters |
-| God Service | All operations concentrated in a single Service class |
-| Direct Repository Access | Controller directly referencing Repository |
-| Domain Leakage | Domain logic leaking into adapter layer |
-| Entity Reuse | JPA Entity reused as domain model |
-| Swallowed Exceptions | Empty catch blocks |
-| Magic Strings | Hardcoded status strings, etc. |
+| アンチパターン | 問題 |
+|---------------|------|
+| Smart Controller | Controller にビジネスロジックが集中 |
+| Anemic Domain Model | ドメインモデルが setter/getter だけのデータ構造 |
+| God Service | 1つの Service クラスに全操作が集中 |
+| Repository直叩き | Controller が Repository を直接参照 |
+| ドメイン漏洩 | adapter 層にドメインロジックが漏れる |
+| Entity兼用 | JPA Entity をドメインモデルとして使い回す |
+| 例外握りつぶし | 空の catch ブロック |
+| Magic String | ハードコードされたステータス文字列等 |

@@ -1,98 +1,98 @@
-# review -- Review Instruction Template
+# review — レビュー instruction テンプレート
 
-> **Purpose**: Review within parallel sub-steps (general purpose)
-> **Agent**: architecture-reviewer, qa-reviewer, security-reviewer, frontend-reviewer, ai-antipattern-reviewer, etc.
-> **Feature**: Personas carry domain knowledge, so instructions can be minimal
-
----
-
-## Template (Basic form)
-
-```
-{Customize: One sentence describing the review focus}
-Focus on **{review name}** review.
-{Customize: Add exclusions if applicable}
-Do not review AI-specific issues (handled in the ai_review movement).
-
-{Customize: Add if reference reports exist}
-**Reports to reference:**
-- Plan: {report:plan.md}
-- Implementation scope: {report:coder-scope.md}
-
-**Review aspects:**
-{Customize: Aspect list based on persona expertise}
-- {Aspect 1}
-- {Aspect 2}
-- {Aspect 3}
-```
+> **用途**: parallel sub-step 内のレビュー（汎用）
+> **使用エージェント**: architecture-reviewer, qa-reviewer, security-reviewer, frontend-reviewer, ai-antipattern-reviewer 等
+> **特徴**: ペルソナがドメイン知識を持つため、instruction は最小限でよい
 
 ---
 
-## Variations
-
-### A. Architecture review
+## テンプレート（基本形）
 
 ```
-Focus on **architecture and design** review.
-Do not review AI-specific issues (handled in the ai_review movement).
+{カスタマイズ: レビューの焦点を1文で}
+**{レビュー名}**のレビューに集中してください。
+{カスタマイズ: 除外事項があれば}
+AI特有の問題はレビューしないでください（ai_reviewムーブメントで行います）。
 
-**Reports to reference:**
-- Plan: {report:plan.md}
-- Implementation scope: {report:coder-scope.md}
+{カスタマイズ: 参照レポートがあれば}
+**参照するレポート:**
+- 計画: {report:plan.md}
+- 実装スコープ: {report:coder-scope.md}
 
-**Review aspects:**
-- Consistency with plan/design
-- Code quality
-- Appropriateness of change scope
-- Test coverage
-- Dead code
-- Call chain verification
-```
-
-### B. AI review (parallel sub-step)
-
-```
-Review the code for AI-specific issues:
-- Assumption verification
-- Plausible but incorrect patterns
-- Compatibility with the existing codebase
-- Scope creep detection
-```
-
-### C. Security review
-
-```
-Review changes from a security perspective. Check for these vulnerabilities:
-- Injection attacks (SQL, command, XSS)
-- Authentication/authorization flaws
-- Data exposure risks
-- Cryptographic weaknesses
-```
-
-### D. QA review
-
-```
-Review changes from a quality assurance perspective.
-
-**Review aspects:**
-- Test coverage and quality
-- Testing strategy (unit/integration/E2E)
-- Error handling
-- Logging and monitoring
-- Maintainability
+**レビュー観点:**
+{カスタマイズ: ペルソナの専門性に応じた観点リスト}
+- {観点1}
+- {観点2}
+- {観点3}
 ```
 
 ---
 
-## Design principles
+## バリエーション
 
-- **Keep instructions minimal**: Personas carry domain expertise, so instructions only specify the review target and focus
-- **Aspect lists may overlap with persona**: The instruction's aspect list serves as a reminder to the agent
-- **State exclusions explicitly**: Use instructions to define responsibility boundaries between reviewers
+### A. アーキテクチャレビュー
+
+```
+**アーキテクチャと設計**のレビューに集中してください。
+AI特有の問題はレビューしないでください（ai_reviewムーブメントで行います）。
+
+**参照するレポート:**
+- 計画: {report:plan.md}
+- 実装スコープ: {report:coder-scope.md}
+
+**レビュー観点:**
+- 計画/設計との整合性
+- コード品質
+- 変更スコープの適切性
+- テストカバレッジ
+- デッドコード
+- 呼び出しチェーン検証
+```
+
+### B. AIレビュー（parallel sub-step）
+
+```
+AI特有の問題についてコードをレビューしてください:
+- 仮定の検証
+- もっともらしいが間違っているパターン
+- 既存コードベースとの適合性
+- スコープクリープの検出
+```
+
+### C. セキュリティレビュー
+
+```
+セキュリティの観点から変更をレビューしてください。以下の脆弱性をチェック:
+- インジェクション攻撃（SQL, コマンド, XSS）
+- 認証・認可の不備
+- データ露出リスク
+- 暗号化の弱点
+```
+
+### D. QAレビュー
+
+```
+品質保証の観点から変更をレビューしてください。
+
+**レビュー観点:**
+- テストカバレッジと品質
+- テスト戦略（単体/統合/E2E）
+- エラーハンドリング
+- ログとモニタリング
+- 保守性
+```
 
 ---
 
-## Typical rules
+## 設計原則
+
+- **instruction は最小限に**: ペルソナが専門知識を持つので、instruction ではレビュー対象と焦点を指示するだけ
+- **観点リストはペルソナと重複してよい**: instruction の観点リストはエージェントへのリマインダーとして機能する
+- **除外事項を明記**: 他のレビュアーとの責務境界を instruction で指示する
+
+---
+
+## 典型的な rules
 
 ```yaml
 rules:

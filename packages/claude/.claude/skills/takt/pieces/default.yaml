@@ -1,5 +1,5 @@
 name: default
-description: Test-first development piece (plan → write tests → implement → AI antipattern review → parallel review → complete)
+description: テスト先行開発ピース（計画 → テスト作成 → 実装 → AIアンチパターンレビュー → 並列レビュー → 完了）
 piece_config:
   provider_options:
     codex:
@@ -16,22 +16,22 @@ loop_monitors:
     judge:
       persona: supervisor
       instruction_template: |
-        The ai_review ↔ ai_fix loop has repeated {cycle_count} times.
+        ai_review と ai_fix のループが {cycle_count} 回繰り返されました。
 
-        Review the reports from each cycle and determine whether this loop
-        is healthy (making progress) or unproductive (repeating the same issues).
+        各サイクルのレポートを確認し、このループが健全（進捗がある）か、
+        非生産的（同じ問題を繰り返している）かを判断してください。
 
-        **Reports to reference:**
-        - AI Review results: {report:ai-review.md}
+        **参照するレポート:**
+        - AIレビュー結果: {report:ai-review.md}
 
-        **Judgment criteria:**
-        - Are new issues being found/fixed in each cycle?
-        - Are the same findings being repeated?
-        - Are fixes actually being applied?
+        **判断基準:**
+        - 各サイクルで新しい問題が発見・修正されているか
+        - 同じ指摘が繰り返されていないか
+        - 修正が実際に反映されているか
       rules:
-        - condition: Healthy (making progress)
+        - condition: 健全（進捗あり）
           next: ai_review
-        - condition: Unproductive (no improvement)
+        - condition: 非生産的（改善なし）
           next: reviewers
   - cycle:
       - reviewers
@@ -41,9 +41,9 @@ loop_monitors:
       persona: supervisor
       instruction_template: loop-monitor-reviewers-fix
       rules:
-        - condition: converging (findings decreasing, fixes applied)
+        - condition: 健全（指摘数が減少、修正が反映されている）
           next: reviewers
-        - condition: unproductive (same findings repeating)
+        - condition: 非生産的（同じ指摘が繰り返される）
           next: ABORT
 movements:
   - name: plan
@@ -60,16 +60,16 @@ movements:
           - WebSearch
           - WebFetch
     rules:
-      - condition: Requirements are clear and implementable
+      - condition: 要件が明確で実装可能
         next: write_tests
-      - condition: User is asking a question (not an implementation task)
+      - condition: ユーザーが質問をしている（実装タスクではない）
         next: COMPLETE
-      - condition: Requirements unclear, insufficient info
+      - condition: 要件が不明確、情報不足
         next: ABORT
         appendix: |
-          Clarifications needed:
-          - {Question 1}
-          - {Question 2}
+          確認事項:
+          - {質問1}
+          - {質問2}
     instruction: plan
     output_contracts:
       report:
@@ -97,13 +97,13 @@ movements:
     required_permission_mode: edit
     instruction: write-tests-first
     rules:
-      - condition: Tests written successfully
+      - condition: テスト作成が完了した
         next: implement
-      - condition: Cannot proceed because the test target is not implemented yet, so skip test writing
+      - condition: テスト対象が未実装のためテスト作成をスキップする
         next: implement
-      - condition: Cannot proceed with test writing
+      - condition: テスト作成を進行できない
         next: ABORT
-      - condition: User input needed for clarification
+      - condition: ユーザーへの確認事項があるためユーザー入力が必要
         next: write_tests
         requires_user_input: true
         interactive_only: true
@@ -136,13 +136,13 @@ movements:
     required_permission_mode: edit
     instruction: implement-after-tests
     rules:
-      - condition: Implementation complete
+      - condition: 実装完了
         next: ai_review
-      - condition: No implementation (report only)
+      - condition: 実装未着手（レポートのみ）
         next: ai_review
-      - condition: Cannot proceed, insufficient info
+      - condition: 判断できない、情報不足
         next: ai_review
-      - condition: User input required
+      - condition: ユーザー入力が必要
         next: implement
         requires_user_input: true
         interactive_only: true
@@ -168,9 +168,9 @@ movements:
           - WebFetch
     instruction: ai-review
     rules:
-      - condition: No AI-specific issues
+      - condition: AI特有の問題なし
         next: reviewers
-      - condition: AI-specific issues found
+      - condition: AI特有の問題あり
         next: ai_fix
     output_contracts:
       report:
@@ -200,11 +200,11 @@ movements:
     instruction: ai-fix
     pass_previous_response: false
     rules:
-      - condition: AI issues fixed
+      - condition: AI Reviewerの指摘に対する修正が完了した
         next: ai_review
-      - condition: No fix needed (verified target files/spec)
+      - condition: 修正不要（指摘対象ファイル/仕様の確認済み）
         next: reviewers
-      - condition: Cannot proceed with fixes
+      - condition: 修正を進行できない
         next: reviewers
   - name: reviewers
     parallel:
@@ -244,8 +244,8 @@ movements:
               - WebFetch
         instruction: supervise
         rules:
-          - condition: All checks passed
-          - condition: Requirements unmet, tests failing, build errors
+          - condition: すべて問題なし
+          - condition: 要求未達成、テスト失敗、ビルドエラー
         output_contracts:
           report:
             - name: supervisor-validation.md
@@ -254,9 +254,9 @@ movements:
               format: summary
               use_judge: false
     rules:
-      - condition: all("approved", "All checks passed")
+      - condition: all("approved", "すべて問題なし")
         next: COMPLETE
-      - condition: any("needs_fix", "Requirements unmet, tests failing, build errors")
+      - condition: any("needs_fix", "要求未達成、テスト失敗、ビルドエラー")
         next: fix
   - name: fix
     edit: true
@@ -281,7 +281,7 @@ movements:
     instruction: fix
     pass_previous_response: false
     rules:
-      - condition: Fix complete
+      - condition: 修正完了
         next: reviewers
-      - condition: Cannot proceed, insufficient info
+      - condition: 判断できない、情報不足
         next: plan

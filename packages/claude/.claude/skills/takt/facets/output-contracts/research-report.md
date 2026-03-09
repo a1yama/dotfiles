@@ -1,28 +1,28 @@
 ```markdown
-# Research Report
+# 調査レポート
 
-## Research Overview
-{Summarize the original request in 1-2 sentences}
+## 調査概要
+{元の依頼を1-2文で要約}
 
-## Key Findings
-{Major insights discovered during research, as bullet points}
+## 主要な発見
+{調査で得られた重要な知見を箇条書きで}
 
-## Research Results
+## 調査結果
 
-### {Topic 1}
-{Data and analysis results}
+### {トピック1}
+{データと分析結果}
 
-### {Topic 2}
-{Data and analysis results}
+### {トピック2}
+{データと分析結果}
 
-## Data Sources
-| # | Source | Type | Reliability |
-|---|--------|------|-------------|
-| 1 | {Source name/URL} | {Web/Codebase/Literature} | {High/Medium/Low} |
+## データソース
+| # | ソース | 種別 | 信頼度 |
+|---|--------|------|--------|
+| 1 | {ソース名/URL} | {Web/コードベース/文献} | {High/Medium/Low} |
 
-## Conclusions and Recommendations
-{Conclusions and recommendations based on research results}
+## 結論と推奨
+{調査結果に基づく結論と推奨事項}
 
-## Remaining Gaps (if any)
-- {Items that could not be researched or unverified hypotheses}
+## 残存ギャップ（あれば）
+- {調査できなかった項目や未検証の仮説}
 ```

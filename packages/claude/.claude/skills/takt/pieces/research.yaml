@@ -1,5 +1,5 @@
 name: research
-description: Research piece - autonomously executes research without asking questions
+description: 調査ピース - 質問せずに自律的に調査を実行
 piece_config:
   provider_options:
     claude:
@@ -22,9 +22,9 @@ movements:
     knowledge: research
     instruction: research-plan
     rules:
-      - condition: Planning is complete
+      - condition: 計画が完了した
         next: dig
-      - condition: Insufficient information to create a plan
+      - condition: 情報が不足しており計画を立てられない
         next: ABORT
   - name: dig
     persona: research-digger
@@ -32,9 +32,9 @@ movements:
     knowledge: research
     instruction: research-dig
     rules:
-      - condition: Research is complete
+      - condition: 調査が完了した
         next: supervise
-      - condition: Unable to conduct research
+      - condition: 調査を実行できない
         next: ABORT
   - name: supervise
     persona: research-supervisor
@@ -42,7 +42,7 @@ movements:
     knowledge: research
     instruction: research-supervise
     rules:
-      - condition: Research results adequately answer the original request
+      - condition: 調査結果が元の依頼に対して十分である
         next: COMPLETE
-      - condition: Research results are insufficient and replanning is needed
+      - condition: 調査結果が不十分であり、計画からやり直す必要がある
         next: plan

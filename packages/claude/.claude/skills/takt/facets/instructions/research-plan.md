@@ -1,10 +1,10 @@
-Analyze the research request and create a research plan.
+調査依頼を分析し、調査計画を立ててください。
 
-**Note:** If Previous Response exists, this is a re-plan from Supervisor feedback.
-Incorporate the feedback into the revised plan.
+**注意:** Previous Response がある場合は Supervisor からの差し戻しです。
+フィードバックを反映した計画を作成してください。
 
-**What to do:**
-1. Decompose the request (What: what to know / Why: why / Scope: how far)
-2. Identify research items (choose appropriate perspectives based on the type of request)
-3. Identify candidate data sources for each item
-4. Assign priorities (P1: Required / P2: Important / P3: Nice to have)
+**やること:**
+1. 依頼を分解する（What: 何を知りたいか / Why: なぜか / Scope: どこまでか）
+2. 調査項目を洗い出す（依頼の種類に応じて適切な観点を選ぶ）
+3. 各項目のデータソース候補を特定する
+4. 優先順位を付ける（P1: 必須 / P2: 重要 / P3: あれば良い）

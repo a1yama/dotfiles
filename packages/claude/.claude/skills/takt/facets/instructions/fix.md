@@ -1,31 +1,31 @@
-Use reports in the Report Directory and fix the issues raised by the reviewer.
+Report Directory内のレビューレポートを確認し、指摘事項を修正してください。
 
-**Report reference policy:**
-- Use the latest review reports in the Report Directory as primary evidence.
-- Past iteration reports are saved as `{filename}.{timestamp}` in the same directory (e.g., `architect-review.md.20260304T123456Z`). For each report, run Glob with a `{report-name}.*` pattern, read up to 2 files in descending timestamp order, and understand persists / reopened trends before starting fixes.
+**レポート参照方針:**
+- Report Directory内の最新レビューレポートを一次情報として参照してください。
+- 過去イテレーションのレポートは `{ファイル名}.{タイムスタンプ}` 形式で同ディレクトリに保存されています（例: `architect-review.md.20260304T123456Z`）。各レポートについて `{レポート名}.*` パターンで Glob を実行し、タイムスタンプ降順で最大2件まで読み、persists / reopened の傾向を把握してから修正に入ること。
 
-**Completion criteria (all must be satisfied):**
-- All findings in this iteration (new / reopened) have been fixed
-- Potential occurrences of the same `family_tag` have been fixed simultaneously (no partial fixes that cause recurrence)
-- At least one regression test per `family_tag` has been added (mandatory for config-contract and boundary-check findings)
-- Findings with the same `family_tag` from multiple reviewers have been merged and addressed as one fix
+**完了条件（以下をすべて満たすこと）:**
+- 今回受け取った全指摘（new / reopened）を修正したこと
+- 同一 `family_tag` の潜在箇所を同時に修正したこと（部分修正で再発させない）
+- `family_tag` ごとに最低1件の再発防止テストを追加したこと（config契約/境界チェック系は必須）
+- 複数レビュアーから同一 `family_tag` の指摘が届いている場合は1件に統合して対応したこと
 
-**Important**: After fixing, run the build (type check) and tests.
+**重要**: 修正後、ビルド（型チェック）とテストを必ず実行してください。
 
-**Required output (include headings)**
-## Work results
-- {Summary of actions taken}
-## Changes made
-- {Summary of changes}
-## Build results
-- {Build execution results}
-## Test results
-- {Test command executed and results}
-## Convergence gate
-| Metric | Count |
-|--------|-------|
-| new (fixed in this iteration) | {N} |
-| reopened (recurrence fixed) | {N} |
-| persists (carried over, not addressed this iteration) | {N} |
-## Evidence
-- {List key points from files checked/searches/diffs/logs}
+**必須出力（見出しを含める）**
+## 作業結果
+- {実施内容の要約}
+## 変更内容
+- {変更内容の要約}
+## ビルド結果
+- {ビルド実行結果}
+## テスト結果
+- {テスト実行コマンドと結果}
+## 収束ゲート
+| 指標 | 件数 |
+|------|------|
+| new（今回修正） | {N} |
+| reopened（再発修正） | {N} |
+| persists（前回から継続、今回未着手） | {N} |
+## 証拠
+- {確認したファイル/検索/差分/ログの要点を列挙}

@@ -1,5 +1,5 @@
 name: magi
-description: MAGI Deliberation System - Analyze from 3 perspectives and decide by majority
+description: MAGI合議システム - 3つの観点から分析し多数決で判定
 piece_config:
   provider_options:
     claude:
@@ -19,109 +19,109 @@ movements:
   - name: melchior
     persona: melchior
     instruction_template: |
-      # MAGI System Initiated
+      # MAGI System 起動
 
-      ## Matter for Deliberation
+      ## 審議事項
       {task}
 
-      ## Instructions
-      You are MELCHIOR-1 of the MAGI System.
-      Analyze the above from the perspective of a scientist/engineer and render your judgment.
+      ## 指示
+      あなたはMAGI System の MELCHIOR-1 です。
+      科学者・技術者の観点から上記を分析し、判定を下してください。
 
-      ## Output Format
+      ## 出力フォーマット
 
-      | Judgment | Tag |
-      |----------|-----|
-      | In favor | `[MELCHIOR:APPROVE]` |
-      | Against | `[MELCHIOR:REJECT]` |
-      | Conditional approval | `[MELCHIOR:CONDITIONAL]` |
+      | 判定 | タグ |
+      |------|------|
+      | 賛成 | `[MELCHIOR:APPROVE]` |
+      | 反対 | `[MELCHIOR:REJECT]` |
+      | 条件付き賛成 | `[MELCHIOR:CONDITIONAL]` |
 
-      ### Output Example
+      ### 出力例
 
       ```
       [MELCHIOR:APPROVE]
 
-      Reason: {Reason for approval}
+      理由: {賛成の理由}
       ```
     rules:
-      - condition: Judgment completed
+      - condition: 判定を完了した
         next: balthasar
   - name: balthasar
     persona: balthasar
     instruction_template: |
-      # MAGI System Continuing
+      # MAGI System 継続
 
-      ## Matter for Deliberation
+      ## 審議事項
       {task}
 
-      ## MELCHIOR-1's Judgment
+      ## MELCHIOR-1 の判定
       {previous_response}
 
-      ## Instructions
-      You are BALTHASAR-2 of the MAGI System.
-      Analyze the above from the perspective of a nurturer and render your judgment.
-      Consider MELCHIOR's judgment as reference, but make your own independent assessment.
+      ## 指示
+      あなたはMAGI System の BALTHASAR-2 です。
+      育成者の観点から上記を分析し、判定を下してください。
+      MELCHIORの判定は参考にしつつも、独自の観点で判断してください。
 
-      ## Output Format
+      ## 出力フォーマット
 
-      | Judgment | Tag |
-      |----------|-----|
-      | In favor | `[BALTHASAR:APPROVE]` |
-      | Against | `[BALTHASAR:REJECT]` |
-      | Conditional approval | `[BALTHASAR:CONDITIONAL]` |
+      | 判定 | タグ |
+      |------|------|
+      | 賛成 | `[BALTHASAR:APPROVE]` |
+      | 反対 | `[BALTHASAR:REJECT]` |
+      | 条件付き賛成 | `[BALTHASAR:CONDITIONAL]` |
 
-      ### Output Example
+      ### 出力例
 
       ```
       [BALTHASAR:APPROVE]
 
-      Reason: {Reason for approval}
+      理由: {賛成の理由}
       ```
     rules:
-      - condition: Judgment completed
+      - condition: 判定を完了した
         next: casper
   - name: casper
     persona: casper
     instruction_template: |
-      # MAGI System Final Deliberation
+      # MAGI System 最終審議
 
-      ## Matter for Deliberation
+      ## 審議事項
       {task}
 
-      ## Previous Judgments
+      ## これまでの判定
       {previous_response}
 
-      ## Instructions
-      You are CASPER-3 of the MAGI System.
-      Analyze the above from a practical/realistic perspective and render your judgment.
+      ## 指示
+      あなたはMAGI System の CASPER-3 です。
+      実務・現実の観点から上記を分析し、判定を下してください。
 
-      **Finally, tally the judgments from all three and provide the final conclusion.**
+      **最後に、3者の判定を集計し、最終結論を出してください。**
 
-      ## Output Format
+      ## 出力フォーマット
 
-      Final conclusion by majority vote:
+      最終結論は3者の多数決で判定:
 
-      | Judgment | Tag |
-      |----------|-----|
-      | Approved (2+ in favor) | `[MAGI:APPROVE]` |
-      | Rejected (2+ against) | `[MAGI:REJECT]` |
-      | Conditional approval | `[MAGI:CONDITIONAL]` |
+      | 判定 | タグ |
+      |------|------|
+      | 承認（2票以上賛成） | `[MAGI:APPROVE]` |
+      | 却下（2票以上反対） | `[MAGI:REJECT]` |
+      | 条件付き承認 | `[MAGI:CONDITIONAL]` |
 
-      ### Output Example
+      ### 出力例
 
       ```
-      ## MAGI System Final Judgment
+      ## MAGI System 最終判定
 
-      | System | Judgment |
-      |--------|----------|
+      | システム | 判定 |
+      |----------|------|
       | MELCHIOR-1 | APPROVE |
       | BALTHASAR-2 | CONDITIONAL |
       | CASPER-3 | APPROVE |
 
-      **Conclusion: [MAGI:APPROVE]**
+      **結論: [MAGI:APPROVE]**
 
-      [Reasoning/Summary]
+      [理由・まとめ]
       ```
     rules:
-      - condition: Final judgment completed
+      - condition: 最終判定を完了した
         next: COMPLETE

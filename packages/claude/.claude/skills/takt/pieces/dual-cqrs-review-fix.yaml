@@ -1,5 +1,5 @@
 name: dual-cqrs-review-fix
-description: Frontend + CQRS+ES focused review + fix loop (structure, modularization, domain model, component design, security, QA)
+description: フロントエンド＋CQRS+ES特化レビュー＋修正ループ（構造・モジュール化・ドメインモデル・コンポーネント設計・セキュリティ・QA）
 piece_config:
   provider_options:
     codex:
@@ -17,9 +17,9 @@ loop_monitors:
       persona: supervisor
       instruction_template: loop-monitor-reviewers-fix
       rules:
-        - condition: Healthy (progress being made)
+        - condition: 健全（進捗あり）
           next: reviewers
-        - condition: Unproductive (repeated findings, fixes not applied)
+        - condition: 非生産的（同じ指摘の反復・修正未反映）
           next: supervise
 
 movements:
@@ -41,9 +41,9 @@ movements:
         - name: review-target.md
           format: review-gather
     rules:
-      - condition: Review target information gathered
+      - condition: レビュー対象の情報収集完了
         next: reviewers
-      - condition: Unable to identify review target, insufficient information
+      - condition: レビュー対象を特定できない、情報不足
         next: ABORT
 
   - name: reviewers
@@ -197,9 +197,9 @@ movements:
     pass_previous_response: false
     instruction: fix
     rules:
-      - condition: Fixes complete
+      - condition: 修正が完了した
         next: reviewers
-      - condition: Unable to proceed with fixes
+      - condition: 修正を進行できない
         next: supervise
 
   - name: supervise
@@ -217,9 +217,9 @@ movements:
     instruction: supervise
     pass_previous_response: false
     rules:
-      - condition: All validations complete, ready to merge
+      - condition: すべての検証が完了し、マージ可能な状態である
         next: COMPLETE
-      - condition: Issues detected
+      - condition: 問題が検出された
         next: fix_supervisor
     output_contracts:
       report:
@@ -255,7 +255,7 @@ movements:
     instruction: fix-supervisor
     pass_previous_response: false
     rules:
-      - condition: Fixes for supervisor findings complete
+      - condition: 監督者の指摘に対する修正が完了した
         next: supervise
-      - condition: Unable to proceed with fixes
+      - condition: 修正を進行できない
         next: supervise

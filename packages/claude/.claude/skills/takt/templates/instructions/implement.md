@@ -1,87 +1,87 @@
-# implement -- Implementation Instruction Template
+# implement — 実装 instruction テンプレート
 
-> **Purpose**: Coding and test execution
-> **Agent**: coder
-> **Reports**: Scope + Decisions (format embedded in template)
+> **用途**: コーディング・テスト実行
+> **使用エージェント**: coder
+> **レポート**: Scope + Decisions（フォーマットをテンプレート内に埋め込み）
 
 ---
 
-## Template
+## テンプレート
 
 ```
-{Customize: Adjust based on the source movement}
-Implement according to the plan from the plan movement.
+{カスタマイズ: 参照元ムーブメントに応じて変更}
+planムーブメントで立てた計画に従って実装してください。
 
-**Reports to reference:**
-- Plan: {report:plan.md}
-{Customize: Add if architect movement exists}
-- Design: {report:architecture.md} (if exists)
+**参照するレポート:**
+- 計画: {report:plan.md}
+{カスタマイズ: architect ムーブメントがある場合に追加}
+- 設計: {report:architecture.md}（存在する場合）
 
-Only reference files within the Report Directory shown in Piece Context.
-Do not search or reference other report directories.
+Piece Contextに示されたReport Directory内のファイルのみ参照してください。
+他のレポートディレクトリは検索/参照しないでください。
 
-{Customize: Add if architect exists}
-**Important:** Do not make design decisions; follow the design determined in the architect movement.
-Report any unclear points or need for design changes.
+{カスタマイズ: architect がある場合に追加}
+**重要:** 設計判断はせず、architectムーブメントで決定された設計に従ってください。
+不明点や設計の変更が必要な場合は報告してください。
 
-**Important**: Add unit tests alongside implementation.
-- Add unit tests for newly created classes/functions
-- Update relevant tests when modifying existing code
-- Test file placement: follow the project's conventions
-- Running tests is mandatory. After implementation, always run tests and verify results
+**重要**: 実装と同時に単体テストを追加してください。
+- 新規作成したクラス・関数には単体テストを追加
+- 既存コードを変更した場合は該当するテストを更新
+- テストファイルの配置: プロジェクトの規約に従う
+- テスト実行は必須。実装完了後、必ずテストを実行して結果を確認
 
-**Scope output contract (create at implementation start):**
+**Scope出力契約（実装開始時に作成）:**
 ```markdown
-# Change Scope Declaration
+# 変更スコープ宣言
 
-## Task
-{One-line task summary}
+## タスク
+{タスクの1行要約}
 
-## Planned Changes
-| Type | File |
-|------|------|
-| Create | `src/example.ts` |
-| Modify | `src/routes.ts` |
+## 変更予定
+| 種別 | ファイル |
+|------|---------|
+| 作成 | `src/example.ts` |
+| 変更 | `src/routes.ts` |
 
-## Estimated Size
+## 推定規模
 Small / Medium / Large
 
-## Impact Area
-- {Affected modules or features}
+## 影響範囲
+- {影響するモジュールや機能}
 ```
 
-**Decisions output contract (at implementation end, only when decisions were made):**
+**Decisions出力契約（実装完了時、決定がある場合のみ）:**
 ```markdown
-# Decision Log
+# 決定ログ
 
-## 1. {Decision}
-- **Background**: {Why the decision was needed}
-- **Options considered**: {List of options}
-- **Rationale**: {Why this was chosen}
+## 1. {決定内容}
+- **背景**: {なぜ決定が必要だったか}
+- **検討した選択肢**: {選択肢リスト}
+- **理由**: {選んだ理由}
 ```
 
-**Required output (include headings)**
-## Work results
-- {Summary of work performed}
-## Changes made
-- {Summary of changes}
-## Test results
-- {Command and results}
+**必須出力（見出しを含める）**
+## 作業結果
+- {実施内容の要約}
+## 変更内容
+- {変更内容の要約}
+## テスト結果
+- {実行コマンドと結果}
 ```
 
 ---
 
-## Typical rules
+## 典型的な rules
 
 ```yaml
 rules:
-  - condition: Implementation complete
+  - condition: 実装完了
     next: {ai_review or reviewers}
-  - condition: Implementation not started (report only)
+  - condition: 実装未着手（レポートのみ）
     next: {ai_review or reviewers}
-  - condition: Cannot determine, insufficient information
+  - condition: 判断できない、情報不足
     next: {ai_review or reviewers}
-  - condition: User input needed
+  - condition: ユーザー入力が必要
     next: implement
     requires_user_input: true
     interactive_only: true
@@ -89,7 +89,7 @@ rules:
 
 ---
 
-## Report settings
+## レポート設定
 
 ```yaml
 report:
@@ -97,6 +97,6 @@ report:
   - Decisions: coder-decisions.md
 ```
 
-**Note**: Do not add sequence numbers to report filenames.
-Use `coder-scope.md`, not `02-coder-scope.md`.
-Sequence numbers depend on piece structure and hinder template reuse.
+**注意**: レポートファイル名に連番を付けない。
+`02-coder-scope.md` ではなく `coder-scope.md` とする。
+連番はピース構造に依存するため、テンプレートの再利用を妨げる。

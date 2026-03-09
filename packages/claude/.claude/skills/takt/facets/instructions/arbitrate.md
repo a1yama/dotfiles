@@ -1,14 +1,14 @@
-The ai_review (reviewer) and ai_fix (coder) disagree.
+ai_review（レビュアー）と ai_fix（コーダー）の意見が食い違っています。
 
-- ai_review flagged issues and issued a REJECT
-- ai_fix reviewed and determined "no fix needed"
+- ai_review は問題を指摘し REJECT しました
+- ai_fix は確認の上「修正不要」と判断しました
 
-Review both outputs and arbitrate which judgment is valid.
+両者の出力を確認し、どちらの判断が妥当か裁定してください。
 
-**Reports to reference:**
-- AI review results: {report:ai-review.md}
+**参照するレポート:**
+- AIレビュー結果: {report:ai-review.md}
 
-**Judgment criteria:**
-- Whether ai_review's findings are specific and point to real issues in the code
-- Whether ai_fix's rebuttal has evidence (file verification results, test results)
-- Whether the findings are non-blocking (record only) level or actually require fixes
+**判断基準:**
+- ai_review の指摘が具体的で、コード上の実在する問題を指しているか
+- ai_fix の反論に根拠（ファイル確認結果、テスト結果）があるか
+- 指摘が非ブロッキング（記録のみ）レベルか、実際に修正が必要か

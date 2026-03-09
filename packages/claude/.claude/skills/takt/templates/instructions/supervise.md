@@ -1,79 +1,79 @@
-# supervise -- Final Verification Instruction Template
+# supervise — 最終検証 instruction テンプレート
 
-> **Purpose**: Run tests/builds, verify all review results, give final approval
-> **Agent**: supervisor, dual-supervisor
-> **Reports**: Validation + Summary (format embedded in template)
+> **用途**: テスト・ビルド実行、全レビュー結果の確認、最終承認
+> **使用エージェント**: supervisor, dual-supervisor
+> **レポート**: Validation + Summary（フォーマットをテンプレート内に埋め込み）
 
 ---
 
-## Template
+## テンプレート
 
 ```
-Run tests, verify builds, and perform final approval.
+テスト実行、ビルド確認、最終承認を行ってください。
 
-{Customize: Review pass status -- for dual pieces where all reviews have passed}
+{カスタマイズ: レビュー通過状況 — dual ピースなど全レビュー通過後の場合}
 ## Previous Reviews Summary
-Reaching this movement means all of the following reviews have been APPROVED:
-{Customize: Actual review list}
+このムーブメントに到達したということは、以下のレビューがすべてAPPROVEされています：
+{カスタマイズ: 実際のレビュー一覧}
 - AI Review: APPROVED
 - Architecture Review: APPROVED
 
-**Full piece verification:**
-1. Does the implementation match the plan ({report:plan.md}) {Customize: Add design report if applicable}?
-2. Have all review movement findings been addressed?
-3. Has the original task objective been achieved?
+**ピース全体の確認:**
+1. 計画（{report:plan.md}）{カスタマイズ: 設計レポートがあれば追加}と実装結果が一致しているか
+2. 各レビュームーブメントの指摘が対応されているか
+3. 元のタスク目的が達成されているか
 
-**Report verification:** Read all reports in the Report Directory and
-check for any unaddressed improvement suggestions.
+**レポートの確認:** Report Directory内の全レポートを読み、
+未対応の改善提案がないか確認してください。
 
-**Validation output contract:**
+**Validation出力契約:**
 ```markdown
-# Final Verification Results
+# 最終検証結果
 
-## Result: APPROVE / REJECT
+## 結果: APPROVE / REJECT
 
-## Verification Summary
-| Item | Status | Verification Method |
-|------|--------|-------------------|
-| Requirements met | Pass | Compared against requirements list |
-| Tests | Pass | `npm test` (N passed) |
-| Build | Pass | `npm run build` succeeded |
-| Functional check | Pass | Main flow verified |
+## 検証サマリー
+| 項目 | 状態 | 確認方法 |
+|------|------|---------|
+| 要求充足 | ✅ | 要求リストと照合 |
+| テスト | ✅ | `npm test` (N passed) |
+| ビルド | ✅ | `npm run build` 成功 |
+| 動作確認 | ✅ | 主要フロー確認 |
 
-## Artifacts
-- Created: {created files}
-- Modified: {modified files}
+## 成果物
+- 作成: {作成したファイル}
+- 変更: {変更したファイル}
 
-## Incomplete items (if REJECT)
-| # | Item | Reason |
-|---|------|--------|
-| 1 | {item} | {reason} |
+## 未完了項目（REJECTの場合）
+| # | 項目 | 理由 |
+|---|------|------|
+| 1 | {項目} | {理由} |
 ```
 
-**Summary output contract (APPROVE only):**
+**Summary出力契約（APPROVEの場合のみ）:**
 ```markdown
-# Task Completion Summary
+# タスク完了サマリー
 
-## Task
-{Original request in 1-2 sentences}
+## タスク
+{元の要求を1-2文で}
 
-## Result
-Complete
+## 結果
+完了
 
-## Changes
-| Type | File | Description |
-|------|------|-------------|
-| Create | `src/file.ts` | Description |
+## 変更内容
+| 種別 | ファイル | 概要 |
+|------|---------|------|
+| 作成 | `src/file.ts` | 概要説明 |
 
-## Review Results
-| Review | Result |
-|--------|--------|
-{Customize: Adjust list based on the piece's review structure}
+## レビュー結果
+| レビュー | 結果 |
+|---------|------|
+{カスタマイズ: ピースのレビュー構成に応じてリスト変更}
 | AI Review | APPROVE |
 | Architecture | APPROVE |
 | Supervisor | APPROVE |
 
-## Verification Commands
+## 確認コマンド
 ```bash
 npm test
 npm run build
@@ -83,19 +83,19 @@ npm run build
 
 ---
 
-## Typical rules
+## 典型的な rules
 
 ```yaml
 rules:
-  - condition: All checks passed
+  - condition: すべて問題なし
     next: COMPLETE
-  - condition: Requirements not met, test failure, build error
+  - condition: 要求未達成、テスト失敗、ビルドエラー
     next: plan  # or fix_supervisor
 ```
 
 ---
 
-## Report settings
+## レポート設定
 
 ```yaml
 report:
@@ -103,4 +103,4 @@ report:
   - Summary: summary.md
 ```
 
-**Note**: Do not add sequence numbers to report filenames.
+**注意**: レポートファイル名に連番を付けない。

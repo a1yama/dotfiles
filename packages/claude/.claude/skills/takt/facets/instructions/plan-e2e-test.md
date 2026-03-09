@@ -1,11 +1,11 @@
-Analyze the target code and identify missing E2E tests.
+対象コードを分析し、不足しているE2Eテストを洗い出してください。
 
-**Note:** If a Previous Response exists, this is a replan due to rejection.
-Revise the test plan taking that feedback into account.
+**注意:** Previous Responseがある場合は差し戻しのため、
+その内容を踏まえてテスト計画を見直してください。
 
-**Actions:**
-1. Read target features, implementation, and existing E2E specs (`e2e/specs/**/*.e2e.ts`) to understand behavior
-2. Summarize current E2E coverage (happy path, failure path, regression points)
-3. Identify missing E2E scenarios with expected outcomes and observability points
-4. Specify execution commands (`npm run test:e2e:mock` and, when needed, `npx vitest run e2e/specs/<target>.e2e.ts`)
-5. Provide concrete guidance for failure analysis → fix → rerun workflow
+**やること:**
+1. 対象機能の仕様・実装・既存E2Eテスト（`e2e/specs/**/*.e2e.ts`）を読み、振る舞いを理解する
+2. 既存E2Eテストのカバー範囲（正常系・異常系・回帰観点）を整理する
+3. 不足しているE2Eケースを洗い出す（シナリオ、期待結果、失敗時の観測点）
+4. 実行コマンドを明記する（`npm run test:e2e:mock` / 必要時 `npx vitest run e2e/specs/<target>.e2e.ts`）
+5. 実装者向けに、失敗解析→修正→再実行の手順を具体化する

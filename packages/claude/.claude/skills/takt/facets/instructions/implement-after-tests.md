@@ -1,61 +1,61 @@
-Implement according to the plan, making existing tests pass.
-Refer only to files within the Report Directory shown in the Piece Context. Do not search or reference other report directories.
-Use reports in the Report Directory as the primary source of truth. If additional context is needed, you may consult Previous Response and conversation history as secondary sources (Previous Response may be unavailable). If information conflicts, prioritize reports in the Report Directory and actual file contents.
+計画に従って、テストがパスするように実装してください。
+Piece Contextに示されたReport Directory内のファイルのみ参照してください。他のレポートディレクトリは検索/参照しないでください。
+Report Directory内のレポートを一次情報として参照してください。不足情報の補完が必要な場合に限り、Previous Responseや会話履歴を補助的に参照して構いません（Previous Responseは提供されない場合があります）。情報が競合する場合は、Report Directory内のレポートと実際のファイル内容を優先してください。
 
-**Important**: Tests have already been written. Implement production code to make existing tests pass.
-- Review existing test files and understand the expected behavior
-- Implement production code to make tests pass
-- Tests are already written so additional tests are generally unnecessary, but may be added if needed
-- If test modifications are needed, document the reasons in the Decisions output contract before modifying
-- Build verification is mandatory. After completing implementation, run the build (type check) and verify there are no type errors
-- Running tests is mandatory. After build succeeds, always run tests and verify all tests pass
-- When introducing new contract strings (file names, config key names, etc.), define them as constants in one place
+**重要**: テストは既に作成済みです。既存テストがパスするように実装してください。
+- 既存のテストファイルを確認し、期待される振る舞いを理解する
+- テストがパスするようにプロダクションコードを実装する
+- テストは作成済みのため基本的に追加不要だが、必要なら追加してよい
+- テストの修正が必要な場合は、修正理由をDecisions出力契約に記録した上で修正可
+- ビルド確認は必須。実装完了後、ビルド（型チェック）を実行し、型エラーがないことを確認
+- テスト実行は必須。ビルド成功後、必ずテストを実行して全テストがパスすることを確認
+- ファイル名・設定キー名などの契約文字列を新規導入する場合は、定数として1箇所で定義すること
 
-**Scope output contract (create at the start of implementation):**
+**Scope出力契約（実装開始時に作成）:**
 ```markdown
-# Change Scope Declaration
+# 変更スコープ宣言
 
-## Task
-{One-line task summary}
+## タスク
+{タスクの1行要約}
 
-## Planned changes
-| Type | File |
-|------|------|
-| Create | `src/example.ts` |
-| Modify | `src/routes.ts` |
+## 変更予定
+| 種別 | ファイル |
+|------|---------|
+| 作成 | `src/example.ts` |
+| 変更 | `src/routes.ts` |
 
-## Estimated size
+## 推定規模
 Small / Medium / Large
 
-## Impact area
-- {Affected modules or features}
+## 影響範囲
+- {影響するモジュールや機能}
 ```
 
-**Decisions output contract (at implementation completion, only if decisions were made):**
+**Decisions出力契約（実装完了時、決定がある場合のみ）:**
 ```markdown
-# Decision Log
+# 決定ログ
 
-## 1. {Decision}
-- **Context**: {Why the decision was needed}
-- **Options considered**: {List of options}
-- **Rationale**: {Reason for the choice}
+## 1. {決定内容}
+- **背景**: {なぜ決定が必要だったか}
+- **検討した選択肢**: {選択肢リスト}
+- **理由**: {選んだ理由}
 ```
 
-**Pre-completion self-check (required):**
-Before running build and tests, verify the following:
-- If new parameters/fields were added, grep to confirm they are actually passed from call sites
-- For any `??`, `||`, `= defaultValue` usage, confirm fallback is truly necessary
-- Verify no replaced code/exports remain after refactoring
-- Verify no features outside the task specification were added
-- Verify no if/else blocks call the same function with only argument differences
-- Verify new code matches existing implementation patterns (API call style, type definition style, etc.)
+**実装完了前の自己チェック（必須）:**
+ビルドとテストを実行する前に、以下を確認してください:
+- 新しいパラメータ/フィールドを追加した場合、grep で呼び出し元から実際に渡されているか確認した
+- `??`, `||`, `= defaultValue` を使った箇所で、フォールバックが本当に必要か確認した
+- リファクタリングで置き換えたコード・エクスポートが残っていないか確認した
+- タスク指示書にない機能を追加していないか確認した
+- if/else で同一関数を呼び出し、引数の差異のみになっていないか確認した
+- 新しいコードが既存の実装パターン（API呼び出し方式、型定義方式等）と一致しているか確認した
 
-**Required output (include headings)**
-## Work results
-- {Summary of actions taken}
-## Changes made
-- {Summary of changes}
-## Build results
-- {Build execution results}
-## Test results
-- {Test command executed and results}
+**必須出力（見出しを含める）**
+## 作業結果
+- {実施内容の要約}
+## 変更内容
+- {変更内容の要約}
+## ビルド結果
+- {ビルド実行結果}
+## テスト結果
+- {テスト実行コマンドと結果}

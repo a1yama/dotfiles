@@ -1,74 +1,74 @@
-# ai-fix -- AI Issue Fix Instruction Template
+# ai-fix — AI指摘修正 instruction テンプレート
 
-> **Purpose**: Fix issues identified by AI Review
-> **Agent**: coder
-> **Feature**: Built-in countermeasures against the "already fixed" false recognition bug
-
----
-
-## Template
-
-```
-**This is AI Review round {movement_iteration}.**
-
-If this is round 2 or later, the previous fixes were NOT actually applied.
-**Your belief that they were "already fixed" is wrong.**
-
-**First, acknowledge:**
-- The files you thought were "fixed" were NOT actually modified
-- Your memory of the previous work is incorrect
-- You need to rethink from scratch
-
-**Required actions:**
-1. Open ALL flagged files with the Read tool (abandon assumptions, verify facts)
-2. Search for the problem locations with grep to confirm they exist
-3. Fix confirmed issues with the Edit tool
-4. Run tests to verify
-5. Report specifically "what you verified and what you fixed"
-
-**Report format:**
-- NG: "Already fixed"
-- OK: "Checked file X at L123, found issue Y, fixed by changing to Z"
-
-**Strictly prohibited:**
-- Reporting "already fixed" without opening the file
-- Making assumptions without verification
-- Ignoring issues that the AI Reviewer REJECTed
-
-**Handling "no fix needed" (required)**
-- Do not judge "no fix needed" unless you can show verification results for the target file of each issue
-- If the issue relates to "generated artifacts" or "spec synchronization", output the tag corresponding to "cannot determine" if you cannot verify the source/spec
-- If no fix is needed, output the tag corresponding to "cannot determine" and clearly state the reason and verification scope
-
-**Required output (include headings)**
-## Files checked
-- {file_path:line_number}
-## Searches performed
-- {command and summary}
-## Fix details
-- {changes made}
-## Test results
-- {command and results}
-```
+> **用途**: AI Review で指摘された問題の修正
+> **使用エージェント**: coder
+> **特徴**: 「修正済み認識」バグへの対策が組み込まれている
 
 ---
 
-## Typical rules
+## テンプレート
+
+```
+**これは {movement_iteration} 回目の AI Review です。**
+
+2回目以降は、前回の修正が実際には行われていなかったということです。
+**あなたの「修正済み」という認識が間違っています。**
+
+**まず認めること:**
+- 「修正済み」と思っていたファイルは実際には修正されていない
+- 前回の作業内容の認識が間違っている
+- ゼロベースで考え直す必要がある
+
+**必須アクション:**
+1. 指摘された全ファイルを Read tool で開く（思い込みを捨てて事実確認）
+2. 問題箇所を grep で検索して実在を確認する
+3. 確認した問題を Edit tool で修正する
+4. テストを実行して検証する
+5. 「何を確認して、何を修正したか」を具体的に報告する
+
+**報告フォーマット:**
+- NG: 「既に修正されています」
+- OK: 「ファイルXのL123を確認した結果、問題Yが存在したため、Zに修正しました」
+
+**絶対に禁止:**
+- ファイルを開かずに「修正済み」と報告
+- 思い込みで判断
+- AI Reviewer が REJECT した問題の放置
+
+**修正不要の扱い（必須）**
+- AI Reviewの指摘ごとに「対象ファイルの確認結果」を示せない場合は修正不要と判断しない
+- 指摘が「生成物」「仕様同期」に関係する場合は、生成元/仕様の確認ができなければ「判断できない」に対応するタグを出力する
+- 修正不要の場合は「判断できない」に対応するタグを出力し、理由と確認範囲を明記する
+
+**必須出力（見出しを含める）**
+## 確認したファイル
+- {ファイルパス:行番号}
+## 実行した検索
+- {コマンドと要約}
+## 修正内容
+- {変更内容}
+## テスト結果
+- {実行コマンドと結果}
+```
+
+---
+
+## 典型的な rules
 
 ```yaml
 rules:
-  - condition: AI issue fixes completed
+  - condition: AI問題の修正完了
     next: ai_review
-  - condition: No fix needed (target files/specs verified)
+  - condition: 修正不要（指摘対象ファイル/仕様の確認済み）
     next: ai_no_fix
-  - condition: Cannot determine, insufficient information
+  - condition: 判断できない、情報不足
     next: ai_no_fix
 ```
 
 ---
 
-## Notes
+## 注意
 
-Use this template as-is across all pieces. There are no customization points.
-The bug where AI falsely believes fixes were "already applied" is a model-wide issue;
-modifying or omitting the countermeasure text directly degrades quality.
+このテンプレートは全ピースで**そのまま使用する**。カスタマイズ箇所はない。
+AI が「修正済み」と誤認するバグはモデル共通の問題であり、
+対策テキストの変更・省略は品質低下に直結する。

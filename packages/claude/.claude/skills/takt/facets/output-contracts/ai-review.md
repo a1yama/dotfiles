@@ -1,44 +1,44 @@
 ```markdown
-# AI-Generated Code Review
+# AI生成コードレビュー
 
-## Result: APPROVE / REJECT
+## 結果: APPROVE / REJECT
 
-## Summary
-{Summarize the result in one sentence}
+## サマリー
+{1文で結果を要約}
 
-## Verified Items
-| Aspect | Result | Notes |
-|--------|--------|-------|
-| Validity of assumptions | ✅ | - |
-| API/library existence | ✅ | - |
-| Context fit | ✅ | - |
-| Scope | ✅ | - |
+## 検証した項目
+| 観点 | 結果 | 備考 |
+|------|------|------|
+| 仮定の妥当性 | ✅ | - |
+| API/ライブラリの実在 | ✅ | - |
+| コンテキスト適合 | ✅ | - |
+| スコープ | ✅ | - |
 
-## Current Iteration Findings (new)
-| # | finding_id | family_tag | Category | Location | Issue | Fix Suggestion |
-|---|------------|------------|----------|----------|-------|----------------|
-| 1 | AI-NEW-src-file-L23 | hallucination | Hallucinated API | `src/file.ts:23` | Non-existent method | Replace with existing API |
+## 今回の指摘（new）
+| # | finding_id | family_tag | カテゴリ | 場所 | 問題 | 修正案 |
+|---|------------|------------|---------|------|------|--------|
+| 1 | AI-NEW-src-file-L23 | hallucination | 幻覚API | `src/file.ts:23` | 存在しないメソッド | 実在APIへ置換 |
 
-## Carry-over Findings (persists)
-| # | finding_id | family_tag | Previous Evidence | Current Evidence | Issue | Fix Suggestion |
-|---|------------|------------|-------------------|------------------|-------|----------------|
-| 1 | AI-PERSIST-src-file-L42 | hallucination | `src/file.ts:42` | `src/file.ts:42` | Still unresolved | Apply prior fix plan |
+## 継続指摘（persists）
+| # | finding_id | family_tag | 前回根拠 | 今回根拠 | 問題 | 修正案 |
+|---|------------|------------|----------|----------|------|--------|
+| 1 | AI-PERSIST-src-file-L42 | hallucination | `src/file.ts:42` | `src/file.ts:42` | 未解消 | 既存修正方針を適用 |
 
-## Resolved Findings (resolved)
-| finding_id | Resolution Evidence |
-|------------|---------------------|
-| AI-RESOLVED-src-file-L10 | `src/file.ts:10` no longer contains the issue |
+## 解消済み（resolved）
+| finding_id | 解消根拠 |
+|------------|----------|
+| AI-RESOLVED-src-file-L10 | `src/file.ts:10` に該当問題なし |
 
-## Reopened Findings (reopened)
-| # | finding_id | family_tag | Prior Resolution Evidence | Recurrence Evidence | Issue | Fix Suggestion |
-|---|------------|------------|--------------------------|---------------------|-------|----------------|
-| 1 | AI-REOPENED-src-file-L55 | hallucination | `Previously fixed at src/file.ts:10` | `Recurred at src/file.ts:55` | Issue description | Fix approach |
+## 再開指摘（reopened）
+| # | finding_id | family_tag | 解消根拠（前回） | 再発根拠 | 問題 | 修正案 |
+|---|------------|------------|----------------|---------|------|--------|
+| 1 | AI-REOPENED-src-file-L55 | hallucination | `前回: src/file.ts:10 で修正済み` | `src/file.ts:55 で再発` | 問題の説明 | 修正方法 |
 
-## Rejection Gate
-- REJECT is valid only when at least one finding exists in `new`, `persists`, or `reopened`
-- Findings without `finding_id` are invalid
+## REJECT判定条件
+- `new`、`persists`、または `reopened` が1件以上ある場合のみ REJECT 可
+- `finding_id` なしの指摘は無効
 ```
 
-**Cognitive load reduction rules:**
-- No issues → Summary sentence + checklist + empty finding sections (10 lines or fewer)
-- Issues found → include table rows only for impacted sections (30 lines or fewer)
+**認知負荷軽減ルール:**
+- 問題なし → サマリー + チェック表 + 空の指摘セクション（10行以内）
+- 問題あり → 該当セクションのみ行追加（30行以内）

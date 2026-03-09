@@ -1,34 +1,34 @@
 ```markdown
-# Task Plan
+# タスク計画
 
-## Original Request
-{User's request as-is}
+## 元の要求
+{ユーザーの要求をそのまま記載}
 
-## Analysis
+## 分析結果
 
-### Objective
-{What needs to be achieved}
+### 目的
+{達成すべきこと}
 
-### Reference Material Findings (when reference material exists)
-{Overview of reference implementation's approach and key differences from current implementation}
+### 参照資料の調査結果（参照資料がある場合）
+{参照資料の実装アプローチの概要と、現在の実装との主要な差異}
 
-### Scope
-{Impact area}
+### スコープ
+{影響範囲}
 
-### Approaches Considered (when design decisions exist)
-| Approach | Adopted? | Rationale |
-|----------|----------|-----------|
+### 検討したアプローチ（設計判断がある場合）
+| アプローチ | 採否 | 理由 |
+|-----------|------|------|
 
-### Implementation Approach
-{How to proceed}
+### 実装アプローチ
+{どう進めるか}
 
-## Implementation Guidelines (only when design is needed)
-- {Guidelines the Coder should follow during implementation}
+## 実装ガイドライン（設計が必要な場合のみ）
+- {Coderが実装時に従うべき指針}
 
-## Out of Scope (only when items exist)
-| Item | Reason for exclusion |
-|------|---------------------|
+## スコープ外（項目がある場合のみ）
+| 項目 | 除外理由 |
+|------|---------|
 
-## Open Questions (if any)
-- {Unclear points or items that need confirmation}
+## 確認事項（あれば）
+- {不明点や確認が必要な点}
 ```

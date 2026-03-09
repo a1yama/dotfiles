@@ -1,49 +1,49 @@
-# {Policy Name}
+# {ポリシー名}
 
-{One-sentence purpose description.}
+{1文の目的説明。体言止めまたは「〜する。」}
 
-## Principles
+## 原則
 
-| Principle | Criterion |
-|-----------|-----------|
-| {Principle 1} | {One-line judgment criterion} |
-| {Principle 2} | {One-line judgment criterion} |
-| {Principle 3} | {One-line judgment criterion} |
-| {Principle 4} | {One-line judgment criterion} |
-| {Principle 5} | {One-line judgment criterion} |
+| 原則 | 基準 |
+|------|------|
+| {原則1} | {1行の判断基準} |
+| {原則2} | {1行の判断基準} |
+| {原則3} | {1行の判断基準} |
+| {原則4} | {1行の判断基準} |
+| {原則5} | {1行の判断基準} |
 
-## {Rule Category 1}
+## {ルールカテゴリ1}
 
-{Category overview. 1-2 sentences}
+{カテゴリの概要。1-2文}
 
-### {Prohibited/Recommended Patterns}
+### {禁止/推奨パターン}
 
-| Pattern | Example | Problem |
-|---------|---------|---------|
-| {Pattern A} | `{code example}` | {Why it's a problem} |
-| {Pattern B} | `{code example}` | {Why it's a problem} |
+| パターン | 例 | 問題 |
+|---------|-----|------|
+| {パターンA} | `{コード例}` | {なぜ問題か} |
+| {パターンB} | `{コード例}` | {なぜ問題か} |
 
-### {Correct Implementation}
+### {正しい実装}
 
 ```typescript
 // NG
-{bad example}
+{悪い例}
 
 // OK
-{good example}
+{良い例}
 ```
 
-### {Acceptable Cases}
+### {許容されるケース}
 
-- {Exception 1}
-- {Exception 2}
+- {例外1}
+- {例外2}
 
-## {Rule Category 2}
+## {ルールカテゴリ2}
 
-{Free form: Combine tables, code examples, and bullet points}
+{自由形式: テーブル、コード例、箇条書きを組み合わせる}
 
-## Prohibited
+## 禁止事項
 
-- **{Prohibition 1}** - {Reason}
-- **{Prohibition 2}** - {Reason}
-- **{Prohibition 3}** - {Reason}
+- **{禁止1}** - {理由}
+- **{禁止2}** - {理由}
+- **{禁止3}** - {理由}

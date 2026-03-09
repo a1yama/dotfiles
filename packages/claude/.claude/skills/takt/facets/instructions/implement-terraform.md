@@ -1,54 +1,54 @@
-Implement Terraform code according to the plan.
-Refer only to files within the Report Directory shown in the Piece Context. Do not search or reference other report directories.
+計画に従って Terraform コードを実装してください。
+Piece Contextに示されたReport Directory内のファイルのみ参照してください。他のレポートディレクトリは検索/参照しないでください。
 
-**Important**: After implementation, run the following validations in order:
-1. `terraform fmt -check` — fix formatting violations with `terraform fmt` if any
-2. `terraform validate` — check for syntax and type errors
-3. `terraform plan` — verify changes (no unintended modifications)
+**重要**: 実装完了後、以下の検証を順番に実行してください。
+1. `terraform fmt -check` — フォーマット違反があれば `terraform fmt` で修正
+2. `terraform validate` — 構文・型エラーの確認
+3. `terraform plan` — 変更内容の確認（意図しない変更がないこと）
 
-**Constraints:**
-- Never execute `terraform apply`
-- Never write secrets (passwords, tokens) in code
-- Do not remove existing `lifecycle { prevent_destroy = true }` without approval
-- All new variables must have `type` and `description`
+**注意事項:**
+- `terraform apply` は絶対に実行しない
+- 機密情報（パスワード、トークン）をコードに書かない
+- 既存リソースの `lifecycle { prevent_destroy = true }` を無断で削除しない
+- 新しい variable を追加する場合は `type` と `description` を必ず付ける
 
-**Scope output contract (create at the start of implementation):**
+**Scope出力契約（実装開始時に作成）:**
 ```markdown
-# Change Scope Declaration
+# 変更スコープ宣言
 
-## Task
-{One-line task summary}
+## タスク
+{タスクの1行要約}
 
-## Planned changes
-| Type | File |
-|------|------|
-| Create | `modules/example/main.tf` |
-| Modify | `environments/sandbox/main.tf` |
+## 変更予定
+| 種別 | ファイル |
+|------|---------|
+| 作成 | `modules/example/main.tf` |
+| 変更 | `environments/sandbox/main.tf` |
 
-## Estimated size
+## 推定規模
 Small / Medium / Large
 
-## Impact area
-- {Affected modules or resources}
+## 影響範囲
+- {影響するモジュールやリソース}
 ```
 
-**Decisions output contract (at implementation completion, only if decisions were made):**
+**Decisions出力契約（実装完了時、決定がある場合のみ）:**
 ```markdown
-# Decision Log
+# 決定ログ
 
-## 1. {Decision}
-- **Context**: {Why the decision was needed}
-- **Options considered**: {List of options}
-- **Rationale**: {Reason for the choice}
-- **Cost impact**: {If applicable}
+## 1. {決定内容}
+- **背景**: {なぜ決定が必要だったか}
+- **検討した選択肢**: {選択肢リスト}
+- **理由**: {選んだ理由}
+- **コスト影響**: {ある場合のみ}
 ```
 
-**Required output (include headings)**
-## Work results
-- {Summary of actions taken}
-## Changes made
-- {Summary of changes}
-## Validation results
-- {terraform fmt -check result}
-- {terraform validate result}
-- {terraform plan summary (resources to add/change/destroy)}
+**必須出力（見出しを含める）**
+## 作業結果
+- {実施内容の要約}
+## 変更内容
+- {変更内容の要約}
+## 検証結果
+- {terraform fmt -check の結果}
+- {terraform validate の結果}
+- {terraform plan の結果サマリー（追加/変更/削除のリソース数）}

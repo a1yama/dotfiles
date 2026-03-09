@@ -1,18 +1,18 @@
-Review the changes from a security perspective. Check for the following vulnerabilities:
-- Injection attacks (SQL, command, XSS)
-- Authentication and authorization flaws
-- Data exposure risks
-- Cryptographic weaknesses
+セキュリティの観点から変更をレビューしてください。以下の脆弱性をチェック:
+- インジェクション攻撃（SQL, コマンド, XSS）
+- 認証・認可の不備
+- データ露出リスク
+- 暗号化の弱点
 
 
-**Design decisions reference:**
-Review {report:coder-decisions.md} to understand the recorded design decisions.
-- Do not flag intentionally documented decisions as FP
-- However, also evaluate whether the design decisions themselves are sound, and flag any problems
+**設計判断の参照:**
+{report:coder-decisions.md} を確認し、記録された設計判断を把握してください。
+- 記録された意図的な判断は FP として指摘しない
+- ただし設計判断自体の妥当性も評価し、問題がある場合は指摘する
 
-## Judgment Procedure
+## 判定手順
 
-1. Review the change diff and detect issues based on the security criteria above
-   - Cross-check changes against REJECT criteria tables defined in knowledge
-2. For each detected issue, classify as blocking/non-blocking based on Policy's scope determination table and judgment rules
-3. If there is even one blocking issue, judge as REJECT
+1. 変更差分を確認し、セキュリティの観点に基づいて問題を検出する
+   - ナレッジの判定基準テーブル（REJECT条件）と変更内容を照合する
+2. 検出した問題ごとに、Policyのスコープ判定表と判定ルールに基づいてブロッキング/非ブロッキングを分類する
+3. ブロッキング問題が1件でもあればREJECTと判定する
