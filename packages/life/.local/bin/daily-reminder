@@ -1,0 +1,245 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# daily-reminder: SOD/EOD の定時 Discord + Slack リマインド
+# Usage: daily-reminder [sod|eod]
+
+LIFE_REPO="${LIFE_REPO:-$HOME/ghq/github.com/a1yama/life}"
+GH_REPO="a1yama/life"
+PROJECT_NUMBER=6
+
+# 環境変数が未設定なら zsh の local.zsh から読み込む
+load_webhook_url() {
+  local var_name="$1"
+  if [[ -z "${!var_name:-}" ]]; then
+    local local_zsh="$HOME/.zsh/local.zsh"
+    if [[ -f "$local_zsh" ]]; then
+      local val
+      val=$(grep "$var_name" "$local_zsh" | sed 's/.*="//' | sed 's/"//' || true)
+      if [[ -n "$val" ]]; then
+        export "$var_name=$val"
+      fi
+    fi
+  fi
+}
+
+load_webhook_url "CLAUDE_DISCORD_WEBHOOK_URL"
+load_webhook_url "CLAUDE_SLACK_WEBHOOK_URL"
+
+if [[ -z "${CLAUDE_DISCORD_WEBHOOK_URL:-}" && -z "${CLAUDE_SLACK_WEBHOOK_URL:-}" ]]; then
+  echo "Error: CLAUDE_DISCORD_WEBHOOK_URL or CLAUDE_SLACK_WEBHOOK_URL must be set" >&2
+  exit 1
+fi
+
+# 6:00 境界: 0:00-5:59 は前日扱い
+current_hour=$(date +%H)
+if [[ "$current_hour" -lt 6 ]]; then
+  today=$(date -v-1d +%Y-%m-%d)
+else
+  today=$(date +%Y-%m-%d)
+fi
+
+daily_file="$LIFE_REPO/ideas/daily/${today}.md"
+mode="${1:-sod}"
+
+# --- GitHub Projects からステータス別 Issue を取得 ---
+fetch_project_items() {
+  gh api graphql -f query='{
+    user(login:"a1yama") {
+      projectV2(number:6) {
+        items(first:100) {
+          nodes {
+            fieldValueByName(name:"Status") {
+              ... on ProjectV2ItemFieldSingleSelectValue { name }
+            }
+            content {
+              ... on Issue { title number state url }
+            }
+          }
+        }
+      }
+    }
+  }' 2>/dev/null || echo '{}'
+}
+
+# --- 送信関数 ---
+send_discord() {
+  local payload="$1"
+  [[ -z "${CLAUDE_DISCORD_WEBHOOK_URL:-}" ]] && return 0
+  curl -s -X POST "$CLAUDE_DISCORD_WEBHOOK_URL" \
+    -H 'Content-Type: application/json' \
+    -d "$payload" \
+    >/dev/null 2>&1 &
+}
+
+send_slack() {
+  local payload="$1"
+  [[ -z "${CLAUDE_SLACK_WEBHOOK_URL:-}" ]] && return 0
+  curl -s -X POST "$CLAUDE_SLACK_WEBHOOK_URL" \
+    -H 'Content-Type: application/json' \
+    -d "$payload" \
+    >/dev/null 2>&1 &
+}
+
+# --- プロジェクトデータ取得 ---
+project_json=$(fetch_project_items)
+
+count_by_status() {
+  local status="$1"
+  echo "$project_json" | jq -r "[.data.user.projectV2.items.nodes[] | select(.fieldValueByName.name == \"$status\")] | length"
+}
+
+items_by_status() {
+  local status="$1"
+  local limit="${2:-5}"
+  echo "$project_json" | jq -r "[.data.user.projectV2.items.nodes[] | select(.fieldValueByName.name == \"$status\") | .content] | limit($limit; .[]) | \"• #\(.number) \(.title)\""
+}
+
+todo_count=$(count_by_status "Todo")
+in_progress_count=$(count_by_status "In Progress")
+pending_count=$(count_by_status "Pending")
+done_count=$(count_by_status "Done")
+
+# Done かつ state=OPEN のもの（Close 忘れ）
+done_not_closed=$(echo "$project_json" | jq -r '[.data.user.projectV2.items.nodes[] | select(.fieldValueByName.name == "Done" and .content.state == "OPEN") | .content] | .[] | "• #\(.number) \(.title)"')
+
+case "$mode" in
+  sod)
+    # SOD 実施済みチェック
+    if [[ -f "$daily_file" ]]; then
+      sod_status="✅ 日次ファイルあり"
+    else
+      sod_status="⚠️ 未作成"
+    fi
+
+    in_progress_items=$(items_by_status "In Progress" 5)
+    todo_items=$(items_by_status "Todo" 5)
+    pending_items=$(items_by_status "Pending" 5)
+
+    # --- Discord (embed) ---
+    discord_fields=$(jq -n \
+      --arg sod "$sod_status" \
+      --arg ip "${in_progress_count}件" \
+      --arg todo "${todo_count}件" \
+      --arg pending "${pending_count}件" \
+      --arg ip_items "${in_progress_items:-なし}" \
+      --arg todo_items "${todo_items:-なし}" \
+      --arg pending_items "${pending_items:-なし}" \
+      '[
+        { name: "📄 日次ファイル", value: $sod, inline: true },
+        { name: "🏃 実行中", value: $ip, inline: true },
+        { name: "📋 Todo", value: $todo, inline: true },
+        { name: "⏸️ Pending", value: $pending, inline: true },
+        { name: "🏃 In Progress", value: $ip_items, inline: false },
+        { name: "📋 Todo", value: $todo_items, inline: false },
+        { name: "⏸️ Pending", value: $pending_items, inline: false },
+        { name: "💡 Tip", value: "`life-memo \"内容\"` でサッとメモ\n`life-issue \"タイトル\"` でIssue作成", inline: false }
+      ]')
+    discord_payload=$(jq -n \
+      --argjson fields "$discord_fields" \
+      '{
+        embeds: [{
+          title: "☀️ SOD リマインド",
+          description: "おはようございます。今日のタスクを確認しましょう。",
+          color: 16750848,
+          fields: $fields
+        }]
+      }')
+    send_discord "$discord_payload"
+
+    # --- Slack (Block Kit) ---
+    slack_blocks=$(jq -n \
+      --arg sod "$sod_status" \
+      --arg ip_count "$in_progress_count" \
+      --arg todo_count "$todo_count" \
+      --arg pending_count "$pending_count" \
+      --arg ip_items "${in_progress_items:-なし}" \
+      --arg todo_items "${todo_items:-なし}" \
+      --arg pending_items "${pending_items:-なし}" \
+      '{
+        blocks: [
+          { type: "header", text: { type: "plain_text", text: "☀️ SOD リマインド" } },
+          { type: "section", text: { type: "mrkdwn", text: ("📄 日次ファイル: " + $sod + "　|　🏃 実行中: " + $ip_count + "件　|　📋 Todo: " + $todo_count + "件　|　⏸️ Pending: " + $pending_count + "件") } },
+          { type: "divider" },
+          { type: "section", text: { type: "mrkdwn", text: ("*🏃 In Progress*\n" + $ip_items) } },
+          { type: "section", text: { type: "mrkdwn", text: ("*📋 Todo*\n" + $todo_items) } },
+          { type: "section", text: { type: "mrkdwn", text: ("*⏸️ Pending*\n" + $pending_items) } },
+          { type: "divider" },
+          { type: "context", elements: [{ type: "mrkdwn", text: "💡 `life-memo \"内容\"` でサッとメモ　|　`life-issue \"タイトル\"` でIssue作成" }] },
+          { type: "actions", elements: [
+            { type: "button", text: { type: "plain_text", text: "📋 Issue一覧" }, url: "https://github.com/a1yama/life/issues" },
+            { type: "button", text: { type: "plain_text", text: "🗂️ Board" }, url: "https://github.com/users/a1yama/projects/6/views/1" }
+          ]}
+        ]
+      }')
+    send_slack "$slack_blocks"
+    ;;
+
+  eod)
+    in_progress_items=$(items_by_status "In Progress" 10)
+
+    # --- Discord ---
+    discord_fields="[]"
+    if [[ -n "$done_not_closed" ]]; then
+      discord_fields=$(jq -n \
+        --arg items "$done_not_closed" \
+        '[{ name: "⚠️ Done だけど未 Close", value: $items, inline: false }]')
+    fi
+    if [[ -n "$in_progress_items" ]]; then
+      discord_fields=$(echo "$discord_fields" | jq \
+        --arg items "$in_progress_items" \
+        '. + [{ name: "🏃 In Progress", value: $items, inline: false }]')
+    fi
+    discord_payload=$(jq -n \
+      --argjson fields "$discord_fields" \
+      '{
+        embeds: [{
+          title: "🌙 EOD リマインド",
+          description: "お疲れさまでした。EOD を実行して今日の作業を記録しましょう。",
+          color: 5814783,
+          fields: $fields
+        }]
+      }')
+    send_discord "$discord_payload"
+
+    # --- Slack (Block Kit) ---
+    # Done 未 Close セクション
+    done_section=""
+    if [[ -n "$done_not_closed" ]]; then
+      done_section="*⚠️ Done だけど未 Close*
+${done_not_closed}
+
+"
+    fi
+    ip_section=""
+    if [[ -n "$in_progress_items" ]]; then
+      ip_section="*🏃 In Progress*
+${in_progress_items}"
+    fi
+
+    slack_blocks=$(jq -n \
+      --arg done_sec "$done_section" \
+      --arg ip_sec "$ip_section" \
+      '{
+        blocks: [
+          { type: "header", text: { type: "plain_text", text: "🌙 EOD リマインド" } },
+          { type: "section", text: { type: "mrkdwn", text: "お疲れさまでした。EOD を実行して今日の作業を記録しましょう。" } },
+          { type: "divider" },
+          { type: "section", text: { type: "mrkdwn", text: ($done_sec + $ip_sec) } },
+          { type: "divider" },
+          { type: "actions", elements: [
+            { type: "button", text: { type: "plain_text", text: "📋 Issue一覧" }, url: "https://github.com/a1yama/life/issues" },
+            { type: "button", text: { type: "plain_text", text: "🗂️ Board" }, url: "https://github.com/users/a1yama/projects/6/views/1" }
+          ]}
+        ]
+      }')
+    send_slack "$slack_blocks"
+    ;;
+
+  *)
+    echo "Usage: daily-reminder [sod|eod]" >&2
+    exit 1
+    ;;
+esac
+
+wait

@@ -1,0 +1,146 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# life-issue: Issue 作成 + ラベル + プロジェクト追加をワンコマンドで（AI整形付き）
+# Usage: life-issue "タイトル" [-l LABEL] [-b BODY] [--raw]
+
+AI_TIMEOUT=120
+
+LIFE_REPO="a1yama/life"
+PROJECT_ID=6
+
+show_help() {
+  echo "Usage: life-issue \"タイトル\" [-l LABEL] [-b BODY] [--raw]"
+  echo ""
+  echo "Options:"
+  echo "  -l, --label LABEL   ラベルを指定（複数可: -l foo -l bar）"
+  echo "  -b, --body BODY     Issue の本文"
+  echo "  -s, --select-label  fzf でラベルを選択"
+  echo "  --raw               AI整形をスキップ"
+  echo "  -h, --help          ヘルプ表示"
+  echo ""
+  echo "ラベル未指定の場合は fzf で選択できます（fzf がある場合）"
+}
+
+title=""
+body=""
+labels=()
+raw_mode=false
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -l|--label)
+      labels+=("$2")
+      shift 2
+      ;;
+    -b|--body)
+      body="$2"
+      shift 2
+      ;;
+    -s|--select-label)
+      # fzf 選択はラベル未指定時に自動で動くため、明示的フラグは不要（互換性のため残す）
+      shift
+      ;;
+    --raw)
+      raw_mode=true
+      shift
+      ;;
+    -h|--help)
+      show_help
+      exit 0
+      ;;
+    *)
+      if [[ -z "$title" ]]; then
+        title="$1"
+      fi
+      shift
+      ;;
+  esac
+done
+
+if [[ -z "$title" ]]; then
+  echo "Error: タイトルを指定してください" >&2
+  show_help >&2
+  exit 1
+fi
+
+# ラベル未指定の場合、fzf があれば選択UI
+if [[ ${#labels[@]} -eq 0 ]] && command -v fzf &>/dev/null; then
+  echo "ラベルを選択してください（Tab で複数選択、Enter で確定、Esc でスキップ）:"
+  selected=$(gh label list --repo "$LIFE_REPO" --limit 50 --json name --jq '.[].name' \
+    | fzf --multi --prompt="Label> " --height=20 2>/dev/null || true)
+  if [[ -n "$selected" ]]; then
+    while IFS= read -r l; do
+      labels+=("$l")
+    done <<< "$selected"
+  fi
+fi
+
+# AI 整形
+if [[ "$raw_mode" == false ]] && command -v claude &>/dev/null; then
+  echo "🤖 AI で整形中..."
+  tmpfile=$(mktemp)
+  trap 'rm -f "$tmpfile"' EXIT
+
+  ai_input="タイトル: ${title}"
+  [[ -n "$body" ]] && ai_input="${ai_input}
+本文: ${body}"
+
+  env -u CLAUDECODE claude -p --max-turns 1 --model haiku "GitHub Issueのタイトルと本文を整形してください。ルール:
+- 意味は変えない
+- タイトルは簡潔に（50文字以内目安）
+- 本文がなければ、タイトルから推測して1-2行の説明を生成
+- 出力形式: 1行目にタイトル、2行目以降に本文
+- タイトルと本文だけを出力し、それ以外は何も出力しない
+
+入力:
+${ai_input}" > "$tmpfile" 2>/dev/null &
+  claude_pid=$!
+  ( sleep "$AI_TIMEOUT" && kill "$claude_pid" 2>/dev/null ) &
+  watchdog_pid=$!
+
+  if wait "$claude_pid" 2>/dev/null; then
+    kill "$watchdog_pid" 2>/dev/null || true
+    ai_result=$(cat "$tmpfile")
+  else
+    kill "$watchdog_pid" 2>/dev/null || true
+    echo "⚠️ AI整形がタイムアウトしました（${AI_TIMEOUT}秒）。--raw で再実行してください"
+    exit 1
+  fi
+
+  if [[ -z "$ai_result" ]]; then
+    echo "⚠️ AI整形に失敗しました。--raw で再実行してください"
+    exit 1
+  fi
+
+  ai_title=$(echo "$ai_result" | head -1)
+  ai_body=$(echo "$ai_result" | tail -n +2)
+  if [[ -n "$ai_title" ]]; then
+    title="$ai_title"
+  fi
+  if [[ -n "$ai_body" ]]; then
+    body="$ai_body"
+  fi
+fi
+
+# gh issue create コマンド組み立て
+cmd=(gh issue create --repo "$LIFE_REPO" --title "$title")
+
+if [[ -n "$body" ]]; then
+  cmd+=(--body "$body")
+else
+  cmd+=(--body "")
+fi
+
+for l in "${labels[@]}"; do
+  cmd+=(--label "$l")
+done
+
+echo "📝 Issue を作成中..."
+issue_url=$("${cmd[@]}" 2>&1)
+echo "✅ 作成: $issue_url"
+
+# プロジェクトに追加
+echo "📋 プロジェクトに追加中..."
+gh project item-add "$PROJECT_ID" --owner a1yama --url "$issue_url" 2>&1
+echo "✅ Life Board に追加しました"

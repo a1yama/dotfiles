@@ -6,6 +6,8 @@
     "allow": [
       "List(*)",
       "Read(*)",
+      "Glob(*)",
+      "Grep(*)",
       "WebSearch",
       "WebFetch(domain:*)",
       "Fetch(https://*)",
@@ -73,7 +75,6 @@
       "Bash(git reset *)",
       "Bash(git commit *)",
       "Bash(git cherry-pick *)",
-      "mcp__o3__o3-search",
       "mcp__notionApi__API-post-search",
       "mcp__notionApi__API-post-database-query",
       "mcp__notionApi__API-get-block-children",
