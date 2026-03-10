@@ -1,0 +1,140 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# life-memo: ターミナルからワンライナーでメモを追記（AI整形付き）
+# Usage: life-memo "メモ内容"
+#        life-memo -t "タイトル" "メモ内容"
+#        life-memo --raw "メモ内容"   # AI整形なし
+#        echo "メモ内容" | life-memo
+
+AI_TIMEOUT=120
+
+LIFE_REPO="${LIFE_REPO:-$HOME/ghq/github.com/a1yama/life}"
+
+# 引数パース
+title=""
+raw_mode=false
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -t|--title)
+      title="$2"
+      shift 2
+      ;;
+    --raw)
+      raw_mode=true
+      shift
+      ;;
+    -h|--help)
+      echo "Usage: life-memo [-t TITLE] [--raw] \"メモ内容\""
+      echo "       echo \"メモ内容\" | life-memo [-t TITLE]"
+      echo ""
+      echo "Options:"
+      echo "  -t, --title TITLE  メモの見出し（省略時はAIが生成）"
+      echo "  --raw              AI整形をスキップしてそのまま記録"
+      exit 0
+      ;;
+    *)
+      break
+      ;;
+  esac
+done
+
+# メモ内容の取得（引数 or stdin）
+if [[ $# -gt 0 ]]; then
+  content="$*"
+elif [[ ! -t 0 ]]; then
+  content=$(cat)
+else
+  echo "Error: メモ内容を指定してください" >&2
+  echo "Usage: life-memo \"メモ内容\"" >&2
+  exit 1
+fi
+
+# 6:00 境界: 0:00-5:59 は前日扱い
+current_hour=$(date +%H)
+if [[ "$current_hour" -lt 6 ]]; then
+  today=$(date -v-1d +%Y-%m-%d)
+else
+  today=$(date +%Y-%m-%d)
+fi
+now=$(date +%H:%M)
+
+daily_dir="$LIFE_REPO/ideas/daily"
+daily_file="$daily_dir/${today}.md"
+
+# ディレクトリ確認
+mkdir -p "$daily_dir"
+
+# ファイルが存在しない場合は frontmatter 付きで新規作成
+if [[ ! -f "$daily_file" ]]; then
+  cat > "$daily_file" <<EOF
+---
+date: ${today}
+---
+EOF
+fi
+
+# Notes セクションが無ければ追加
+if ! grep -q '^## Notes' "$daily_file"; then
+  echo "" >> "$daily_file"
+  echo "## Notes" >> "$daily_file"
+fi
+
+# AI 整形
+if [[ "$raw_mode" == false ]] && command -v claude &>/dev/null; then
+  echo "🤖 AI で整形中..."
+  tmpfile=$(mktemp)
+  trap 'rm -f "$tmpfile"' EXIT
+
+  env -u CLAUDECODE claude -p --max-turns 1 --model haiku "以下のメモを整形してください。ルール:
+- 意味は絶対に変えない
+- 誤字脱字を修正する
+- 文章を簡潔に整える
+- 1行目にタイトル（短く）、2行目以降に本文を出力
+- タイトルと本文だけを出力し、それ以外は何も出力しない
+
+メモ:
+${content}" > "$tmpfile" 2>/dev/null &
+  claude_pid=$!
+  ( sleep "$AI_TIMEOUT" && kill "$claude_pid" 2>/dev/null ) &
+  watchdog_pid=$!
+
+  if wait "$claude_pid" 2>/dev/null; then
+    kill "$watchdog_pid" 2>/dev/null || true
+    ai_result=$(cat "$tmpfile")
+  else
+    kill "$watchdog_pid" 2>/dev/null || true
+    echo "⚠️ AI整形がタイムアウトしました（${AI_TIMEOUT}秒）。--raw で再実行してください"
+    exit 1
+  fi
+
+  if [[ -z "$ai_result" ]]; then
+    echo "⚠️ AI整形に失敗しました。--raw で再実行してください"
+    exit 1
+  fi
+
+  ai_title=$(echo "$ai_result" | head -1)
+  ai_body=$(echo "$ai_result" | tail -n +2 | sed '/./,$!d')
+  if [[ -z "$title" ]]; then
+    title="$ai_title"
+  fi
+  if [[ -n "$ai_body" ]]; then
+    content="$ai_body"
+  fi
+fi
+
+# 見出し作成
+if [[ -n "$title" ]]; then
+  heading="### ${now} ${title}"
+else
+  heading="### ${now}"
+fi
+
+# メモ追記
+{
+  echo ""
+  echo "$heading"
+  echo "$content"
+} >> "$daily_file"
+
+echo "✅ ${daily_file#$LIFE_REPO/} に追記しました"
