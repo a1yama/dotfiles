@@ -8,6 +8,7 @@
       "Read(*)",
       "Glob(*)",
       "Grep(*)",
+      "Search(*)",
       "WebSearch",
       "WebFetch(domain:*)",
       "Fetch(https://*)",

@@ -1,5 +1,6 @@
 ---
-description: タスクを並列サブタスクに分解し、claude-tmux spawn で複数エージェントを起動する
+name: spawn-agents
+description: タスクを並列サブタスクに分解し、claude-tmux spawnで複数エージェントを起動する。"並列で"、"エージェント起動"、"spawn"と言われたら使用する。
 user-invocable: true
 ---
 

@@ -1,24 +1,51 @@
 # dotfiles
 
 ## Installation
-run install
-```
+
+```bash
 curl -o - https://raw.githubusercontent.com/a1yama/dotfiles/refs/heads/master/install | sh
 ```
 
-## zsh
-zshはそれぞれの環境で違うものがあると思うので、それぞれを設定するようにした  
-installでtouchしているので`packages/zsh/.zsh/local.zsh`に必要な設定を記載していく  
-exportは特に独自のものを入れると思うのでzshrcには記載していない  
-aliasも各環境で必要なものが出てくると思うので、固有のものはlocal.zshに記載する
+## Packages
 
-## vim 
-vimは開発でガッツリ使うことはなく、簡単なスクリプトを書くときや、Goの簡単な検証をするときなどに使う程度  
-nvimまでいらないけどどうせなら…という好奇心から設定してみた  
-設定ファイルは以下をそのまま使っている  
-それをstowのディレクトリ構造に落とし込んでいる  
-https://gitlab.com/utzuro/dots/-/tree/main/config/vim?ref_type=heads
+| パッケージ | 説明 |
+|---|---|
+| zsh | シェル設定。`packages/zsh/.zsh/local.zsh`に環境固有の設定を記載 |
+| nvim | Neovim設定（lazy.nvim, LSP, copilot等） |
+| tmux | ターミナルマルチプレクサ設定 |
+| starship | プロンプトテーマ |
+| git | gitconfig, global ignore |
+| lazygit | lazygit設定 |
+| yazi | ファイルマネージャ設定 |
+| wezterm | ターミナルエミュレータ設定 |
+| zellij | ターミナルマルチプレクサ設定 |
+| claude | Claude Code設定（CLAUDE.md, skills等） |
+| codex | Codex設定 |
+| takt | TAKTピースエンジン設定 |
+| life | lifeリポジトリ用ユーティリティ（後述） |
 
-tmuxは使わないので、そのあたりのプラグインだけ削除してあとの設定はそのままにしている
-正直まだ使い方が分からないところがあるが同僚氏なので、分からないところは聞いていこうと思う
+## stowの使い方
 
+各パッケージの反映:
+```bash
+stow -d packages -t ~ <package-name>
+```
+
+全パッケージの反映:
+```bash
+for pkg in packages/*/; do stow -d packages -t ~ "$(basename "$pkg")"; done
+```
+
+## 注意: lifeパッケージ
+
+`packages/life/`はプライベートリポジトリ（a1yama/life）が存在する前提のユーティリティです。
+
+使用前に以下をクローンしてください:
+```bash
+ghq get git@github.com:a1yama/life.git
+```
+
+含まれるスクリプト:
+- `life-memo` - ターミナルからワンライナーでメモを追記（AI整形付き）
+- `life-issue` - lifeリポジトリのIssue操作
+- `daily-reminder` - デイリーリマインダー
