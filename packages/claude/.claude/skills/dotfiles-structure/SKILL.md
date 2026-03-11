@@ -1,5 +1,6 @@
 ---
-description: dotfilesリポジトリのパッケージ構造とstowの使い方。設定ファイルの追加・変更・stow反映時に参照する。
+name: dotfiles-structure
+description: dotfilesリポジトリのパッケージ構造とstowの使い方。設定ファイルの追加・変更・stow反映時に参照する。"dotfiles"、"stow"、"設定ファイル追加"と言われたら使用する。
 user-invocable: false
 ---
 
