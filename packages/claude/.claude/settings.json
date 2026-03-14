@@ -82,9 +82,9 @@
       "mcp__notionApi__API-retrieve-a-database",
       "mcp__codex"
     ],
-    "deny": []
+    "deny": [],
+    "defaultMode": "auto"
   },
-  "model": "opus",
   "hooks": {
     "Notification": [
       {

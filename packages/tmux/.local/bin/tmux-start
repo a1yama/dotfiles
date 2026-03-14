@@ -1,0 +1,19 @@
+set -euo pipefail
+
+SESSION="${1:-main}"
+
+# 既存セッションがあればアタッチして終了
+if tmux has-session -t "$SESSION" 2>/dev/null; then
+  echo "Session '$SESSION' already exists. Attaching..."
+  exec tmux attach -t "$SESSION"
+fi
+
+# --- セッション作成 ---
+tmux new-session -d -s "$SESSION" -n "life" -c "$HOME/ghq/github.com/a1yama/life"
+tmux new-window -t "$SESSION" -n "dotfiles" -c "$HOME/dotfiles"
+# --- 各ウィンドウで Claude Code を起動 ---
+tmux send-keys -t "$SESSION:1" "claude" Enter
+tmux send-keys -t "$SESSION:2" "claude" Enter
+
+tmux select-window -t "$SESSION:1"
+exec tmux attach -t "$SESSION"

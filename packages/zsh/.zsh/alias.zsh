@@ -5,6 +5,7 @@ alias tat="tmux attach -t"
 alias tl="tmux list-sessions"
 alias tn="tmux new -s"
 alias tk="tmux kill-session -t"
+alias ts="tmux-start"
 
 alias g="git"
 alias cat="bat"
