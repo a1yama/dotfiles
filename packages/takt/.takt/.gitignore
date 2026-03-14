@@ -18,5 +18,8 @@
 !knowledge/**
 !instructions/
 !instructions/**
+
+# OS files
+.DS_Store
 !output-contracts/
 !output-contracts/**
