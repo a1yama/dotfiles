@@ -73,6 +73,12 @@ esac
 # ベル通知（既存の動作を維持）
 printf '\a' > /dev/tty 2>/dev/null || true
 
+# Wio Terminal 通知（未接続時はスキップ）
+wio_port=$(ls /dev/cu.usbmodem* 2>/dev/null | head -1)
+if [[ -n "$wio_port" ]]; then
+  printf "%s\n" "$title" > "$wio_port" 2>/dev/null &
+fi
+
 # Slack 通知
 if [[ -n "${CLAUDE_SLACK_WEBHOOK_URL:-}" ]]; then
   # last_user がある場合はコンテキストに追加
