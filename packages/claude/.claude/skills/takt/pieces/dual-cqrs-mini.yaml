@@ -15,7 +15,7 @@ loop_monitors:
     threshold: 3
     judge:
       persona: supervisor
-      instruction_template: loop-monitor-reviewers-fix
+      instruction: loop-monitor-reviewers-fix
       rules:
         - condition: 健全（指摘数が減少、修正が反映されている）
           next: fix_both
@@ -25,6 +25,8 @@ movements:
   - name: plan
     edit: false
     persona: planner
+    policy:
+      - design-planning
     knowledge:
       - frontend
       - backend
@@ -51,13 +53,14 @@ movements:
     output_contracts:
       report:
         - name: plan.md
-          format: plan
+          format: plan-frontend
   - name: implement
     edit: true
     persona: coder
     policy:
       - coding
       - testing
+      - design-fidelity
     knowledge:
       - frontend
       - backend
@@ -163,6 +166,7 @@ movements:
         policy:
           - coding
           - testing
+          - design-fidelity
         knowledge:
           - frontend
           - backend
@@ -191,6 +195,7 @@ movements:
         policy:
           - coding
           - testing
+          - design-fidelity
         knowledge:
           - frontend
           - backend
@@ -223,6 +228,7 @@ movements:
     policy:
       - coding
       - testing
+      - design-fidelity
     knowledge:
       - frontend
       - backend
@@ -256,6 +262,7 @@ movements:
     policy:
       - coding
       - testing
+      - design-fidelity
     knowledge:
       - frontend
       - backend

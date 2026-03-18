@@ -37,6 +37,10 @@
 - **複雑すぎるリスト内包表記**
   - 説明: 可読性を損なう複雑な内包表記は通常のループに書き直すべき
 
+### アーキテクチャ
+- **スクリプトとAPIでビジネスロジックが重複していないか**
+  - 説明: スクリプト（scripts/）とAPI（api.py）で同じビジネスロジックを個別に実装すると、差異が生まれて異なる結果を返す原因になる。共通ロジックは専用モジュール（例: analyzer.py）に集約し、スクリプト・APIの両方からそれを呼ぶこと。過去にscrape_historical.pyとapi.pyで予測ロジックが重複し、スクリプト側でオッズの戻り値を捨ててDB経由で読み直す冗長な経路を通っていたため、APIと異なる結果（推奨0件）になる事故が発生した。
+
 ## 参考資料
 - [PEP 8 – Style Guide for Python Code](https://peps.python.org/pep-0008/)
 - [Google Python Style Guide](https://google.github.io/styleguide/pyguide.html)

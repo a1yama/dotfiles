@@ -721,6 +721,56 @@ data class ApprovalInfo(
 | 値オブジェクトにビジネスロジック（状態遷移等） | REJECT。Aggregateの責務 |
 | init ブロックなしで不変条件が保証されない | REJECT |
 
+## マスタデータと CRUD の使い分け
+
+CQRS+ES システム内でも、すべてをイベントソーシングで実装する必要はない。マスタデータ（参照データ）のように性質が単純なものは、通常の CRUD で実装した方がシンプルで保守しやすい。
+
+ただし、「マスタデータだから CRUD」と機械的に判断しない。以下の基準で該当するものが多いほど CRUD が適している。逆に、1つでも CQRS+ES を必要とする要件があれば、採用を検討する。
+
+**CRUD で十分と判断する基準:**
+
+| 観点 | CRUD 寄り | CQRS+ES 寄り |
+|------|----------|-------------|
+| ビジネス要件 | 「〜を管理したい」程度で特別な言及がない | 固有のビジネスルールや制約がある |
+| ロジックの発展 | 単純な参照・更新で完結し、発展が見込めない | 状態遷移やライフサイクルが複雑化しうる |
+| 変更履歴・監査 | 「いつ誰が変えたか」の追跡が不要 | 変更履歴の参照や監査証跡が必要 |
+| ドメインイベント | この変更が他の集約やプロセスに影響しない | 変更が下流プロセスをトリガーする |
+| 整合性の範囲 | 単体で完結し、他集約との整合性が不要 | 他の集約と整合性を保つ必要がある |
+| 時点参照 | 「過去のある時点の状態」を問われない | 時点指定のクエリが必要 |
+
+**典型的な CRUD 対象の例:**
+- 都道府県・国コードなどのコードマスタ
+- カテゴリ・タグなどの分類マスタ
+- 設定値・定数テーブル
+
+**CQRS+ES が必要と判断できる例:**
+- 商品マスタだが、価格変更履歴の追跡が必要
+- 組織マスタだが、変更時に権限の再計算をトリガーする
+- 取引先マスタだが、与信審査の状態遷移がある
+
+```kotlin
+// CRUD で十分: 単純なカテゴリマスタ
+@Entity
+data class Category(
+    @Id val categoryId: String,
+    val name: String,
+    val displayOrder: Int
+)
+
+// CQRS+ES が適切: 価格変更履歴の追跡が必要な商品
+data class Product(
+    val productId: String,
+    val currentPrice: Money
+) {
+    fun changePrice(newPrice: Money, reason: String): PriceChangedEvent {
+        require(newPrice.amount > BigDecimal.ZERO) { "価格は正の値でなければなりません" }
+        return PriceChangedEvent(productId, currentPrice, newPrice, reason)
+    }
+}
+```
+
+CRUD で実装する場合も、CQRS+ES システム内の他集約からは ID 参照で利用する。CRUD エンティティが集約の内部状態を直接参照しない点は同じ。
+
 ## インフラ層
 
 確認事項:

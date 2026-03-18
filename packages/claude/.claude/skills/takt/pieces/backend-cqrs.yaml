@@ -1,5 +1,5 @@
 name: backend-cqrs
-description: CQRS+ES・セキュリティ・QA専門家レビュー
+description: テストファースト・AIレビュー・2段階レビュー・修正ループ・監督付きCQRS+ES開発
 piece_config:
   provider_options:
     codex:
@@ -10,15 +10,27 @@ max_movements: 30
 initial_movement: plan
 loop_monitors:
   - cycle:
-      - reviewers
+      - ai_review
+      - ai_fix
+    threshold: 3
+    judge:
+      persona: supervisor
+      instruction: loop-monitor-ai-fix
+      rules:
+        - condition: 健全（進捗あり）
+          next: ai_review
+        - condition: 非生産的（改善なし）
+          next: reviewers_1
+  - cycle:
+      - reviewers_1
       - fix
     threshold: 3
     judge:
       persona: supervisor
-      instruction_template: loop-monitor-reviewers-fix
+      instruction: loop-monitor-reviewers-fix
       rules:
         - condition: 健全（指摘数が減少、修正が反映されている）
-          next: reviewers
+          next: reviewers_1
         - condition: 非生産的（同じ指摘が繰り返される）
           next: supervise
 movements:
@@ -41,13 +53,55 @@ movements:
     instruction: plan
     rules:
       - condition: タスク分析と計画が完了した
-        next: implement
+        next: write_tests
       - condition: 要件が不明確で計画を立てられない
         next: ABORT
     output_contracts:
       report:
         - name: plan.md
           format: plan
+  - name: write_tests
+    edit: true
+    persona: coder
+    policy:
+      - coding
+      - testing
+    knowledge:
+      - backend
+      - cqrs-es
+      - architecture
+      - unit-testing
+      - e2e-testing
+    provider_options:
+      claude:
+        allowed_tools:
+          - Read
+          - Glob
+          - Grep
+          - Edit
+          - Write
+          - Bash
+          - WebSearch
+          - WebFetch
+    required_permission_mode: edit
+    instruction: write-tests-first
+    rules:
+      - condition: テスト作成が完了した
+        next: implement
+      - condition: 実装対象が未実装のためテスト作成をスキップ
+        next: implement
+      - condition: テスト作成を進行できない
+        next: plan
+      - condition: ユーザー入力が必要
+        next: write_tests
+        requires_user_input: true
+        interactive_only: true
+    output_contracts:
+      report:
+        - name: test-scope.md
+          format: coder-scope
+        - name: test-decisions.md
+          format: coder-decisions
   - name: implement
     edit: true
     persona: coder
@@ -106,7 +160,7 @@ movements:
     instruction: ai-review
     rules:
       - condition: AI特有の問題が見つからない
-        next: reviewers
+        next: reviewers_1
       - condition: AI特有の問題が検出された
         next: ai_fix
     output_contracts:
@@ -159,9 +213,9 @@ movements:
       - condition: ai_reviewの指摘が妥当（修正すべき）
         next: ai_fix
       - condition: ai_fixの判断が妥当（修正不要）
-        next: reviewers
+        next: reviewers_1
     instruction: arbitrate
-  - name: reviewers
+  - name: reviewers_1
     parallel:
       - name: cqrs-es-review
         edit: false
@@ -186,6 +240,38 @@ movements:
           report:
             - name: cqrs-es-review.md
               format: cqrs-es-review
+      - name: testing-review
+        edit: false
+        persona: testing-reviewer
+        policy:
+          - review
+          - testing
+        knowledge:
+          - unit-testing
+          - e2e-testing
+        provider_options:
+          claude:
+            allowed_tools:
+              - Read
+              - Glob
+              - Grep
+              - WebSearch
+              - WebFetch
+        rules:
+          - condition: approved
+          - condition: needs_fix
+        instruction: review-test
+        output_contracts:
+          report:
+            - name: testing-review.md
+              format: testing-review
+    rules:
+      - condition: all("approved")
+        next: reviewers_2
+      - condition: any("needs_fix")
+        next: fix
+  - name: reviewers_2
+    parallel:
       - name: security-review
         edit: false
         persona: security-reviewer
@@ -260,7 +346,7 @@ movements:
     pass_previous_response: false
     rules:
       - condition: 修正が完了した
-        next: reviewers
+        next: reviewers_1
       - condition: 修正を進行できない
         next: plan
     instruction: fix

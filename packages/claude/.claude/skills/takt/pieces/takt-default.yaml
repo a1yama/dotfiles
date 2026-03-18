@@ -12,10 +12,10 @@ loop_monitors:
   - cycle:
       - ai_review
       - ai_fix
-    threshold: 3
+    threshold: 5
     judge:
       persona: supervisor
-      instruction_template: loop-monitor-ai-fix
+      instruction: loop-monitor-ai-fix
       rules:
         - condition: 健全（進捗あり）
           next: ai_review
@@ -24,10 +24,10 @@ loop_monitors:
   - cycle:
       - reviewers
       - fix
-    threshold: 3
+    threshold: 5
     judge:
       persona: supervisor
-      instruction_template: loop-monitor-reviewers-fix
+      instruction: loop-monitor-reviewers-fix
       rules:
         - condition: 健全（指摘数が減少、修正が反映されている）
           next: reviewers
@@ -72,6 +72,8 @@ movements:
     knowledge:
       - takt
       - architecture
+      - unit-testing
+      - e2e-testing
     provider_options:
       claude:
         allowed_tools:
@@ -305,6 +307,9 @@ movements:
         policy:
           - review
           - testing
+        knowledge:
+          - unit-testing
+          - e2e-testing
         provider_options:
           claude:
             allowed_tools:

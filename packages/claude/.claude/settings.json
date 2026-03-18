@@ -76,6 +76,7 @@
       "Bash(git reset *)",
       "Bash(git commit *)",
       "Bash(git cherry-pick *)",
+      "Bash(git diff *)",
       "mcp__notionApi__API-post-search",
       "mcp__notionApi__API-post-database-query",
       "mcp__notionApi__API-get-block-children",

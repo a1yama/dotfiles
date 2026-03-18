@@ -204,13 +204,35 @@ return storage.upload(file, options)
 - 50行超のUI/ロジック → 分離
 - 複数の責務がある → 分離
 
+### 機能追加時の到達経路
+
+新しい機能や画面を追加したら、実装と同じ変更セットで利用者が到達する経路も更新する。フレームワーク固有の配線方法は各ドメイン知識に従う。
+
+| 基準 | 判定 |
+|------|------|
+| 新機能の実装だけ追加し、呼び出し側・導線・到達経路の更新を忘れる | REJECT |
+| 利用者がどこから到達するか未定義のまま公開機能を追加する | REJECT |
+| 実装追加と同じ変更セットで導線と到達経路を更新する | OK |
+| 一時導線を追加した場合、その用途と除去条件を記録する | OK |
+
 ### 依存の方向
 
 - 上位層 → 下位層（逆方向禁止）
 - データ取得はルート（View/Controller）で行い、子に渡す
 - 子は親のことを知らない
 
-### 状態管理
+### 実行条件と依存条件の一致
+
+依存やトリガーは、実際にその処理を再実行したい条件と一致させる。静的ルールや実装都合のためだけに依存を増やし、意図しない再実行を起こさない。
+
+| 基準 | 判定 |
+|------|------|
+| lint や実装都合だけで依存やトリガーを増やし、再実行ループを生む | REJECT |
+| 無関係な state 変化や callback 再生成で初期処理が再実行される | REJECT |
+| 再実行条件が URL・フィルタ・明示的更新操作などの仕様に対応している | OK |
+| 初期化と再取得のトリガーを分けて設計している | OK |
+
+## 状態管理
 
 - 状態は使う場所に閉じ込める
 - 子は状態を直接変更しない（イベントを親に通知）
@@ -304,6 +326,73 @@ function formatCurrency(amount: number): string { ... }
 function formatDate(date: Date): string { ... }
 function formatPercentage(value: number): string { ... }
 ```
+
+## 同一実装の別名関数（DRY 違反）
+
+AIは同じ処理を異なる関数名で複数定義しがちである。
+
+| パターン | 例 | 判定 |
+|---------|-----|------|
+| 同一実装の別名関数 | `copyFacets()` と `placeFacetFiles()` が同じ処理 | REJECT |
+| 引数シグネチャが同一で本体も同一 | 2つの関数が同じパラメータを受け取り同じ処理を行う | REJECT |
+
+```typescript
+// REJECT - 同じ実装が別名で存在
+function copyFiles(src: string, dest: string): void {
+  for (const f of readdirSync(src)) {
+    copyFileSync(join(src, f), join(dest, f));
+  }
+}
+function placeFiles(src: string, dest: string): void {
+  for (const f of readdirSync(src)) {
+    copyFileSync(join(src, f), join(dest, f));
+  }
+}
+
+// OK - 1つの関数にまとめる
+function copyFiles(src: string, dest: string): void {
+  for (const f of readdirSync(src)) {
+    copyFileSync(join(src, f), join(dest, f));
+  }
+}
+```
+
+検証アプローチ:
+1. 新規追加された関数の本体が、既存関数と同一または酷似していないか確認
+2. 同じファイル内の関数同士、および同じモジュール内の関数同士を比較
+3. 重複があれば1つにまとめ、呼び出し元を統一
+
+## Stateful Regex の危険なパターン
+
+`/g` フラグ付き正規表現はステートフル（`lastIndex` を保持する）。モジュールスコープに定義して `test()` と `replace()` を混用すると予期しない結果になる。
+
+| パターン | 例 | 判定 |
+|---------|-----|------|
+| モジュールスコープの `/g` 正規表現を `test()` で使用 | `const RE = /x/g; if (RE.test(s)) ...` | REJECT |
+| `/g` 正規表現を `test()` と `replace()` で使い回し | `RE.test(s)` の後に `s.replace(RE, ...)` | REJECT |
+
+```typescript
+// REJECT - モジュールスコープの /g 正規表現を test() で使用
+const PATTERN = /\{\{facet:(\w+)\}\}/g;
+function hasFacetRef(text: string): boolean {
+  return PATTERN.test(text);  // lastIndex が進み、次回の呼び出しで結果が変わる
+}
+
+// OK - test() には /g を付けない、または関数内で new RegExp
+const PATTERN_CHECK = /\{\{facet:(\w+)\}\}/;  // /g なし
+const PATTERN_REPLACE = /\{\{facet:(\w+)\}\}/g;  // replace 用は /g
+function hasFacetRef(text: string): boolean {
+  return PATTERN_CHECK.test(text);
+}
+function replaceFacetRefs(text: string): string {
+  return text.replace(PATTERN_REPLACE, ...);
+}
+```
+
+検証アプローチ:
+1. モジュールスコープの正規表現に `/g` フラグがあるか確認
+2. `/g` 付き正規表現が `test()` で使われていないか確認
+3. 同一の正規表現が `test()` と `replace()` の両方で使われていないか確認
 
 ## 禁止事項
 
