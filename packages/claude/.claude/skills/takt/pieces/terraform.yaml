@@ -51,7 +51,6 @@ movements:
           - Bash
           - WebSearch
           - WebFetch
-    required_permission_mode: full
     quality_gates:
       - terraform fmt -check がエラーなし
       - terraform validate が成功
@@ -176,7 +175,6 @@ movements:
               - Bash
               - WebSearch
               - WebFetch
-        required_permission_mode: full
         rules:
           - condition: AI問題の修正完了
           - condition: 修正不要（指摘対象ファイル/仕様の確認済み）
@@ -198,7 +196,6 @@ movements:
               - Bash
               - WebSearch
               - WebFetch
-        required_permission_mode: full
         rules:
           - condition: 監督者の指摘に対する修正が完了した
           - condition: 修正を進行できない
@@ -225,7 +222,6 @@ movements:
           - Bash
           - WebSearch
           - WebFetch
-    required_permission_mode: full
     pass_previous_response: false
     rules:
       - condition: AI問題の修正完了
@@ -252,7 +248,6 @@ movements:
           - Bash
           - WebSearch
           - WebFetch
-    required_permission_mode: full
     pass_previous_response: false
     rules:
       - condition: 監督者の指摘に対する修正が完了した
@@ -265,7 +260,7 @@ loop_monitors:
     threshold: 3
     judge:
       persona: supervisor
-      instruction_template: |
+      instruction: |
         レビュー → 修正のサイクルが {cycle_count} 回繰り返されました。
         Report Directory 内のレビューレポート履歴を確認し、収束状況を判断してください。
 
@@ -282,7 +277,7 @@ loop_monitors:
     threshold: 3
     judge:
       persona: supervisor
-      instruction_template: |
+      instruction: |
         AI修正 → レビューのサイクルが {cycle_count} 回繰り返されました。
         Report Directory 内のレビューレポート履歴を確認し、収束状況を判断してください。
 
@@ -299,7 +294,7 @@ loop_monitors:
     threshold: 3
     judge:
       persona: supervisor
-      instruction_template: |
+      instruction: |
         監督修正 → レビューのサイクルが {cycle_count} 回繰り返されました。
         Report Directory 内のレビューレポート履歴を確認し、収束状況を判断してください。
 

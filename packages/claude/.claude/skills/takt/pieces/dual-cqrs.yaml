@@ -15,7 +15,7 @@ loop_monitors:
     threshold: 3
     judge:
       persona: supervisor
-      instruction_template: loop-monitor-ai-fix
+      instruction: loop-monitor-ai-fix
       rules:
         - condition: 健全（進捗あり）
           next: ai_review
@@ -27,7 +27,7 @@ loop_monitors:
     threshold: 3
     judge:
       persona: supervisor
-      instruction_template: loop-monitor-reviewers-fix
+      instruction: loop-monitor-reviewers-fix
       rules:
         - condition: 健全（指摘数が減少、修正が反映されている）
           next: reviewers
@@ -37,6 +37,8 @@ movements:
   - name: plan
     edit: false
     persona: planner
+    policy:
+      - design-planning
     knowledge:
       - frontend
       - backend
@@ -60,13 +62,14 @@ movements:
     output_contracts:
       report:
         - name: plan.md
-          format: plan
+          format: plan-frontend
   - name: implement
     edit: true
     persona: coder
     policy:
       - coding
       - testing
+      - design-fidelity
     session: refresh
     knowledge:
       - frontend
@@ -133,6 +136,7 @@ movements:
     policy:
       - coding
       - testing
+      - design-fidelity
     session: refresh
     knowledge:
       - frontend
@@ -204,7 +208,9 @@ movements:
       - name: frontend-review
         edit: false
         persona: frontend-reviewer
-        policy: review
+        policy:
+          - review
+          - design-fidelity
         knowledge: frontend
         provider_options:
           claude:
@@ -276,6 +282,7 @@ movements:
     policy:
       - coding
       - testing
+      - design-fidelity
     knowledge:
       - frontend
       - backend
@@ -333,6 +340,7 @@ movements:
     policy:
       - coding
       - testing
+      - design-fidelity
     knowledge:
       - frontend
       - backend

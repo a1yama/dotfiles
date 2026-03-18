@@ -158,8 +158,8 @@ echo "=== 作業者: \${name} ==="
 echo "Dir: \$(pwd)"
 echo "---"
 
-# 対話モードで実行（実装→レビュー→修正ループをセッション内で完結）
-claude --allowedTools "Edit,Write,Read,Grep,Glob,Bash,WebSearch,WebFetch" < "\${prompt_file}"
+# プロンプトを読み込んで実行（完了後に自動終了）
+claude -p --allowedTools "Edit,Write,Read,Grep,Glob,Bash,WebSearch,WebFetch" "\$(cat "\${prompt_file}")"
 
 echo "completed" > "\${agent_dir}/status"
 echo ""
@@ -183,7 +183,12 @@ echo "作業者の承認リクエストを監視中..."
 echo ""
 
 while true; do
-  # 作業者ペインの生存確認
+  # 作業者の完了確認（statusファイル or ペイン消失）
+  if [[ -f "\${agent_dir}/status" ]] && [[ "\$(cat "\${agent_dir}/status")" == "completed" ]]; then
+    echo ""
+    echo "=== 作業者が完了しました ==="
+    break
+  fi
   if [[ -f "\${worker_pane_id_file}" ]]; then
     worker_pane=\$(cat "\${worker_pane_id_file}")
     if ! tmux list-panes -a -F '#{pane_id}' 2>/dev/null | grep -q "^\${worker_pane}\\\$"; then
@@ -195,7 +200,7 @@ while true; do
   fi
 
   # レビュー結果の検出
-  local review_file="\${agent_dir}/review-result"
+  review_file="\${agent_dir}/review-result"
   if [[ -f "\${review_file}" ]] && [[ ! -f "\${agent_dir}/review-notified" ]]; then
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "📝 コードレビュー結果"
@@ -246,8 +251,15 @@ while true; do
 done
 
 echo ""
-say "監督 \${name} が終了しました"
-read -r -p "Enterで閉じる..."
+say "エージェント \${name} が終了しました"
+sleep 3
+
+# ウィンドウを自動で閉じる
+window_name_file="\${agent_dir}/window-name"
+if [[ -f "\${window_name_file}" ]]; then
+  wname=\$(cat "\${window_name_file}")
+  tmux kill-window -t "\${wname}" 2>/dev/null
+fi
 SUPERVISOR
   chmod +x "$supervisor_script"
 
