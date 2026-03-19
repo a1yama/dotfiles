@@ -1,0 +1,468 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# life-note: CLIノート管理ツール（nb風）
+# Usage: life-note                     # 新規ノート（エディタ起動）
+#        life-note "テキスト"           # テキストからノート作成（AIタイトル）
+#        life-note ls                   # ノート一覧（fzfあればインタラクティブ）
+#        life-note show <番号|名前>     # ノート表示
+#        life-note edit <番号|名前>     # ノート編集
+#        life-note search "キーワード"  # 横断検索
+#        echo "テキスト" | life-note    # stdinからノート作成
+
+AI_TIMEOUT=30
+LIFE_REPO="${LIFE_REPO:-$HOME/ghq/github.com/a1yama/life}"
+NOTES_DIR="$LIFE_REPO/ideas/notes"
+INDEX_FILE="$NOTES_DIR/.index"
+
+# --- ユーティリティ ---
+
+ensure_dir() {
+  mkdir -p "$NOTES_DIR"
+  [[ -f "$INDEX_FILE" ]] || touch "$INDEX_FILE"
+}
+
+# .indexからN番目のファイル名を取得（新しい順）
+resolve_note() {
+  local query="$1"
+
+  # 数値なら番号指定
+  if [[ "$query" =~ ^[0-9]+$ ]]; then
+    local file
+    file=$(sed -n "${query}p" "$INDEX_FILE")
+    if [[ -z "$file" ]]; then
+      echo "Error: ${query}番のノートは存在しません" >&2
+      return 1
+    fi
+    echo "$NOTES_DIR/$file"
+    return 0
+  fi
+
+  # ファイル名（拡張子なし or あり）で検索
+  if [[ -f "$NOTES_DIR/${query}.md" ]]; then
+    echo "$NOTES_DIR/${query}.md"
+    return 0
+  fi
+  if [[ -f "$NOTES_DIR/${query}" ]]; then
+    echo "$NOTES_DIR/${query}"
+    return 0
+  fi
+
+  echo "Error: ノートが見つかりません: $query" >&2
+  return 1
+}
+
+# fzfでノートを選択（引数があればresolve_note、なければfzf）
+select_note() {
+  if [[ $# -gt 0 ]]; then
+    resolve_note "$1"
+    return
+  fi
+
+  if ! command -v fzf &>/dev/null || [[ ! -t 0 ]]; then
+    echo "Error: ノート番号または名前を指定してください" >&2
+    return 1
+  fi
+
+  local entries=()
+  local count=0
+  while IFS= read -r filename; do
+    [[ -z "$filename" ]] && continue
+    count=$((count + 1))
+    local title
+    title=$(extract_title "$NOTES_DIR/$filename")
+    entries+=("$(printf "%3d. %s" "$count" "$title")")
+  done < "$INDEX_FILE"
+
+  if [[ ${#entries[@]} -eq 0 ]]; then
+    echo "ノートがありません" >&2
+    return 1
+  fi
+
+  local selected
+  selected=$(printf '%s\n' "${entries[@]}" | fzf --reverse --preview "
+    num=\$(echo {} | sed 's/^ *//' | cut -d. -f1)
+    file=\$(sed -n \"\${num}p\" \"$INDEX_FILE\")
+    if command -v bat &>/dev/null; then
+      bat --style=plain --language=markdown \"$NOTES_DIR/\$file\"
+    else
+      cat \"$NOTES_DIR/\$file\"
+    fi
+  " --preview-window=right:60%) || return 1
+
+  local num
+  num=$(echo "$selected" | sed 's/^ *//' | cut -d. -f1)
+  echo "$NOTES_DIR/$(sed -n "${num}p" "$INDEX_FILE")"
+}
+
+# .indexを再構築（更新日時の新しい順）
+rebuild_index() {
+  ensure_dir
+  # .index自体と隠しファイルを除外し、更新日時の新しい順でソート
+  find "$NOTES_DIR" -maxdepth 1 -name '*.md' -type f -print0 \
+    | xargs -0 ls -1t 2>/dev/null \
+    | while IFS= read -r filepath; do
+        basename "$filepath"
+      done > "$INDEX_FILE"
+}
+
+# ノートからタイトルを抽出（frontmatter title > h1 > ファイル名）
+extract_title() {
+  local file="$1"
+  local title=""
+
+  # frontmatter の title
+  if head -1 "$file" | grep -q '^---'; then
+    title=$(awk '/^---$/{n++; next} n==1 && /^title:/{sub(/^title:[[:space:]]*/, ""); gsub(/^["'"'"']|["'"'"']$/, ""); print; exit}' "$file")
+  fi
+
+  # h1
+  if [[ -z "$title" ]]; then
+    title=$(grep -m1 '^# ' "$file" | sed 's/^# //')
+  fi
+
+  # ファイル名
+  if [[ -z "$title" ]]; then
+    title=$(basename "$file" .md)
+  fi
+
+  echo "$title"
+}
+
+# AIでタイトル生成
+generate_title() {
+  local content="$1"
+  if ! command -v claude &>/dev/null; then
+    echo ""
+    return
+  fi
+
+  local tmpfile
+  tmpfile=$(mktemp)
+
+  env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT -u CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS claude -p --max-turns 1 --model haiku "以下のノート内容から短いタイトル（20文字以内）を1行だけ出力してください。マークダウン記法や装飾は不要です。
+
+${content}" > "$tmpfile" 2>/dev/null &
+  local pid=$!
+  ( sleep "$AI_TIMEOUT" && kill "$pid" 2>/dev/null ) &
+  local watchdog=$!
+
+  if wait "$pid" 2>/dev/null; then
+    kill "$watchdog" 2>/dev/null || true
+    local result
+    result=$(cat "$tmpfile")
+    rm -f "$tmpfile"
+    echo "$result"
+  else
+    kill "$watchdog" 2>/dev/null || true
+    rm -f "$tmpfile"
+    echo ""
+  fi
+}
+
+# タイムスタンプからファイル名生成
+new_filename() {
+  date +%Y%m%d-%H%M.md
+}
+
+# frontmatter付きでファイル作成
+create_note_file() {
+  local file="$1"
+  local title="$2"
+  local today
+  today=$(date +%Y-%m-%d)
+
+  cat > "$file" <<EOF
+---
+title: "${title}"
+date: ${today}
+---
+
+EOF
+}
+
+# --- サブコマンド ---
+
+cmd_new() {
+  ensure_dir
+  local content=""
+
+  if [[ $# -gt 0 ]]; then
+    content="$*"
+  elif [[ ! -t 0 ]]; then
+    content=$(cat)
+  fi
+
+  local filename
+  filename=$(new_filename)
+  local filepath="$NOTES_DIR/$filename"
+
+  # 同名ファイルが存在する場合（同分に2回実行）
+  if [[ -f "$filepath" ]]; then
+    filename="${filename%.md}-$(date +%S).md"
+    filepath="$NOTES_DIR/$filename"
+  fi
+
+  local body=""
+  if [[ -n "$content" ]]; then
+    body="$content"
+  else
+    # エディタで本文だけ書かせる（frontmatterなし）
+    touch "$filepath"
+    "${EDITOR:-vim}" "$filepath"
+
+    body=$(sed '/^$/d' "$filepath")
+    if [[ -z "$body" ]]; then
+      rm -f "$filepath"
+      echo "空のノートを削除しました"
+      return
+    fi
+  fi
+
+  # 仮タイトル（本文先頭）で即保存
+  local tmp_title
+  tmp_title=$(echo "$body" | head -1 | cut -c1-30)
+
+  local today
+  today=$(date +%Y-%m-%d)
+  local note_body
+  if [[ -f "$filepath" ]] && [[ -s "$filepath" ]]; then
+    note_body=$(cat "$filepath")
+  else
+    note_body="$body"
+  fi
+  {
+    echo "---"
+    echo "title: \"${tmp_title}\""
+    echo "date: ${today}"
+    echo "---"
+    echo ""
+    echo "$note_body"
+  } > "$filepath"
+
+  rebuild_index
+  echo "✅ ${filename}: ${tmp_title}"
+
+  # AIタイトル生成をバックグラウンドで実行
+  (
+    ai_title=$(generate_title "$body")
+    if [[ -n "$ai_title" ]]; then
+      sed -i '' "s/^title: \".*\"/title: \"${ai_title}\"/" "$filepath"
+    fi
+  ) &>/dev/null &
+  disown
+}
+
+cmd_ls() {
+  ensure_dir
+  rebuild_index
+
+  local count=0
+  local entries=()
+
+  while IFS= read -r filename; do
+    [[ -z "$filename" ]] && continue
+    count=$((count + 1))
+    local file="$NOTES_DIR/$filename"
+    local title
+    title=$(extract_title "$file")
+    local date_str
+    date_str=$(sed -n 's/^date: *//p' "$file" | head -1)
+    [[ -z "$date_str" ]] && date_str=$(echo "$filename" | sed 's/\([0-9]\{4\}\)\([0-9]\{2\}\)\([0-9]\{2\}\).*/\1-\2-\3/')
+
+    entries+=("$(printf "%3d. %s  (%s)" "$count" "$title" "$date_str")")
+  done < "$INDEX_FILE"
+
+  if [[ ${#entries[@]} -eq 0 ]]; then
+    echo "ノートがありません"
+    return
+  fi
+
+  # fzfがあればインタラクティブ選択
+  if command -v fzf &>/dev/null && [[ -t 1 ]]; then
+    local fzf_preview="
+      num=\$(echo {} | sed 's/^ *//' | cut -d. -f1)
+      file=\$(sed -n \"\${num}p\" \"$INDEX_FILE\")
+      if command -v bat &>/dev/null; then
+        bat --style=plain --language=markdown \"$NOTES_DIR/\$file\"
+      else
+        cat \"$NOTES_DIR/\$file\"
+      fi"
+
+    local out
+    out=$(printf '%s\n' "${entries[@]}" | fzf --reverse \
+      --header "C-j/C-k:移動 / enter:表示 / C-e:編集 / C-d:削除" \
+      --preview "$fzf_preview" \
+      --preview-window=right:60% \
+      --expect=ctrl-e,ctrl-d) || return 0
+
+    local key action_line
+    key=$(echo "$out" | head -1)
+    action_line=$(echo "$out" | tail -1)
+    [[ -z "$action_line" ]] && return 0
+
+    local num
+    num=$(echo "$action_line" | sed 's/^ *//' | cut -d. -f1)
+    local file="$NOTES_DIR/$(sed -n "${num}p" "$INDEX_FILE")"
+
+    case "$key" in
+      ctrl-e)
+        "${EDITOR:-vim}" "$file"
+        ;;
+      ctrl-d)
+        local title
+        title=$(extract_title "$file")
+        read -r -p "「${title}」を削除しますか？ [y/N] " confirm
+        if [[ "$confirm" =~ ^[yY]$ ]]; then
+          rm "$file"
+          rebuild_index
+          echo "🗑️ 削除しました: $(basename "$file")"
+        fi
+        ;;
+      *)
+        if command -v bat &>/dev/null; then
+          bat --style=plain --language=markdown "$file"
+        else
+          cat "$file"
+        fi
+        ;;
+    esac
+  else
+    printf '%s\n' "${entries[@]}"
+  fi
+}
+
+cmd_show() {
+  ensure_dir
+  rebuild_index
+
+  local file
+  file=$(select_note "$@") || exit 1
+
+  if command -v bat &>/dev/null; then
+    bat --style=plain --language=markdown "$file"
+  else
+    cat "$file"
+  fi
+}
+
+cmd_edit() {
+  ensure_dir
+  rebuild_index
+
+  local file
+  file=$(select_note "$@") || exit 1
+
+  "${EDITOR:-vim}" "$file"
+}
+
+cmd_delete() {
+  ensure_dir
+  rebuild_index
+
+  local file
+  file=$(select_note "$@") || exit 1
+
+  local title
+  title=$(extract_title "$file")
+
+  read -r -p "「${title}」を削除しますか？ [y/N] " confirm
+  if [[ "$confirm" =~ ^[yY]$ ]]; then
+    rm "$file"
+    rebuild_index
+    echo "🗑️ 削除しました: $(basename "$file")"
+  else
+    echo "キャンセルしました"
+  fi
+}
+
+cmd_search() {
+  if [[ $# -eq 0 ]] || [[ -z "$1" ]]; then
+    echo "Error: 検索キーワードを指定してください" >&2
+    echo "Usage: life-note search \"キーワード\"" >&2
+    exit 1
+  fi
+
+  ensure_dir
+  local keyword="$1"
+  local results
+  results=$(grep -rn "$keyword" "$NOTES_DIR"/*.md 2>/dev/null || true)
+
+  if [[ -z "$results" ]]; then
+    echo "「${keyword}」に一致するノートは見つかりませんでした"
+    return
+  fi
+
+  local count
+  count=$(echo "$results" | wc -l | tr -d ' ')
+
+  echo "$results" | while IFS= read -r line; do
+    local rel="${line#$NOTES_DIR/}"
+    echo "$rel"
+  done
+
+  echo ""
+  echo "📊 ${count} 件ヒット"
+}
+
+cmd_help() {
+  cat <<'EOF'
+Usage: life-note [サブコマンド] [引数]
+
+サブコマンド:
+  (なし)                       エディタで新規ノート作成
+  "テキスト"                   テキストからノート作成（AIタイトル自動付与）
+  ls                           ノート一覧（fzfあればプレビュー付き選択）
+  show [番号|名前]             ノート表示（fzf選択可）
+  edit [番号|名前]             ノート編集（fzf選択可）
+  rm [番号|名前]               ノート削除（fzf選択可）
+  search "キーワード"          ノート横断検索
+  help                         このヘルプを表示
+
+ノート指定: 番号（ls表示順）またはファイル名（拡張子省略可）
+保存先: ideas/notes/
+EOF
+}
+
+# --- メインルーティング ---
+
+case "${1:-}" in
+  ls|list)
+    shift
+    cmd_ls "$@"
+    ;;
+  show)
+    shift
+    cmd_show "$@"
+    ;;
+  edit)
+    shift
+    cmd_edit "$@"
+    ;;
+  rm|delete)
+    shift
+    cmd_delete "$@"
+    ;;
+  search|s)
+    shift
+    cmd_search "$@"
+    ;;
+  -h|--help|help)
+    cmd_help
+    ;;
+  -*)
+    echo "Error: 不明なオプション: $1" >&2
+    cmd_help >&2
+    exit 1
+    ;;
+  "")
+    if [[ ! -t 0 ]]; then
+      cmd_new
+    else
+      cmd_new
+    fi
+    ;;
+  *)
+    cmd_new "$@"
+    ;;
+esac

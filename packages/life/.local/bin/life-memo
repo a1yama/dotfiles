@@ -4,7 +4,7 @@ set -euo pipefail
 # life-memo: ターミナルからワンライナーでメモを追記（AI整形付き）
 # Usage: life-memo "メモ内容"
 #        life-memo -t "タイトル" "メモ内容"
-#        life-memo --raw "メモ内容"   # AI整形なし
+#        life-memo --raw "メモ内容"
 #        echo "メモ内容" | life-memo
 
 AI_TIMEOUT=120

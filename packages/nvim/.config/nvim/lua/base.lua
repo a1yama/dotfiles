@@ -6,6 +6,7 @@ local api = vim.api
 local diagnostic = vim.diagnostic
 opt.encoding = 'utf-8'
 opt.number = true
+opt.relativenumber = true
 opt.clipboard = "unnamedplus"
 opt.list = true
 opt.expandtab = true
