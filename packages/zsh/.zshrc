@@ -26,6 +26,8 @@ fi
 # Initialize starship and plugins after compinit
 eval "$(starship init zsh)"
 
+eval "$(zoxide init zsh)"
+
 if type brew &>/dev/null; then
   source $(brew --prefix)/share/zsh-autosuggestions/zsh-autosuggestions.zsh
   source $(brew --prefix)/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
