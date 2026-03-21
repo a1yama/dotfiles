@@ -38,13 +38,21 @@ resolve_note() {
     return 0
   fi
 
-  # ファイル名（拡張子なし or あり）で検索
+  # 相対パス指定（サブディレクトリ含む）
   if [[ -f "$NOTES_DIR/${query}.md" ]]; then
     echo "$NOTES_DIR/${query}.md"
     return 0
   fi
   if [[ -f "$NOTES_DIR/${query}" ]]; then
     echo "$NOTES_DIR/${query}"
+    return 0
+  fi
+
+  # ファイル名のみで再帰検索
+  local found
+  found=$(find "$NOTES_DIR" -name "${query}.md" -type f -o -name "${query}" -type f 2>/dev/null | head -1)
+  if [[ -n "$found" ]]; then
+    echo "$found"
     return 0
   fi
 
@@ -98,11 +106,11 @@ select_note() {
 # .indexを再構築（更新日時の新しい順）
 rebuild_index() {
   ensure_dir
-  # .index自体と隠しファイルを除外し、更新日時の新しい順でソート
-  find "$NOTES_DIR" -maxdepth 1 -name '*.md' -type f -print0 \
+  # サブディレクトリを含む全.mdを更新日時の新しい順でソート、NOTES_DIRからの相対パスで格納
+  find "$NOTES_DIR" -name '*.md' -type f -print0 \
     | xargs -0 ls -1t 2>/dev/null \
     | while IFS= read -r filepath; do
-        basename "$filepath"
+        echo "${filepath#$NOTES_DIR/}"
       done > "$INDEX_FILE"
 }
 
@@ -360,17 +368,80 @@ cmd_delete() {
   ensure_dir
   rebuild_index
 
-  local file
-  file=$(select_note "$@") || exit 1
+  # 引数ありなら単一削除
+  if [[ $# -gt 0 ]]; then
+    local file
+    file=$(resolve_note "$1") || exit 1
+    local title
+    title=$(extract_title "$file")
+    read -r -p "「${title}」を削除しますか？ [y/N] " confirm
+    if [[ "$confirm" =~ ^[yY]$ ]]; then
+      rm "$file"
+      rebuild_index
+      echo "🗑️ 削除しました: $(basename "$file")"
+    else
+      echo "キャンセルしました"
+    fi
+    return
+  fi
 
-  local title
-  title=$(extract_title "$file")
+  # fzfで複数選択
+  if ! command -v fzf &>/dev/null || [[ ! -t 0 ]]; then
+    echo "Error: ノート番号または名前を指定してください" >&2
+    return 1
+  fi
 
-  read -r -p "「${title}」を削除しますか？ [y/N] " confirm
+  local entries=()
+  local count=0
+  while IFS= read -r filename; do
+    [[ -z "$filename" ]] && continue
+    count=$((count + 1))
+    local title
+    title=$(extract_title "$NOTES_DIR/$filename")
+    entries+=("$(printf "%3d. %s" "$count" "$title")")
+  done < "$INDEX_FILE"
+
+  if [[ ${#entries[@]} -eq 0 ]]; then
+    echo "ノートがありません" >&2
+    return 1
+  fi
+
+  local selected
+  selected=$(printf '%s\n' "${entries[@]}" | fzf --reverse --multi \
+    --header "Tab:選択 / enter:削除実行" \
+    --preview "
+      num=\$(echo {} | sed 's/^ *//' | cut -d. -f1)
+      file=\$(sed -n \"\${num}p\" \"$INDEX_FILE\")
+      if command -v bat &>/dev/null; then
+        bat --style=plain --language=markdown \"$NOTES_DIR/\$file\"
+      else
+        cat \"$NOTES_DIR/\$file\"
+      fi
+    " --preview-window=right:60%) || return 0
+
+  local files=()
+  local titles=()
+  while IFS= read -r line; do
+    [[ -z "$line" ]] && continue
+    local num
+    num=$(echo "$line" | sed 's/^ *//' | cut -d. -f1)
+    local rel
+    rel=$(sed -n "${num}p" "$INDEX_FILE")
+    files+=("$NOTES_DIR/$rel")
+    titles+=("$(extract_title "$NOTES_DIR/$rel")")
+  done <<< "$selected"
+
+  echo "以下の ${#files[@]} 件を削除します:"
+  for t in "${titles[@]}"; do
+    echo "  - $t"
+  done
+  read -r -p "実行しますか？ [y/N] " confirm
   if [[ "$confirm" =~ ^[yY]$ ]]; then
-    rm "$file"
+    for f in "${files[@]}"; do
+      rm "$f"
+    done
     rebuild_index
-    echo "🗑️ 削除しました: $(basename "$file")"
+    echo "🗑️ ${#files[@]} 件削除しました"
   else
     echo "キャンセルしました"
   fi
@@ -386,7 +457,7 @@ cmd_search() {
   ensure_dir
   local keyword="$1"
   local results
-  results=$(grep -rn "$keyword" "$NOTES_DIR"/*.md 2>/dev/null || true)
+  results=$(grep -rn --include='*.md' "$keyword" "$NOTES_DIR" 2>/dev/null || true)
 
   if [[ -z "$results" ]]; then
     echo "「${keyword}」に一致するノートは見つかりませんでした"
