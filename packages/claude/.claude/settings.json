@@ -83,8 +83,7 @@
       "mcp__notionApi__API-retrieve-a-database",
       "mcp__codex"
     ],
-    "deny": [],
-    "defaultMode": "auto"
+    "deny": []
   },
   "hooks": {
     "Notification": [
