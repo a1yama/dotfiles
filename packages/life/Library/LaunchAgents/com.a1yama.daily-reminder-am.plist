@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.a1yama.daily-reminder-am</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/a1yama/.local/bin/daily-reminder</string>
+        <string>reminder-am</string>
+    </array>
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>8</integer>
+        <key>Minute</key>
+        <integer>30</integer>
+    </dict>
+    <key>StandardOutPath</key>
+    <string>/tmp/daily-reminder-am.log</string>
+    <key>StandardErrorPath</key>
+    <string>/tmp/daily-reminder-am.err</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/Users/a1yama/.local/bin</string>
+        <key>HOME</key>
+        <string>/Users/a1yama</string>
+    </dict>
+</dict>
+</plist>
