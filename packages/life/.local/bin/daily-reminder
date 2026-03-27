@@ -236,8 +236,46 @@ ${in_progress_items}"
     send_slack "$slack_blocks"
     ;;
 
+  reminder-am|reminder-pm)
+    # メッセージとタイトルは環境変数から読み込み（~/.zsh/local.zsh に設定）
+    load_webhook_url "REMINDER_AM_TITLE"
+    load_webhook_url "REMINDER_AM_MSG"
+    load_webhook_url "REMINDER_PM_TITLE"
+    load_webhook_url "REMINDER_PM_MSG"
+
+    if [[ "$mode" == "reminder-am" ]]; then
+      title="${REMINDER_AM_TITLE:-📌 朝のリマインド}"
+      msg="${REMINDER_AM_MSG:-}"
+      color=5025616
+    else
+      title="${REMINDER_PM_TITLE:-📌 夜のリマインド}"
+      msg="${REMINDER_PM_MSG:-}"
+      color=16744448
+    fi
+
+    [[ -z "$msg" ]] && { echo "Warning: ${mode} message not set" >&2; exit 0; }
+
+    discord_payload=$(jq -n \
+      --arg title "$title" \
+      --arg msg "$msg" \
+      --argjson color "$color" \
+      '{ embeds: [{ title: $title, description: $msg, color: $color }] }')
+    send_discord "$discord_payload"
+
+    slack_blocks=$(jq -n \
+      --arg title "$title" \
+      --arg msg "$msg" \
+      '{
+        blocks: [
+          { type: "header", text: { type: "plain_text", text: $title } },
+          { type: "section", text: { type: "mrkdwn", text: $msg } }
+        ]
+      }')
+    send_slack "$slack_blocks"
+    ;;
+
   *)
-    echo "Usage: daily-reminder [sod|eod]" >&2
+    echo "Usage: daily-reminder [sod|eod|reminder-am|reminder-pm]" >&2
     exit 1
     ;;
 esac
