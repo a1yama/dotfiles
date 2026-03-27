@@ -117,7 +117,11 @@
     "lua-lsp@claude-plugins-official": true,
     "gopls-lsp@claude-plugins-official": true,
     "example-skills@anthropic-agent-skills": true,
+<<<<<<< HEAD
     "frontend-design@claude-plugins-official": true
+=======
+    "slack@claude-plugins-official": true
+>>>>>>> b1fd01eb8089fb67a1af59390b74382550bc41c9
   },
   "extraKnownMarketplaces": {
     "anthropic-agent-skills": {
@@ -128,5 +132,6 @@
     }
   },
   "alwaysThinkingEnabled": true,
-  "skipDangerousModePermissionPrompt": true
+  "skipDangerousModePermissionPrompt": true,
+  "skipAutoPermissionPrompt": true
 }
