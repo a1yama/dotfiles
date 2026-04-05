@@ -22,6 +22,38 @@ user-invocable: true
 - エージェントが質問する場合、監督エージェント（`/supervise`）が自動的に判断して回答する
 - すべてのエージェント起動後、必要に応じて `/supervise` スキルを実行して質問に対応すること
 
+## claude-tmux リファレンス
+
+### サブコマンド
+
+| コマンド | 説明 |
+|---|---|
+| `claude-tmux spawn "タスク説明" [--name NAME] [--dir DIR] [--no-review]` | 新しいtmuxペインでエージェントを起動 |
+| `claude-tmux issues 42 43 44` | 複数のGitHub Issueを並列エージェントで処理 |
+| `claude-tmux status` | 実行中のエージェント一覧とペイン生存確認 |
+| `claude-tmux questions` | 質問待ちのエージェント一覧を表示 |
+| `claude-tmux answer <name> <回答>` | 質問に回答 |
+| `claude-tmux kill [name\|all]` | エージェントペイン停止とディレクトリ削除 |
+| `claude-tmux clean` | 完了/死亡したエージェントのディレクトリをクリーンアップ |
+
+### 仕様
+
+- エージェントディレクトリ: `/tmp/claude-agents/<name>/`
+  - `pane-id`, `prompt`, `question`, `answer`, `status`
+- ペイン分割: 左右分割（`-h`）、複数なら上下にも分割（`-v`）
+- 実行モード: インタラクティブモード（tmuxセッション外ではエラー）
+
+### オーケストレーション（監督機能）
+
+1. エージェントが `/tmp/claude-agents/<name>/question` に質問を書き込む
+2. 監督が `/supervise` スキルまたは `claude-tmux supervise` で質問を分析・回答
+3. エージェントが `/tmp/claude-agents/<name>/answer` から回答を読み取り続行
+
+### 自動コードレビュー
+
+- タスク完了後、エージェント自身がgit diffでコードレビューを実施
+- `--no-review` でスキップ可能
+
 ## ユーザーの指示
 
 $ARGUMENTS
