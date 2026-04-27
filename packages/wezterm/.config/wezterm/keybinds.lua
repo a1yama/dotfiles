@@ -131,6 +131,12 @@ return {
     { key = "p", mods = "SHIFT|CTRL", action = act.ActivateCommandPalette },
     -- 設定再読み込み
     { key = "r", mods = "SHIFT|CTRL", action = act.ReloadConfiguration },
+
+    -- 矢印キー代替: Opt + hjkl
+    { key = "h", mods = "ALT", action = act.SendKey({ key = "LeftArrow" }) },
+    { key = "j", mods = "ALT", action = act.SendKey({ key = "DownArrow" }) },
+    { key = "k", mods = "ALT", action = act.SendKey({ key = "UpArrow" }) },
+    { key = "l", mods = "ALT", action = act.SendKey({ key = "RightArrow" }) },
     -- キーテーブル用
     -- { key = "s", mods = "LEADER", action = act.ActivateKeyTable({ name = "resize_pane", one_shot = false }) },
     -- {
