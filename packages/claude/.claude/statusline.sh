@@ -11,12 +11,71 @@ echo "$input" > /tmp/claude-statusline/last.json
 cwd=$(echo "$input" | jq -r '.workspace.current_dir')
 dir_name="${cwd/#$HOME/~}"
 model=$(echo "$input" | jq -r '.model.display_name // .model.id // "unknown"')
+version=$(echo "$input" | jq -r '.version // ""')
 
-# Parse token usage
-input_tokens=$(echo "$input" | jq -r '.context_window.total_input_tokens // 0')
-output_tokens=$(echo "$input" | jq -r '.context_window.total_output_tokens // 0')
-total_tokens=$((input_tokens + output_tokens))
-cost=$(echo "$input" | jq -r '.cost.total_cost_usd // 0' | xargs printf '%.2f')
+# Parse rate limits (plan usage)
+five_hour_pct=$(echo "$input" | jq -r '.rate_limits.five_hour.used_percentage // empty')
+five_hour_reset=$(echo "$input" | jq -r '.rate_limits.five_hour.resets_at // empty')
+seven_day_pct=$(echo "$input" | jq -r '.rate_limits.seven_day.used_percentage // empty')
+seven_day_reset=$(echo "$input" | jq -r '.rate_limits.seven_day.resets_at // empty')
+
+color_for_pct() {
+    local pct=$1
+    if [ "$pct" -ge 80 ]; then echo "1;31"
+    elif [ "$pct" -ge 50 ]; then echo "1;33"
+    else echo "1;32"
+    fi
+}
+
+make_bar() {
+    local pct=$1
+    local color=$2
+    local width=10
+    local filled=$(( pct * width / 100 ))
+    [ "$filled" -gt "$width" ] && filled=$width
+    [ "$filled" -lt 0 ] && filled=0
+    local empty=$(( width - filled ))
+    local f_str=""
+    local e_str=""
+    if [ "$filled" -gt 0 ]; then
+        printf -v f_str '%*s' "$filled" ""
+        f_str=${f_str// /█}
+    fi
+    if [ "$empty" -gt 0 ]; then
+        printf -v e_str '%*s' "$empty" ""
+        e_str=${e_str// /░}
+    fi
+    printf '\033[%sm%s\033[0;90m%s\033[0m' "$color" "$f_str" "$e_str"
+}
+
+format_until() {
+    local target=$1
+    local now
+    now=$(date +%s)
+    local diff=$((target - now))
+    if [ "$diff" -le 0 ]; then echo "now"; return; fi
+    local days=$((diff / 86400))
+    local hours=$(( (diff % 86400) / 3600 ))
+    local mins=$(( (diff % 3600) / 60 ))
+    if [ "$days" -gt 0 ]; then echo "${days}d${hours}h"
+    elif [ "$hours" -gt 0 ]; then echo "${hours}h${mins}m"
+    else echo "${mins}m"
+    fi
+}
+
+usage_parts=""
+if [ -n "$five_hour_pct" ]; then
+    c=$(color_for_pct "$five_hour_pct")
+    until_str=$(format_until "$five_hour_reset")
+    bar=$(make_bar "$five_hour_pct" "$c")
+    usage_parts="${usage_parts}  \033[0;90m5h\033[0m ${bar} \033[${c}m${five_hour_pct}%%\033[0m\033[0;90m(${until_str})\033[0m"
+fi
+if [ -n "$seven_day_pct" ]; then
+    c=$(color_for_pct "$seven_day_pct")
+    until_str=$(format_until "$seven_day_reset")
+    bar=$(make_bar "$seven_day_pct" "$c")
+    usage_parts="${usage_parts}  \033[0;90m7d\033[0m ${bar} \033[${c}m${seven_day_pct}%%\033[0m\033[0;90m(${until_str})\033[0m"
+fi
 
 # ==============================================================
 # Line 1: Git status
@@ -106,4 +165,6 @@ echo -e "$git_line"
 # ==============================================================
 # Line 3: Claude Code info
 # ==============================================================
-echo -e "\033[1;35m${model}\033[0m \033[1;34mtokens:${total_tokens}\033[0m (in:${input_tokens} out:${output_tokens}) \033[1;32m\$${cost}\033[0m"
+version_part=""
+[ -n "$version" ] && version_part=" \033[0;90mv${version}\033[0m"
+printf "\033[1;35m${model}\033[0m${version_part}${usage_parts}\n"
