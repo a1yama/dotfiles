@@ -84,7 +84,8 @@
       "mcp__notionApi__API-retrieve-a-database",
       "mcp__codex"
     ],
-    "deny": []
+    "deny": [],
+    "defaultMode": "auto"
   },
   "hooks": {
     "Notification": [
@@ -140,6 +141,6 @@
   "effortLevel": "high",
   "showThinkingSummaries": true,
   "skipDangerousModePermissionPrompt": true,
-  "skipAutoPermissionPrompt": true,
-  "useAutoModeDuringPlan": true
+  "useAutoModeDuringPlan": true,
+  "skipAutoPermissionPrompt": true
 }
