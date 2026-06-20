@@ -79,6 +79,7 @@
       "Bash(git cherry-pick *)",
       "Bash(git diff *)",
       "mcp__notionApi__API-post-search",
+      "Bash(ssh a1yama-pj *)",
       "mcp__notionApi__API-post-database-query",
       "mcp__notionApi__API-get-block-children",
       "mcp__notionApi__API-retrieve-a-database",
@@ -104,6 +105,26 @@
           {
             "type": "command",
             "command": "claude-notify"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -n --arg d \"$(date '+%Y-%m-%d (%a) %H:%M JST')\" '{hookSpecificOutput:{hookEventName:\"UserPromptSubmit\",additionalContext:(\"現在日時: \"+$d)}}'"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "nohup /Users/a1yama/ghq/github.com/a1yama/claude-activity-dashboard/scripts/auto-sync.sh >/dev/null 2>&1 &"
           }
         ]
       }
@@ -142,6 +163,6 @@
   "effortLevel": "high",
   "showThinkingSummaries": true,
   "skipDangerousModePermissionPrompt": true,
-  "useAutoModeDuringPlan": true,
-  "skipAutoPermissionPrompt": true
+  "skipAutoPermissionPrompt": true,
+  "useAutoModeDuringPlan": true
 }

@@ -48,4 +48,3 @@ ghq get git@github.com:a1yama/life.git
 含まれるスクリプト:
 - `life-memo` - ターミナルからワンライナーでメモを追記（AI整形付き）
 - `life-issue` - lifeリポジトリのIssue操作
-- `daily-reminder` - デイリーリマインダー
