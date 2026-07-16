@@ -15,6 +15,23 @@ session_id=$(echo "$input" | jq -r '.session_id // ""')
 short_session="${session_id:0:8}"
 transcript_path=$(echo "$input" | jq -r '.transcript_path // ""')
 
+# Stop: 直近のユーザー発話から一定時間未満の短いターンは通知しない(手元にいる想定のため)。
+# 人間の発話は content が string、ツール結果は array であることを利用して区別する。
+# タイムスタンプが取れない場合は通知する側に倒す(長時間ターンの通知を落とさない)。
+min_turn="${CLAUDE_NOTIFY_MIN_TURN_SECONDS:-60}"
+if [[ "$event" == "Stop" && "$min_turn" -gt 0 && -n "$transcript_path" && -f "$transcript_path" ]]; then
+  last_user_ts=$(tail -200 "$transcript_path" 2>/dev/null \
+    | jq -r 'select(.type == "user" and (.message.content | type == "string")) | .timestamp // empty' 2>/dev/null \
+    | tail -1)
+  if [[ -n "$last_user_ts" ]]; then
+    ts_epoch=$(date -j -u -f "%Y-%m-%dT%H:%M:%S" "${last_user_ts%%.*}" +%s 2>/dev/null || echo "")
+    now_epoch=$(date -u +%s)
+    if [[ -n "$ts_epoch" ]] && (( now_epoch - ts_epoch < min_turn )); then
+      exit 0
+    fi
+  fi
+fi
+
 # トランスクリプトから直近のメッセージを取得
 extract_last_message() {
   local role="$1"
@@ -71,7 +88,7 @@ case "$event" in
 esac
 
 # ベル通知（既存の動作を維持）
-printf '\a' > /dev/tty 2>/dev/null || true
+{ printf '\a' > /dev/tty; } 2>/dev/null || true
 
 # Slack 通知
 if [[ -n "${CLAUDE_SLACK_WEBHOOK_URL:-}" ]]; then

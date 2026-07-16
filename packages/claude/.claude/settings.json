@@ -137,11 +137,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "~/dotfiles/packages/claude/.claude/hooks/stop-quality-gate.sh"
-          },
-          {
-            "type": "command",
-            "command": "claude-notify"
+            "command": "~/dotfiles/packages/claude/.claude/hooks/stop-dispatch.sh"
           }
         ]
       }
