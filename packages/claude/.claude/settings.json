@@ -78,6 +78,7 @@
       "Bash(git commit *)",
       "Bash(git cherry-pick *)",
       "Bash(git diff *)",
+      "Bash(claude-diff *)",
       "mcp__notionApi__API-post-search",
       "Bash(ssh a1yama-pj *)",
       "mcp__notionApi__API-post-database-query",
@@ -85,7 +86,17 @@
       "mcp__notionApi__API-retrieve-a-database",
       "mcp__codex"
     ],
-    "deny": [],
+    "deny": [
+      "Bash(git push --force)",
+      "Bash(git push --force *)",
+      "Bash(git push -f)",
+      "Bash(git push -f *)",
+      "Bash(rm -rf /)",
+      "Bash(rm -rf ~)",
+      "Bash(rm -rf ~/)",
+      "Bash(rm -rf $HOME)",
+      "Bash(rm -rf $HOME/)"
+    ],
     "defaultMode": "auto"
   },
   "hooks": {
@@ -96,6 +107,17 @@
           {
             "type": "command",
             "command": "~/dotfiles/packages/claude/.claude/hooks/bash-tool-nudge.sh"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/dotfiles/packages/claude/.claude/hooks/post-edit-check.sh"
           }
         ]
       }
@@ -113,6 +135,10 @@
     "Stop": [
       {
         "hooks": [
+          {
+            "type": "command",
+            "command": "~/dotfiles/packages/claude/.claude/hooks/stop-quality-gate.sh"
+          },
           {
             "type": "command",
             "command": "claude-notify"
@@ -172,9 +198,9 @@
   },
   "alwaysThinkingEnabled": true,
   "effortLevel": "high",
+  "tui": "fullscreen",
   "showThinkingSummaries": true,
   "skipDangerousModePermissionPrompt": true,
   "skipAutoPermissionPrompt": true,
-  "useAutoModeDuringPlan": true,
-  "tui": "fullscreen"
+  "useAutoModeDuringPlan": true
 }
