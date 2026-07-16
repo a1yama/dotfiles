@@ -19,8 +19,8 @@ user-invocable: true
 - 各サブタスクの説明は、他のエージェントが単独で理解・実行できるよう十分に具体的に記述すること
 - 依存関係があるタスクは直列化するのではなく、依存情報をプロンプトに含めること
 - エージェントはインタラクティブモードでtmuxペイン分割実行される
-- エージェントが質問する場合、監督エージェント（`/supervise`）が自動的に判断して回答する
-- すべてのエージェント起動後、必要に応じて `/supervise` スキルを実行して質問に対応すること
+- エージェントが質問する場合、`claude-tmux supervise` が質問を検知して回答を仲介する
+- すべてのエージェント起動後、`claude-tmux questions` で質問の有無を定期確認し、必要に応じて `claude-tmux supervise` を実行して対応すること
 
 ## claude-tmux リファレンス
 
@@ -46,7 +46,7 @@ user-invocable: true
 ### オーケストレーション（監督機能）
 
 1. エージェントが `/tmp/claude-agents/<name>/question` に質問を書き込む
-2. 監督が `/supervise` スキルまたは `claude-tmux supervise` で質問を分析・回答
+2. 監督が `claude-tmux supervise` で質問を分析・回答
 3. エージェントが `/tmp/claude-agents/<name>/answer` から回答を読み取り続行
 
 ### 自動コードレビュー

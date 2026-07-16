@@ -57,6 +57,14 @@ stow -vd packages -t ~ $(ls packages)
 2. `stow -d packages -t ~ -R <パッケージ名>` で反映する
 3. 新しいツールの場合は `packages/<ツール名>/` にパッケージを新規作成する
 
+## 例外: stow リンクが切れているファイル
+
+**`~/.claude/settings.json` は stow リンクではなく実ファイル**（Claude Code 自身が書き換えるためリンクが切れた）。リポジトリ側 `packages/claude/.claude/settings.json` を編集しても反映されない。
+
+- settings.json を変更するときは**必ず両方のファイルを編集する**
+- 両者の意図的な差分はプラグイン有効化フラグと `model` 指定のみ。それ以外が食い違っていたら同期漏れを疑う
+- `~/.claude/skills/` や hooks はディレクトリごと stow リンクなので、リポジトリ編集が即反映される（二重編集不要）
+
 ## ローカル環境固有の設定
 
 以下のファイルは `install` スクリプトで `touch` され、各環境で個別に編集する（リポジトリに含めない）。

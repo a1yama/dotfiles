@@ -1,0 +1,464 @@
+#!/usr/bin/env python3
+"""claude-diff - Claudeを閉じずにブラウザで差分を見て、行コメントでフィードバックを返す。
+
+サブコマンド:
+  serve   差分ビューアのローカルWebサーバを起動（フォアグラウンド）
+  watch   フィードバックファイルに新規コメントが入るまでブロックし、入ったら出力して終了
+  resolve 指定IDのコメントを resolved にする
+  status  pending / delivered / resolved の件数を表示
+  tmux    別tmuxペインに色付き git diff を定期更新表示（軽量ビューア）
+
+フィードバックはリポジトリを汚さないよう ~/.local/state/claude-diff/<repo-hash>/feedback.jsonl に保存する。
+"""
+import argparse
+import fcntl
+import hashlib
+import http.server
+import json
+import os
+import subprocess
+import sys
+import time
+import webbrowser
+from html import escape
+from pathlib import Path
+from urllib.parse import urlparse, parse_qs
+
+
+def run_git(args, cwd=None):
+    return subprocess.run(
+        ["git", *args], cwd=cwd, capture_output=True, text=True
+    )
+
+
+def repo_root(cwd=None):
+    r = run_git(["rev-parse", "--show-toplevel"], cwd=cwd)
+    if r.returncode != 0:
+        sys.exit("git リポジトリ内で実行してください")
+    return r.stdout.strip()
+
+
+def state_dir(root):
+    key = hashlib.sha1(root.encode()).hexdigest()[:12]
+    d = Path.home() / ".local/state/claude-diff" / key
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def feedback_path(root):
+    return state_dir(root) / "feedback.jsonl"
+
+
+def read_feedback(path):
+    if not path.exists():
+        return []
+    items = []
+    with open(path) as f:
+        for line in f:
+            line = line.strip()
+            if line:
+                try:
+                    items.append(json.loads(line))
+                except json.JSONDecodeError:
+                    pass
+    return items
+
+
+def write_feedback(path, items):
+    tmp = path.with_suffix(".tmp")
+    with open(tmp, "w") as f:
+        for it in items:
+            f.write(json.dumps(it, ensure_ascii=False) + "\n")
+    tmp.replace(path)
+
+
+class FileLock:
+    def __init__(self, path):
+        self.lockfile = Path(str(path) + ".lock")
+
+    def __enter__(self):
+        self.fh = open(self.lockfile, "w")
+        fcntl.flock(self.fh, fcntl.LOCK_EX)
+        return self
+
+    def __exit__(self, *a):
+        fcntl.flock(self.fh, fcntl.LOCK_UN)
+        self.fh.close()
+
+
+# ---- 差分の取得とパース --------------------------------------------------
+
+def base_ref(root):
+    """ブランチ全体差分のベースを推定する。"""
+    for cand in ["origin/main", "origin/master", "main", "master"]:
+        if run_git(["rev-parse", "--verify", "--quiet", cand], cwd=root).returncode == 0:
+            mb = run_git(["merge-base", "HEAD", cand], cwd=root)
+            if mb.returncode == 0 and mb.stdout.strip():
+                return mb.stdout.strip(), cand
+    return None, None
+
+
+def get_diff_text(root, rng):
+    """rng: 'uncommitted' | 'branch' | 任意の git diff 引数文字列。"""
+    if rng == "uncommitted":
+        out = run_git(["diff", "HEAD"], cwd=root).stdout
+        # 未追跡ファイルを新規追加として合成
+        untracked = run_git(
+            ["ls-files", "--others", "--exclude-standard"], cwd=root
+        ).stdout.split()
+        for fp in untracked:
+            d = run_git(["diff", "--no-index", "--", "/dev/null", fp], cwd=root)
+            out += d.stdout
+        return out
+    if rng == "branch":
+        mb, name = base_ref(root)
+        if not mb:
+            return run_git(["diff", "HEAD"], cwd=root).stdout
+        return run_git(["diff", f"{mb}", "HEAD"], cwd=root).stdout
+    # 任意指定（例: "abc123..def456" や "HEAD~3"）
+    return run_git(["diff", *rng.split()], cwd=root).stdout
+
+
+def parse_diff(text):
+    """unified diff を {path, hunks:[{header, lines:[{type, old, new, text}]}]} の配列に。"""
+    files = []
+    cur = None
+    old_no = new_no = 0
+    for line in text.splitlines():
+        if line.startswith("diff --git"):
+            cur = {"path": "", "hunks": []}
+            files.append(cur)
+        elif line.startswith("+++ "):
+            p = line[4:]
+            if p.startswith("b/"):
+                p = p[2:]
+            if cur is not None and p != "/dev/null":
+                cur["path"] = p
+        elif line.startswith("--- "):
+            if cur is not None and not cur["path"]:
+                p = line[4:]
+                if p.startswith("a/"):
+                    p = p[2:]
+                if p != "/dev/null":
+                    cur["path"] = p
+        elif line.startswith("@@"):
+            # @@ -old,cnt +new,cnt @@
+            try:
+                seg = line.split("@@")[1].strip()
+                old_part, new_part = seg.split(" ")
+                old_no = int(old_part[1:].split(",")[0])
+                new_no = int(new_part[1:].split(",")[0])
+            except (IndexError, ValueError):
+                old_no = new_no = 0
+            if cur is not None:
+                cur["hunks"].append({"header": line, "lines": []})
+        elif cur is not None and cur["hunks"]:
+            hunk = cur["hunks"][-1]
+            if line.startswith("+"):
+                hunk["lines"].append({"type": "add", "old": None, "new": new_no, "text": line[1:]})
+                new_no += 1
+            elif line.startswith("-"):
+                hunk["lines"].append({"type": "del", "old": old_no, "new": None, "text": line[1:]})
+                old_no += 1
+            elif line.startswith("\\"):
+                continue  # \ No newline at end of file
+            else:
+                hunk["lines"].append({"type": "ctx", "old": old_no, "new": new_no, "text": line[1:]})
+                old_no += 1
+                new_no += 1
+    return [f for f in files if f["path"]]
+
+
+# ---- HTMLレンダリング ----------------------------------------------------
+
+PAGE = """<!DOCTYPE html>
+<html lang="ja"><head><meta charset="utf-8">
+<title>claude-diff</title>
+<style>
+:root{--bg:#0d1117;--fg:#e6edf3;--mut:#7d8590;--add:#1a3326;--addl:#2ea04326;--del:#3d1f23;--dell:#f8514926;--bd:#30363d;--accent:#58a6ff}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace}
+header{position:sticky;top:0;background:#161b22;border-bottom:1px solid var(--bd);padding:8px 14px;display:flex;gap:10px;align-items:center;z-index:5}
+header h1{font-size:14px;margin:0;color:var(--accent)}
+select,button{background:#21262d;color:var(--fg);border:1px solid var(--bd);border-radius:6px;padding:4px 8px;font:inherit;cursor:pointer}
+button:hover{border-color:var(--accent)}
+.spacer{flex:1}.stat{color:var(--mut)}
+#diff{padding:14px}
+.file{border:1px solid var(--bd);border-radius:8px;margin-bottom:16px;overflow:hidden}
+.file>.fh{background:#161b22;padding:6px 12px;font-weight:600;border-bottom:1px solid var(--bd);position:sticky;top:41px}
+table{width:100%;border-collapse:collapse}
+td{padding:0 8px;white-space:pre-wrap;word-break:break-all;vertical-align:top}
+td.ln{width:1%;text-align:right;color:var(--mut);user-select:none;border-right:1px solid var(--bd);min-width:40px}
+tr.add td.code{background:var(--addl)}tr.del td.code{background:var(--dell)}
+tr.hh td{background:#161b22;color:var(--accent)}
+td.gut{width:24px;text-align:center;color:var(--mut);cursor:pointer;user-select:none;opacity:0}
+tr:hover td.gut{opacity:1}td.gut:hover{color:var(--accent)}
+.cbox{background:#161b22;border:1px solid var(--accent);border-radius:6px;margin:4px 8px;padding:8px}
+.cbox textarea{width:100%;background:#0d1117;color:var(--fg);border:1px solid var(--bd);border-radius:4px;font:inherit;padding:6px;min-height:48px;resize:vertical}
+.cbox .row{display:flex;gap:6px;margin-top:6px}
+.cmt{margin:4px 8px;padding:6px 10px;border-left:3px solid var(--accent);background:#161b22;border-radius:0 6px 6px 0}
+.cmt .meta{color:var(--mut);font-size:11px}
+.badge{font-size:10px;padding:1px 6px;border-radius:10px;margin-left:6px}
+.b-pending{background:#9e6a03;color:#fff}.b-delivered{background:#1f6feb;color:#fff}.b-resolved{background:#238636;color:#fff}
+.empty{color:var(--mut);padding:30px;text-align:center}
+</style></head>
+<body>
+<header>
+<h1>claude-diff</h1>
+<select id="range">
+<option value="uncommitted">未コミット差分 (git diff HEAD)</option>
+<option value="branch">ブランチ全体 (base..HEAD)</option>
+</select>
+<input id="custom" placeholder="任意: HEAD~3 / a..b" style="background:#21262d;color:var(--fg);border:1px solid var(--bd);border-radius:6px;padding:4px 8px;font:inherit;width:160px">
+<button onclick="load()">更新</button>
+<label class="stat"><input type="checkbox" id="auto" checked> 自動更新</label>
+<span class="spacer"></span>
+<span class="stat" id="stat"></span>
+</header>
+<div id="diff"></div>
+<script>
+let comments=[];
+function key(f,l,s){return f+'@'+l+'@'+s}
+async function load(){
+  let r=document.getElementById('custom').value.trim()||document.getElementById('range').value;
+  const res=await fetch('/api/diff?range='+encodeURIComponent(r));
+  const data=await res.json();
+  comments=data.comments;
+  render(data.files);
+  stat();
+}
+async function refreshComments(){
+  const res=await fetch('/api/comments');comments=await res.json();
+  document.querySelectorAll('[data-anchor]').forEach(el=>{el.innerHTML=cmtHtml(el.dataset.anchor)});
+  stat();
+}
+function stat(){
+  const c={pending:0,delivered:0,resolved:0};comments.forEach(x=>c[x.status]++);
+  document.getElementById('stat').textContent=`pending ${c.pending} / delivered ${c.delivered} / resolved ${c.resolved}`;
+}
+function cmtHtml(anchor){
+  return comments.filter(c=>key(c.file,c.line,c.side)===anchor).map(c=>
+    `<div class="cmt"><div class="meta">${c.ts}<span class="badge b-${c.status}">${c.status}</span></div>${esc(c.comment)}</div>`).join('');
+}
+function esc(s){return (s||'').replace(/[&<>]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[m]))}
+function render(files){
+  const root=document.getElementById('diff');root.innerHTML='';
+  if(!files.length){root.innerHTML='<div class="empty">差分はありません</div>';return}
+  for(const f of files){
+    const div=document.createElement('div');div.className='file';
+    let rows='';
+    for(const h of f.hunks){
+      rows+=`<tr class="hh"><td class="ln"></td><td class="ln"></td><td class="gut"></td><td class="code">${esc(h.header)}</td></tr>`;
+      for(const ln of h.lines){
+        const cls=ln.type==='add'?'add':ln.type==='del'?'del':'';
+        const lno=ln.new!=null?ln.new:(ln.old!=null?ln.old:'');
+        const side=ln.type==='del'?'old':'new';
+        const anc=key(f.path,lno,side);
+        rows+=`<tr class="${cls}"><td class="ln">${ln.old??''}</td><td class="ln">${ln.new??''}</td>`+
+          `<td class="gut" onclick="openBox('${f.path}',${lno||'null'},'${side}',this)">+</td>`+
+          `<td class="code">${esc(ln.text)}</td></tr>`+
+          `<tr><td colspan="2"></td><td></td><td><div data-anchor="${anc}">${cmtHtml(anc)}</div></td></tr>`;
+      }
+    }
+    div.innerHTML=`<div class="fh">${esc(f.path)}</div><table>${rows}</table>`;
+    root.appendChild(div);
+  }
+}
+function openBox(file,line,side,gut){
+  const tr=gut.closest('tr');
+  if(tr.nextSibling&&tr.nextSibling.querySelector&&tr.nextSibling.querySelector('.cbox'))return;
+  const box=document.createElement('tr');
+  box.innerHTML=`<td colspan="2"></td><td></td><td><div class="cbox">
+    <textarea placeholder="この行へのフィードバック…"></textarea>
+    <div class="row"><button>送信</button><button class="cancel">取消</button></div></div></td>`;
+  tr.after(box);
+  const ta=box.querySelector('textarea');ta.focus();
+  box.querySelector('button').onclick=async()=>{
+    const v=ta.value.trim();if(!v)return;
+    await fetch('/api/comment',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({file,line,side,comment:v})});
+    box.remove();refreshComments();
+  };
+  box.querySelector('.cancel').onclick=()=>box.remove();
+}
+setInterval(()=>{if(document.getElementById('auto').checked&&!document.querySelector('.cbox'))refreshComments()},3000);
+load();
+</script></body></html>
+"""
+
+
+class Handler(http.server.BaseHTTPRequestHandler):
+    root = None
+    fb = None
+
+    def log_message(self, *a):
+        pass
+
+    def _json(self, obj, code=200):
+        body = json.dumps(obj, ensure_ascii=False).encode()
+        self.send_response(code)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def do_GET(self):
+        u = urlparse(self.path)
+        if u.path == "/":
+            body = PAGE.encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+        elif u.path == "/api/diff":
+            rng = parse_qs(u.query).get("range", ["uncommitted"])[0]
+            files = parse_diff(get_diff_text(self.root, rng))
+            self._json({"files": files, "comments": read_feedback(self.fb)})
+        elif u.path == "/api/comments":
+            self._json(read_feedback(self.fb))
+        else:
+            self.send_error(404)
+
+    def do_POST(self):
+        if urlparse(self.path).path != "/api/comment":
+            return self.send_error(404)
+        ln = int(self.headers.get("Content-Length", 0))
+        data = json.loads(self.rfile.read(ln) or b"{}")
+        item = {
+            "id": hashlib.sha1(
+                f"{data.get('file')}{data.get('line')}{time.time()}".encode()
+            ).hexdigest()[:8],
+            "ts": time.strftime("%Y-%m-%d %H:%M"),
+            "file": data.get("file", ""),
+            "line": data.get("line"),
+            "side": data.get("side", "new"),
+            "comment": data.get("comment", ""),
+            "status": "pending",
+        }
+        with FileLock(self.fb):
+            items = read_feedback(self.fb)
+            items.append(item)
+            write_feedback(self.fb, items)
+        self._json({"ok": True, "id": item["id"]})
+
+
+def cmd_serve(args):
+    root = repo_root()
+    Handler.root = root
+    Handler.fb = feedback_path(root)
+    httpd = http.server.ThreadingHTTPServer(("127.0.0.1", args.port), Handler)
+    url = f"http://127.0.0.1:{args.port}/"
+    print(f"claude-diff serving {root}\n  {url}\n  feedback: {Handler.fb}")
+    if not args.no_open:
+        webbrowser.open(url)
+    try:
+        httpd.serve_forever()
+    except KeyboardInterrupt:
+        pass
+
+
+def cmd_watch(args):
+    root = repo_root()
+    fb = feedback_path(root)
+    deadline = time.time() + args.timeout
+    while time.time() < deadline:
+        with FileLock(fb):
+            items = read_feedback(fb)
+            pending = [x for x in items if x["status"] == "pending"]
+            if pending:
+                for x in items:
+                    if x["status"] == "pending":
+                        x["status"] = "delivered"
+                write_feedback(fb, items)
+        if pending:
+            print(f"=== 新しいフィードバック {len(pending)}件 ===")
+            for x in pending:
+                loc = f"{x['file']}:{x['line']}" if x["line"] else x["file"]
+                print(f"[{x['id']}] {loc}\n  {x['comment']}")
+            print("\n対応したら `claude-diff resolve <id>` で resolved にしてください。")
+            return
+        time.sleep(args.interval)
+    print("TIMEOUT: フィードバックはありませんでした")
+
+
+def cmd_resolve(args):
+    root = repo_root()
+    fb = feedback_path(root)
+    with FileLock(fb):
+        items = read_feedback(fb)
+        ids = set(args.ids)
+        n = 0
+        for x in items:
+            if x["id"] in ids or "all" in ids:
+                x["status"] = "resolved"
+                n += 1
+        write_feedback(fb, items)
+    print(f"{n}件を resolved にしました")
+
+
+def cmd_status(args):
+    root = repo_root()
+    items = read_feedback(feedback_path(root))
+    c = {"pending": 0, "delivered": 0, "resolved": 0}
+    for x in items:
+        c[x["status"]] = c.get(x["status"], 0) + 1
+    print(f"pending {c['pending']} / delivered {c['delivered']} / resolved {c['resolved']}")
+    for x in items:
+        if x["status"] != "resolved":
+            loc = f"{x['file']}:{x['line']}" if x["line"] else x["file"]
+            print(f"  [{x['id']}] {x['status']:9} {loc}  {x['comment'][:60]}")
+
+
+def cmd_tmux(args):
+    """別ペインに色付き git diff を定期更新で表示（軽量ビューア=B案）。"""
+    root = repo_root()
+    pager = "delta --paging=never" if subprocess.run(
+        ["which", "delta"], capture_output=True
+    ).returncode == 0 else "less -R"
+    rng = args.range if args.range != "uncommitted" else "HEAD"
+    inner = (
+        f"cd {root}; while true; do clear; "
+        f"git -c color.ui=always diff {rng} | {pager}; "
+        f"echo '--- {args.interval}s毎に更新 (Ctrl-C で終了) ---'; sleep {args.interval}; done"
+    )
+    if subprocess.run(["which", "tmux"], capture_output=True).returncode != 0:
+        sys.exit("tmux が見つかりません")
+    if os.environ.get("TMUX"):
+        subprocess.run(["tmux", "split-window", "-h", inner])
+    else:
+        subprocess.run(["tmux", "new-session", "-d", "-s", "claude-diff", inner])
+        print("tmux セッション 'claude-diff' を作成しました: tmux attach -t claude-diff")
+
+
+def main():
+    p = argparse.ArgumentParser(description="claude-diff")
+    sub = p.add_subparsers(dest="cmd", required=True)
+
+    s = sub.add_parser("serve")
+    s.add_argument("--port", type=int, default=4517)
+    s.add_argument("--no-open", action="store_true")
+    s.set_defaults(func=cmd_serve)
+
+    w = sub.add_parser("watch")
+    w.add_argument("--timeout", type=int, default=1800)
+    w.add_argument("--interval", type=int, default=2)
+    w.set_defaults(func=cmd_watch)
+
+    r = sub.add_parser("resolve")
+    r.add_argument("ids", nargs="+")
+    r.set_defaults(func=cmd_resolve)
+
+    st = sub.add_parser("status")
+    st.set_defaults(func=cmd_status)
+
+    t = sub.add_parser("tmux")
+    t.add_argument("--range", default="uncommitted")
+    t.add_argument("--interval", type=int, default=3)
+    t.set_defaults(func=cmd_tmux)
+
+    args = p.parse_args()
+    args.func(args)
+
+
+if __name__ == "__main__":
+    main()
