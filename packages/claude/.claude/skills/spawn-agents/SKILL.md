@@ -12,6 +12,7 @@ user-invocable: true
 2. 各サブタスクについて `claude-tmux spawn "タスクの説明" --name <適切な名前>` コマンドをBashツールで実行し、別エージェントを起動する
    - `--name` にはタスクを端的に表す英語のケバブケース名を付ける
    - 必要に応じて `--dir` で作業ディレクトリを指定する
+   - **サブタスク同士が同じファイルを触る可能性がある場合は必ず `--worktree` を付ける**(エージェントごとに専用 git worktree + `agent/<name>` ブランチで作業させ、衝突を防ぐ)。読み取り専用・完全に独立したファイルのみを触るタスクだけ従来モードでよい
 3. すべてのエージェントを起動した後、`claude-tmux status` で起動結果を確認し報告する
 
 ## 注意事項
@@ -28,8 +29,8 @@ user-invocable: true
 
 | コマンド | 説明 |
 |---|---|
-| `claude-tmux spawn "タスク説明" [--name NAME] [--dir DIR] [--no-review]` | 新しいtmuxペインでエージェントを起動 |
-| `claude-tmux issues 42 43 44` | 複数のGitHub Issueを並列エージェントで処理 |
+| `claude-tmux spawn "タスク説明" [--name NAME] [--dir DIR] [--no-review] [--worktree]` | 新しいtmuxペインでエージェントを起動 |
+| `claude-tmux issues [--worktree] 42 43 44` | 複数のGitHub Issueを並列エージェントで処理 |
 | `claude-tmux status` | 実行中のエージェント一覧とペイン生存確認 |
 | `claude-tmux questions` | 質問待ちのエージェント一覧を表示 |
 | `claude-tmux answer <name> <回答>` | 質問に回答 |
@@ -53,6 +54,13 @@ user-invocable: true
 
 - タスク完了後、エージェント自身がgit diffでコードレビューを実施
 - `--no-review` でスキップ可能
+
+### worktree モード(`--worktree`)
+
+- エージェントごとに `<repo>/.worktrees/agent-<name>/` に専用 worktree(ブランチ `agent/<name>`)を作成して作業させる
+- エージェントは完了時に変更をコミットする(push・マージはしない)
+- 完了後のフロー: `git wt list` で確認 → 人間がレビュー・マージ → `git wt rm`(マージ済みは `git wt clean` で一括削除)
+- `kill` / `clean` では worktree は削除されない(マージ判断は人間が行う)
 
 ## ユーザーの指示
 
