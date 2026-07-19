@@ -10,8 +10,8 @@ usage() {
 claude-tmux - tmux × Claude Code 並列エージェント管理（オーケストレーション対応）
 
 Usage:
-  claude-tmux spawn "タスク説明"  [--name NAME] [--dir DIR] [--no-review]
-  claude-tmux issues 42 43 44
+  claude-tmux spawn "タスク説明"  [--name NAME] [--dir DIR] [--no-review] [--worktree]
+  claude-tmux issues [--worktree] 42 43 44
   claude-tmux status
   claude-tmux supervise
   claude-tmux questions
@@ -22,6 +22,7 @@ Usage:
 
 Subcommands:
   spawn      新しいtmuxウィンドウで監督+作業者ペインを起動（実装後に自動レビュー）
+             --worktree で専用 git worktree (agent/<name> ブランチ) を作成して作業
   issues     複数のGitHub Issueを並列エージェントで処理
   status     実行中のエージェント一覧とペイン生存確認
   supervise  監督モード：質問待ちエージェントを検出して対話的に回答（推奨）
@@ -68,6 +69,7 @@ cmd_spawn() {
   local dir=""
   local prompt=""
   local no_review="false"
+  local use_worktree="false"
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -81,6 +83,10 @@ cmd_spawn() {
         ;;
       --no-review)
         no_review="true"
+        shift
+        ;;
+      --worktree)
+        use_worktree="true"
         shift
         ;;
       *)
@@ -110,6 +116,34 @@ cmd_spawn() {
   # エージェントディレクトリ作成
   mkdir -p "$agent_dir"
 
+  # --worktree: 専用 worktree を作成し、作業ディレクトリを差し替える。
+  # 同一ファイルを触るタスクを並列実行しても衝突しないようにするため。
+  local worktree_note=""
+  if [[ "$use_worktree" == "true" ]]; then
+    local repo_root
+    repo_root=$(git -C "$work_dir" rev-parse --show-toplevel 2>/dev/null) || {
+      echo "Error: --worktree は git リポジトリ内でのみ使用できます" >&2
+      rm -rf "$agent_dir"
+      exit 1
+    }
+    local wt_branch="agent/${name}"
+    local wt_path
+    wt_path=$(cd "$work_dir" && git-wt add "$wt_branch") || {
+      echo "Error: worktree の作成に失敗しました (branch: ${wt_branch})" >&2
+      rm -rf "$agent_dir"
+      exit 1
+    }
+    work_dir="$wt_path"
+    echo "$wt_path" > "${agent_dir}/worktree-path"
+    echo "$repo_root" > "${agent_dir}/repo-root"
+    worktree_note="
+
+【worktree での作業】
+- あなたは専用の git worktree（ブランチ: ${wt_branch}）で作業しています
+- 実装が完了したら変更を必ずコミットしてください（コミット規約はリポジトリの CLAUDE.md に従う）
+- メインブランチへのマージは人間が行うため、push・マージ・ブランチ切替はしないでください"
+  fi
+
   # プロンプトファイル作成
   local prompt_file="${agent_dir}/prompt"
   printf '%s' "$prompt" > "$prompt_file"
@@ -124,7 +158,7 @@ cmd_spawn() {
 このタスクは自動実行モードで実行されています。以下のルールに従ってください：
 - ユーザーに質問せず、最善の判断で実装を進めてください
 - 技術選択が必要な場合は、一般的でメンテナンス性の高い選択を優先してください
-- セキュリティとシンプルさを重視してください
+- セキュリティとシンプルさを重視してください${worktree_note}
 
 【実装完了後のレビューループ】$(if [[ "${no_review}" == "true" ]]; then echo "
 ※ レビューはスキップしてください。実装完了後、/exit で終了してください。"; else echo "
@@ -158,13 +192,13 @@ echo "=== 作業者: \${name} ==="
 echo "Dir: \$(pwd)"
 echo "---"
 
-# プロンプトを読み込んで実行（完了後に自動終了）
-claude -p --allowedTools "Edit,Write,Read,Grep,Glob,Bash,WebSearch,WebFetch" "\$(cat "\${prompt_file}")"
+# プロンプトは stdin で渡す。--allowedTools は可変長オプションのため、
+# 後続の位置引数をプロンプトとして置くと飲み込まれてしまう
+claude -p --allowedTools "Edit,Write,Read,Grep,Glob,Bash,WebSearch,WebFetch" < "\${prompt_file}"
 
 echo "completed" > "\${agent_dir}/status"
 echo ""
 echo "=== 完了 ==="
-say "エージェント \${name} が完了しました"
 RUNNER
   chmod +x "$runner_script"
 
@@ -403,15 +437,31 @@ cmd_issues() {
   require_tmux
   ensure_agents_dir
 
-  if [[ $# -eq 0 ]]; then
+  local extra_args=()
+  local issue_nums=()
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --worktree|--no-review)
+        extra_args+=("$1")
+        shift
+        ;;
+      *)
+        issue_nums+=("$1")
+        shift
+        ;;
+    esac
+  done
+
+  if [[ ${#issue_nums[@]} -eq 0 ]]; then
     echo "Error: Issue番号を指定してください" >&2
-    echo "Usage: claude-tmux issues 42 43 44" >&2
+    echo "Usage: claude-tmux issues [--worktree] 42 43 44" >&2
     exit 1
   fi
 
-  for issue_num in "$@"; do
+  for issue_num in "${issue_nums[@]}"; do
     local prompt="GitHub Issue #${issue_num} を gh issue view ${issue_num} で確認し、内容に基づいてタスクを遂行してください。"
-    cmd_spawn "$prompt" --name "issue-${issue_num}"
+    # bash 3.2 の set -u では空配列展開がエラーになるためガード付きで展開する
+    cmd_spawn "$prompt" --name "issue-${issue_num}" ${extra_args[@]+"${extra_args[@]}"}
   done
 }
 
@@ -476,6 +526,10 @@ cmd_status() {
       echo "    ✓ 回答済み"
     fi
 
+    if [[ -f "${agent_dir}/worktree-path" ]]; then
+      echo "    Worktree: $(cat "${agent_dir}/worktree-path")"
+    fi
+
     echo "    Dir: ${agent_dir}"
     echo ""
   done
@@ -511,6 +565,7 @@ cmd_clean() {
 
     if [[ $should_clean -eq 1 ]]; then
       echo "クリーンアップ: ${name}"
+      notify_remaining_worktree "$agent_dir"
       rm -rf "$agent_dir"
       cleaned=$((cleaned + 1))
     fi
@@ -564,6 +619,7 @@ cmd_kill() {
 
       local name=$(basename "$agent_dir")
       kill_agent_window "$agent_dir" "$name"
+      notify_remaining_worktree "$agent_dir"
       rm -rf "$agent_dir"
     done
   else
@@ -575,8 +631,18 @@ cmd_kill() {
     fi
 
     kill_agent_window "$agent_dir" "$target"
+    notify_remaining_worktree "$agent_dir"
     rm -rf "$agent_dir"
     echo "削除: ${agent_dir}"
+  fi
+}
+
+# worktree はマージ判断を人間が行うため自動削除せず、後始末の方法を案内する
+notify_remaining_worktree() {
+  local agent_dir="$1"
+  if [[ -f "${agent_dir}/worktree-path" ]]; then
+    echo "  worktree は残っています: $(cat "${agent_dir}/worktree-path")"
+    echo "  マージ後に 'git wt rm' または 'git wt clean' で削除してください"
   fi
 }
 

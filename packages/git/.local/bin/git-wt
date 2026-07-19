@@ -1,0 +1,213 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# git worktree ヘルパー。worktree はリポジトリ内 .worktrees/ に集約する。
+# .worktreeinclude に列挙された gitignore 対象ファイル(.env 等)は
+# 新規 worktree にチェックアウトされないため、メイン側からコピーする。
+
+WORKTREES_DIRNAME=".worktrees"
+
+usage() {
+  cat <<'EOF'
+git-wt - git worktree ヘルパー(リポジトリ内 .worktrees/ 配置)
+
+Usage:
+  git wt add <branch> [base]   worktree を作成(ブランチ未存在なら base から新規作成)
+  git wt list                  worktree 一覧
+  git wt rm [branch] [--branch]  worktree を削除(--branch でブランチも削除)
+  git wt clean                 マージ済みブランチの worktree を一括削除
+
+Note:
+  - worktree は <repo>/.worktrees/<branch> に作成される(/ は - に変換)
+  - リポジトリルートに .worktreeinclude があれば、記載パターンに一致する
+    未追跡ファイルをメイン worktree からコピーする
+EOF
+}
+
+repo_root() {
+  local root
+  root=$(git rev-parse --show-toplevel 2>/dev/null) || {
+    echo "Error: git リポジトリ内で実行してください" >&2
+    exit 1
+  }
+  # worktree 内から実行された場合はメインリポジトリのルートに解決する
+  local common_dir
+  common_dir=$(git rev-parse --git-common-dir)
+  common_dir=$(cd "$common_dir" && pwd)
+  if [[ "$common_dir" != "$root/.git" ]]; then
+    root=$(dirname "$common_dir")
+  fi
+  echo "$root"
+}
+
+sanitize_branch() {
+  echo "${1//\//-}"
+}
+
+# .worktreeinclude のパターンに一致する未追跡ファイルをコピーする
+copy_worktreeinclude() {
+  local root="$1"
+  local dest="$2"
+  local include_file="${root}/.worktreeinclude"
+
+  [[ -f "$include_file" ]] || return 0
+
+  local pattern
+  while IFS= read -r pattern; do
+    # 空行とコメントをスキップ
+    [[ -z "$pattern" || "$pattern" == \#* ]] && continue
+    # 追跡済みファイルは worktree に存在するためコピー対象は未追跡のみ
+    local file
+    while IFS= read -r file; do
+      [[ -n "$file" ]] || continue
+      local src="${root}/${file}"
+      [[ -f "$src" || -d "$src" ]] || continue
+      if git -C "$root" ls-files --error-unmatch "$file" >/dev/null 2>&1; then
+        continue
+      fi
+      mkdir -p "${dest}/$(dirname "$file")"
+      cp -R "$src" "${dest}/${file}"
+      echo "  copied: ${file}" >&2
+    done < <(cd "$root" && compgen -G "$pattern" || true)
+  done < "$include_file"
+}
+
+cmd_add() {
+  if [[ $# -lt 1 ]]; then
+    echo "Error: ブランチ名を指定してください" >&2
+    echo "Usage: git wt add <branch> [base]" >&2
+    exit 1
+  fi
+
+  local branch="$1"
+  local base="${2:-HEAD}"
+  local root
+  root=$(repo_root)
+  local dir_name
+  dir_name=$(sanitize_branch "$branch")
+  local wt_path="${root}/${WORKTREES_DIRNAME}/${dir_name}"
+
+  if [[ -e "$wt_path" ]]; then
+    echo "Error: ${wt_path} は既に存在します" >&2
+    exit 1
+  fi
+
+  mkdir -p "${root}/${WORKTREES_DIRNAME}"
+
+  if git -C "$root" show-ref --verify --quiet "refs/heads/${branch}"; then
+    git -C "$root" worktree add "$wt_path" "$branch" >&2
+  else
+    git -C "$root" worktree add -b "$branch" "$wt_path" "$base" >&2
+  fi
+
+  copy_worktreeinclude "$root" "$wt_path"
+
+  # 呼び出し元(claude-tmux 等)がパスを受け取れるよう stdout はパスのみ
+  echo "$wt_path"
+}
+
+cmd_list() {
+  git worktree list
+}
+
+select_worktree() {
+  local root="$1"
+  local candidates
+  candidates=$(git -C "$root" worktree list --porcelain \
+    | awk -v prefix="${root}/${WORKTREES_DIRNAME}/" '/^worktree / { path = substr($0, 10); if (index(path, prefix) == 1) print path }')
+  if [[ -z "$candidates" ]]; then
+    echo "Error: ${WORKTREES_DIRNAME}/ 配下に worktree がありません" >&2
+    exit 1
+  fi
+  if command -v fzf >/dev/null 2>&1; then
+    echo "$candidates" | fzf --prompt="remove worktree> "
+  else
+    echo "$candidates" | head -1
+  fi
+}
+
+cmd_rm() {
+  local target=""
+  local remove_branch="false"
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --branch) remove_branch="true"; shift ;;
+      *) target="$1"; shift ;;
+    esac
+  done
+
+  local root
+  root=$(repo_root)
+  local wt_path
+
+  if [[ -n "$target" ]]; then
+    wt_path="${root}/${WORKTREES_DIRNAME}/$(sanitize_branch "$target")"
+    if [[ ! -d "$wt_path" ]]; then
+      echo "Error: ${wt_path} が見つかりません" >&2
+      exit 1
+    fi
+  else
+    wt_path=$(select_worktree "$root")
+    [[ -n "$wt_path" ]] || exit 1
+  fi
+
+  local branch
+  branch=$(git -C "$wt_path" branch --show-current)
+
+  git -C "$root" worktree remove "$wt_path" || {
+    echo "未コミットの変更があります。強制削除する場合:" >&2
+    echo "  git worktree remove --force \"$wt_path\"" >&2
+    exit 1
+  }
+  echo "removed: ${wt_path}"
+
+  if [[ "$remove_branch" == "true" && -n "$branch" ]]; then
+    git -C "$root" branch -d "$branch" \
+      || echo "ブランチ ${branch} は未マージのため残しました(-D で強制削除可)" >&2
+  fi
+}
+
+cmd_clean() {
+  local root
+  root=$(repo_root)
+  local main_branch
+  main_branch=$(git -C "$root" symbolic-ref --short HEAD 2>/dev/null || echo "")
+  local removed=0
+
+  local wt_path
+  while IFS= read -r wt_path; do
+    [[ -n "$wt_path" ]] || continue
+    local branch
+    branch=$(git -C "$wt_path" branch --show-current)
+    [[ -n "$branch" ]] || continue
+    # メインブランチにマージ済みの worktree のみ削除対象
+    if git -C "$root" merge-base --is-ancestor "$branch" "$main_branch" 2>/dev/null; then
+      if git -C "$root" worktree remove "$wt_path" 2>/dev/null; then
+        git -C "$root" branch -d "$branch" >/dev/null 2>&1 || true
+        echo "cleaned: ${wt_path} (branch: ${branch})"
+        removed=$((removed + 1))
+      else
+        echo "skip(未コミット変更あり): ${wt_path}" >&2
+      fi
+    fi
+  done < <(git -C "$root" worktree list --porcelain \
+    | awk -v prefix="${root}/${WORKTREES_DIRNAME}/" '/^worktree / { path = substr($0, 10); if (index(path, prefix) == 1) print path }')
+
+  if [[ $removed -eq 0 ]]; then
+    echo "削除対象の worktree はありません"
+  fi
+}
+
+case "${1:-}" in
+  add) shift; cmd_add "$@" ;;
+  list) cmd_list ;;
+  rm) shift; cmd_rm "$@" ;;
+  clean) cmd_clean ;;
+  -h|--help|"") usage ;;
+  *)
+    echo "Error: 不明なサブコマンド '$1'" >&2
+    usage
+    exit 1
+    ;;
+esac
