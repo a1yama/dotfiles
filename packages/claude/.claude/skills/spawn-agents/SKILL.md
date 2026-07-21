@@ -59,6 +59,7 @@ user-invocable: true
 
 - エージェントごとに `<repo>/.worktrees/agent-<name>/` に専用 worktree(ブランチ `agent/<name>`)を作成して作業させる
 - エージェントは完了時に変更をコミットする(push・マージはしない)
+- 完了後、監督ペインが独立レビュアー(headless claude)で差分を外部レビューし、指摘があれば修正エージェントを自動再投入する(最大2周、`--no-review` で無効)。最終レビューは `/tmp/claude-agents/<name>/external-review` に保存される
 - 完了後のフロー: `git wt list` で確認 → 人間がレビュー・マージ → `git wt rm`(マージ済みは `git wt clean` で一括削除)
 - `kill` / `clean` では worktree は削除されない(マージ判断は人間が行う)
 

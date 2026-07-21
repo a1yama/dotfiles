@@ -1,7 +1,9 @@
 #!/bin/bash
-# Stop フック: ソースコード変更があるのに「テスト実行」「code-review スキル実行」の痕跡がない場合、
-# 一度だけ停止を差し戻して対応(または未実施理由の明示)を促す。
-# CLAUDE.md「テストなしで動きますと言わない」と code-review の起動導線を機構化する品質ゲート。
+# Stop フック: ソースコード変更がある場合の品質ゲート。
+# テストはランナーを検出できたリポジトリで実際に実行し、失敗なら失敗ログ付きで停止を差し戻す
+# (グリーンになるまで終われないループ)。同じ作業ツリー状態での成功はキャッシュして再実行しない。
+# code-review はスキル実行の痕跡がなければ差し戻す。
+# CLAUDE.md「テストなしで動きますと言わない」と code-review の起動導線を機構化する。
 set -u
 
 input=$(cat)
@@ -29,23 +31,45 @@ has_evidence() {
 
 issues=""
 
-# テスト: ランナーを検出できたリポジトリでのみ要求する(ノイズ防止)
-if ! has_evidence '(go test|npm (run )?test|yarn test|pnpm test|pytest|vitest|jest|cargo test|phpunit|make test|bundle exec rspec|rspec )'; then
-  root=$(git rev-parse --show-toplevel 2>/dev/null)
-  suggest=""
-  if [ -f "$root/go.mod" ]; then
-    suggest="go test ./..."
-  elif [ -f "$root/package.json" ] && jq -e '.scripts.test // empty' "$root/package.json" >/dev/null 2>&1; then
-    suggest="npm test"
-  elif [ -f "$root/pytest.ini" ] || { [ -f "$root/pyproject.toml" ] && grep -q '\[tool\.pytest' "$root/pyproject.toml"; }; then
-    suggest="pytest"
-  elif [ -f "$root/Cargo.toml" ]; then
-    suggest="cargo test"
-  elif [ -f "$root/Makefile" ] && grep -qE '^test:' "$root/Makefile"; then
-    suggest="make test"
-  fi
-  if [ -n "$suggest" ]; then
-    issues="- テスト実行の痕跡がありません。\`$suggest\` などで実行して結果を報告するか、実行しない理由を明示してください。"
+# テスト: ランナーを検出できたリポジトリでは実際に実行し、結果で判定する(痕跡ではなく実測)
+root=$(git rev-parse --show-toplevel 2>/dev/null)
+suggest=""
+if [ -f "$root/go.mod" ]; then
+  suggest="go test ./..."
+elif [ -f "$root/package.json" ] && jq -e '.scripts.test // empty' "$root/package.json" >/dev/null 2>&1; then
+  suggest="npm test"
+elif [ -f "$root/pytest.ini" ] || { [ -f "$root/pyproject.toml" ] && grep -q '\[tool\.pytest' "$root/pyproject.toml"; }; then
+  suggest="pytest"
+elif [ -f "$root/Cargo.toml" ]; then
+  suggest="cargo test"
+elif [ -f "$root/Makefile" ] && grep -qE '^test:' "$root/Makefile"; then
+  suggest="make test"
+fi
+
+if [ -n "$suggest" ]; then
+  cache_dir="${QG_CACHE_DIR:-$HOME/.cache/claude-quality-gate}"
+  timeout_s="${QG_TEST_TIMEOUT:-120}"
+  # 作業ツリーの状態ハッシュ。同じ状態でテスト成功済みなら再実行せず、停止のたびの待ち時間を防ぐ
+  state=$({ git diff HEAD 2>/dev/null
+            git ls-files --others --exclude-standard -z 2>/dev/null | xargs -0 shasum 2>/dev/null
+          } | shasum | awk '{print $1}')
+  cache_file="$cache_dir/$(printf '%s' "$root" | shasum | awk '{print $1}')"
+  if [ ! -f "$cache_file" ] || [ "$(cat "$cache_file")" != "$state" ]; then
+    # macOS に timeout(1) がないため perl の alarm でタイムアウトを実装(SIGALRM 終了 = 142)
+    test_out=$(cd "$root" && perl -e 'alarm shift; exec @ARGV' "$timeout_s" sh -c "$suggest" 2>&1)
+    rc=$?
+    if [ "$rc" -eq 0 ]; then
+      mkdir -p "$cache_dir"
+      printf '%s' "$state" > "$cache_file"
+    elif [ "$rc" -eq 142 ]; then
+      # タイムアウト時は実測を諦め、従来どおり痕跡ベースで判定する
+      if ! has_evidence '(go test|npm (run )?test|yarn test|pnpm test|pytest|vitest|jest|cargo test|phpunit|make test|bundle exec rspec|rspec )'; then
+        issues="- テスト(\`$suggest\`)が ${timeout_s}s でタイムアウトしました。手動で実行して結果を報告するか、実行しない理由を明示してください。"
+      fi
+    else
+      issues="- テスト失敗(\`$suggest\`)。修正してください:
+$(printf '%s' "$test_out" | head -c 4000 | head -n 40)"
+    fi
   fi
 fi
 
