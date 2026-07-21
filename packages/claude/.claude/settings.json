@@ -137,7 +137,18 @@
         "hooks": [
           {
             "type": "command",
-            "command": "~/dotfiles/packages/claude/.claude/hooks/stop-dispatch.sh"
+            "command": "~/dotfiles/packages/claude/.claude/hooks/stop-dispatch.sh",
+            "timeout": 180
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/dotfiles/packages/claude/.claude/hooks/settings-drift-check.sh"
           }
         ]
       }

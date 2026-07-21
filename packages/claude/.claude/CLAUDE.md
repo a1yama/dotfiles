@@ -4,6 +4,7 @@ Research the codebase before editing. Never change code you haven't read.
 ## Conversation Guidelines
 
 - 指示が曖昧だったり疑問があった場合にはそのまま作業に入らず質問をしてください。
+- 明確な2〜4択をユーザーに問うときは、文章で聞かず `AskUserQuestion` ツールを使う(自由入力が要る場合は文章で聞く)。
 - 必要に応じてチームで対応してください。
 
 ## Coding Policy

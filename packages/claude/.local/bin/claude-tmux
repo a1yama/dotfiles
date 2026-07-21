@@ -22,7 +22,9 @@ Usage:
 
 Subcommands:
   spawn      新しいtmuxウィンドウで監督+作業者ペインを起動（実装後に自動レビュー）
-             --worktree で専用 git worktree (agent/<name> ブランチ) を作成して作業
+             --worktree で専用 git worktree (agent/<name> ブランチ) を作成して作業。
+             worktree モードでは完了後に監督が独立レビュアーで差分を検証し、
+             指摘があれば修正エージェントを自動再投入する（最大2周、--no-review で無効）
   issues     複数のGitHub Issueを並列エージェントで処理
   status     実行中のエージェント一覧とペイン生存確認
   supervise  監督モード：質問待ちエージェントを検出して対話的に回答（推奨）
@@ -136,6 +138,8 @@ cmd_spawn() {
     work_dir="$wt_path"
     echo "$wt_path" > "${agent_dir}/worktree-path"
     echo "$repo_root" > "${agent_dir}/repo-root"
+    # 外部レビューの差分基点。worktree 作成直後の HEAD = ブランチの開始点
+    git -C "$wt_path" rev-parse HEAD > "${agent_dir}/base-commit"
     worktree_note="
 
 【worktree での作業】
@@ -283,6 +287,79 @@ while true; do
 
   sleep 3
 done
+
+# 外部レビューループ: worktree モードでは作業者とは別の独立レビュアーで差分を検証し、
+# 指摘があれば修正エージェントを再投入する(作業者の自己レビューとは別の独立した目)
+if [[ "${use_worktree}" == "true" && "${no_review}" != "true" ]]; then
+  wt="${work_dir}"
+  base=\$(cat "\${agent_dir}/base-commit" 2>/dev/null || true)
+  round=1
+  max_rounds=2
+  while [[ -n "\${base}" && \${round} -le \${max_rounds} ]]; do
+    diff=\$(git -C "\${wt}" diff "\${base}" 2>/dev/null | head -c 50000)
+    untracked=\$(git -C "\${wt}" ls-files --others --exclude-standard 2>/dev/null)
+    if [[ -z "\${diff}" && -z "\${untracked}" ]]; then
+      echo "変更がないため外部レビューをスキップします"
+      break
+    fi
+    echo ""
+    echo "=== 外部レビュー (\${round}/\${max_rounds}) ==="
+    echo "reviewing" > "\${agent_dir}/status"
+    review_prompt="\${agent_dir}/review-prompt"
+    {
+      echo "あなたは独立したコードレビュアーです。以下の変更をレビューしてください。"
+      echo "- カレントディレクトリで Read/Grep/Glob を使って周辺コードを確認できます"
+      echo "- バグ・セキュリティ・リポジトリ規約(CLAUDE.md)違反など重大な問題のみ指摘してください。軽微なスタイル指摘は不要です"
+      echo "- 最終行に必ず「VERDICT: LGTM」(問題なし)または「VERDICT: FIX」(要修正)とだけ書いてください"
+      echo ""
+      if [[ -n "\${untracked}" ]]; then
+        echo "--- 未追跡ファイル(必要なら Read で確認) ---"
+        echo "\${untracked}"
+        echo ""
+      fi
+      echo "--- 変更差分 ---"
+      printf '%s\n' "\${diff}"
+    } > "\${review_prompt}"
+    review=\$(cd "\${wt}" && claude -p --allowedTools "Read,Grep,Glob" < "\${review_prompt}" 2>&1) || {
+      echo "警告: 外部レビューの実行に失敗しました。人間が確認してください" >&2
+      break
+    }
+    printf '%s' "\${review}" > "\${agent_dir}/external-review"
+    echo "\${review}"
+    verdict=\$(printf '%s' "\${review}" | grep -Eo 'VERDICT: ?(LGTM|FIX)' | tail -1)
+    case "\${verdict}" in
+      *LGTM)
+        echo "✅ 外部レビュー: LGTM"
+        break
+        ;;
+      *FIX)
+        if [[ \${round} -ge \${max_rounds} ]]; then
+          echo "⚠️ レビュー上限(\${max_rounds}周)に達しました。残りの指摘は人間が確認してください: \${agent_dir}/external-review"
+          break
+        fi
+        echo "🔧 指摘があるため修正エージェントを再投入します"
+        echo "fixing" > "\${agent_dir}/status"
+        fix_prompt="\${agent_dir}/fix-prompt"
+        {
+          echo "外部コードレビューで以下の指摘がありました。修正し、変更をコミットしてください(コミット規約はリポジトリの CLAUDE.md に従う)。"
+          echo "ユーザーへの質問はできません。最善の判断で対応してください。push・マージ・ブランチ切替はしないでください。"
+          echo ""
+          printf '%s\n' "\${review}"
+        } > "\${fix_prompt}"
+        (cd "\${wt}" && claude -p --allowedTools "Edit,Write,Read,Grep,Glob,Bash,WebSearch,WebFetch" < "\${fix_prompt}") || {
+          echo "警告: 修正エージェントの実行に失敗しました" >&2
+          break
+        }
+        round=\$((round + 1))
+        ;;
+      *)
+        echo "⚠️ レビュー結果から VERDICT を判定できませんでした。人間が確認してください"
+        break
+        ;;
+    esac
+  done
+  echo "completed" > "\${agent_dir}/status"
+fi
 
 echo ""
 say "エージェント \${name} が終了しました"
@@ -497,7 +574,10 @@ cmd_status() {
         echo "    作業者: ${worker_pane} (alive)"
       else
         echo "    作業者: ${worker_pane} (dead)"
-        echo "completed" > "$status_file"
+        # 外部レビュー中(reviewing/fixing)は監督が状態を管理しているため上書きしない
+        if [[ "$(cat "$status_file" 2>/dev/null)" == "running" ]]; then
+          echo "completed" > "$status_file"
+        fi
       fi
     else
       echo "    作業者: unknown"
