@@ -39,7 +39,12 @@ if [ -f "$root/go.mod" ]; then
 elif [ -f "$root/package.json" ] && jq -e '.scripts.test // empty' "$root/package.json" >/dev/null 2>&1; then
   suggest="npm test"
 elif [ -f "$root/pytest.ini" ] || { [ -f "$root/pyproject.toml" ] && grep -q '\[tool\.pytest' "$root/pyproject.toml"; }; then
-  suggest="pytest"
+  # uv 管理のリポジトリは素の pytest だと依存が無い別 Python で走ってしまうため uv 経由で実行する
+  if [ -f "$root/uv.lock" ]; then
+    suggest="uv run python -m pytest"
+  else
+    suggest="pytest"
+  fi
 elif [ -f "$root/Cargo.toml" ]; then
   suggest="cargo test"
 elif [ -f "$root/Makefile" ] && grep -qE '^test:' "$root/Makefile"; then

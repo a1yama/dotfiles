@@ -65,6 +65,15 @@ stow -vd packages -t ~ $(ls packages)
 - 両者の意図的な差分はプラグイン有効化フラグと `model` 指定のみ。それ以外が食い違っていたら同期漏れを疑う
 - `~/.claude/skills/` や hooks はディレクトリごと stow リンクなので、リポジトリ編集が即反映される（二重編集不要）
 
+## 例外: 意図的に stow 管理しないファイル
+
+**`~/.codex/config.toml` は実ファイル**。Codex はシンボリックリンクを保ったまま書き込むのでリンク自体は可能だが、`[projects."<絶対パス>"] trust_level` を信頼確認のたびに自動追記するため、リンクすると業務プロジェクトのパスが公開リポジトリに載る。
+
+- リポジトリ側は `packages/codex/.codex/config.example.toml`（テンプレート）のみ
+- テンプレートは `packages/codex/.stow-local-ignore` でリンク対象から除外している
+- 新環境では `cp packages/codex/.codex/config.example.toml ~/.codex/config.toml && chmod 600 ~/.codex/config.toml`
+- `~/.codex/AGENTS.md` は stow リンク（リポジトリ編集が即反映）
+
 ## ローカル環境固有の設定
 
 以下のファイルは `install` スクリプトで `touch` され、各環境で個別に編集する（リポジトリに含めない）。
