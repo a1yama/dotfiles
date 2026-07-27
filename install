@@ -54,6 +54,16 @@ ensure_dir ~/.codex
 stow -vd "$STOW_PACKAGES_PATH" -t "$HOME" $(ls "$STOW_PACKAGES_PATH")
 
 ###########################################################
+# Setup Codex config
+###########################################################
+# Codex が [projects] を自動追記するため stow リンクにはせず、テンプレートを複製する
+if [ ! -f "$HOME"/.codex/config.toml ]; then
+    log 'Copy Codex config from template'
+    cp "$STOW_PACKAGES_PATH"/codex/.codex/config.example.toml "$HOME"/.codex/config.toml
+    chmod 600 "$HOME"/.codex/config.toml
+fi
+
+###########################################################
 # Install yazi plugins
 ###########################################################
 log 'Install yazi plugins'

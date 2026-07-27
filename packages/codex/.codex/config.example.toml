@@ -1,0 +1,53 @@
+# ~/.codex/config.toml のテンプレート。
+#
+# stow でリンクしない(.stow-local-ignore で除外)。Codex が
+# [projects."<絶対パス>"] trust_level を自動追記するため、リンクすると
+# 業務プロジェクトのパスが公開リポジトリに載ってしまう。
+# 新環境ではこのファイルを ~/.codex/config.toml へコピーして使う。
+#
+#   cp packages/codex/.codex/config.example.toml ~/.codex/config.toml
+#   chmod 600 ~/.codex/config.toml
+#
+# 設定リファレンス: https://learn.chatgpt.com/docs/config-file/config-reference
+
+# model は固定しない。廃止されたモデル ID を指定すると API が 400 を返して動かなくなるため、
+# Codex の既定(最新推奨モデル)に追従させる。固定したい場合は `codex debug models` で確認する
+model_reasoning_effort = "medium"
+approval_policy = "on-request"
+default_permissions = "workspace-safe"
+
+# :workspace は home 配下を読み放題にするため、認証情報のパスを個別に deny する
+[permissions.workspace-safe]
+description = "Workspace writes with credential paths denied"
+extends = ":workspace"
+
+[permissions.workspace-safe.filesystem]
+"~/.ssh" = "deny"
+"~/.aws" = "deny"
+"~/.gnupg" = "deny"
+"~/.config/gh" = "deny"
+"~/.config/gcloud" = "deny"
+"~/.docker/config.json" = "deny"
+"~/.netrc" = "deny"
+"~/.npmrc" = "deny"
+"~/.codex/auth.json" = "deny"
+"~/.claude/.credentials.json" = "deny"
+"~/.zsh/local.zsh" = "deny"
+
+[permissions.workspace-safe.filesystem.":workspace_roots"]
+"**/.env" = "deny"
+"**/.env.local" = "deny"
+"**/*.env" = "deny"
+
+# 通信が必要な操作(npm install, git fetch 等)は都度承認で外に出す
+[permissions.workspace-safe.network]
+enabled = false
+
+[history]
+persistence = "save-all"
+max_bytes = 104857600
+
+# [projects."<path>"] は Codex が信頼確認のたびに自動追記する。
+# 環境固有なのでテンプレートには含めない。
+[projects."/Users/a1yama"]
+trust_level = "untrusted"
