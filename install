@@ -124,6 +124,17 @@ else
     log 'npm is not installed, skipping typescript-language-server'
 fi
 
+###########################################################
+# Install shared lint toolbox
+###########################################################
+# post-edit-check.sh が全リポジトリ共通で使う。対象リポジトリの node_modules に依存させない
+log 'Install shared lint toolbox'
+if command -v npm >/dev/null 2>&1; then
+    (cd "$STOW_PACKAGES_PATH"/claude/.claude/lint && npm ci)
+else
+    log 'npm is not installed, skipping lint toolbox'
+fi
+
 if command -v rbenv >/dev/null 2>&1; then
     eval "$(rbenv init - zsh)"
     gem install ruby-lsp

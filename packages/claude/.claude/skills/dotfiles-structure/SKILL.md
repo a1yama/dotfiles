@@ -62,6 +62,7 @@ stow -vd packages -t ~ $(ls packages)
 **`~/.claude/settings.json` は stow リンクではなく実ファイル**（Claude Code 自身が書き換えるためリンクが切れた）。リポジトリ側 `packages/claude/.claude/settings.json` を編集しても反映されない。
 
 - settings.json を変更するときは**必ず両方のファイルを編集する**
+- この実ファイルが衝突するため `stow -d packages -t ~ -R claude` は全体が abort する。claude パッケージに新しいディレクトリを追加したときは `ln -s ../dotfiles/packages/claude/.claude/<dir> ~/.claude/<dir>` で個別にリンクする（`ln` は zsh で `life-note` にエイリアスされているため `/bin/ln` を使う）
 - 両者の意図的な差分はプラグイン有効化フラグと `model` 指定のみ。それ以外が食い違っていたら同期漏れを疑う
 - `~/.claude/skills/` や hooks はディレクトリごと stow リンクなので、リポジトリ編集が即反映される（二重編集不要）
 

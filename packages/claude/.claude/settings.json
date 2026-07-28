@@ -79,6 +79,7 @@
       "Bash(git cherry-pick *)",
       "Bash(git diff *)",
       "Bash(claude-diff *)",
+      "Bash(codex exec review *)",
       "mcp__notionApi__API-post-search",
       "Bash(ssh a1yama-pj *)",
       "mcp__notionApi__API-post-database-query",
