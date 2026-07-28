@@ -110,6 +110,15 @@
             "command": "~/dotfiles/packages/claude/.claude/hooks/bash-tool-nudge.sh"
           }
         ]
+      },
+      {
+        "matcher": "AskUserQuestion",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/dotfiles/packages/claude/.claude/hooks/ask-user-question-guard.sh"
+          }
+        ]
       }
     ],
     "PostToolUse": [
