@@ -1,0 +1,34 @@
+version: "2"
+
+# 複雑度のみを見る共有設定。リポジトリ固有の .golangci.yml が無いときのフォールバックとして
+# post-edit-check.sh から使う。バグ検出系は go vet と code-review に任せ、ここでは
+# 「人間が読まなくても壊れない」ための上限だけを機械化する。
+linters:
+  default: none
+  enable:
+    - gocyclo
+    - gocognit
+    - funlen
+    - nestif
+    - dupl
+  settings:
+    gocyclo:
+      min-complexity: 20
+    gocognit:
+      min-complexity: 15
+    funlen:
+      lines: 60
+      statements: 40
+      ignore-comments: true
+    nestif:
+      min-complexity: 4
+    dupl:
+      threshold: 150
+  exclusions:
+    # テストは表形式で長くなりやすく、重複も意図的なので対象外にする
+    rules:
+      - path: _test\.go
+        linters:
+          - funlen
+          - dupl
+          - gocognit

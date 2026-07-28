@@ -1,0 +1,11 @@
+{
+  "name": "claude-lint-toolbox",
+  "version": "1.0.0",
+  "private": true,
+  "description": "post-edit-check.sh が全リポジトリ共通で使う複雑度リント環境。対象リポジトリの node_modules に依存しない",
+  "devDependencies": {
+    "@typescript-eslint/parser": "^8.0.0",
+    "eslint": "^10.0.0",
+    "typescript": "^5.0.0"
+  }
+}

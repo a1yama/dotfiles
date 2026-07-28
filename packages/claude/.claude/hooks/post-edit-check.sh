@@ -36,24 +36,101 @@ $(printf '%s' "$fmtout" | trunc)"
         add_error "go vet:
 $(printf '%s' "$out" | trunc)"
       fi
+
+      if command -v golangci-lint >/dev/null 2>&1; then
+        gomodroot=$(dirname "$gomod")
+        cfg=""
+        for c in .golangci.yml .golangci.yaml .golangci.toml .golangci.json; do
+          [ -f "$gomodroot/$c" ] && { cfg="$gomodroot/$c"; break; }
+        done
+        # リポジトリ固有設定が無ければ複雑度だけを見る共有設定にフォールバックする
+        [ -z "$cfg" ] && cfg="$HOME/.claude/lint/golangci-complexity.yml"
+        # 初回はビルドキャッシュ生成で長引くため打ち切る(SIGALRM 終了 = 142)
+        # 件数上限は無効化する。先に打ち切られると、後段の絞り込みで編集ファイルの指摘が
+        # 残らないことがある(出力量は trunc で抑える)
+        out=$(cd "$dir" && perl -e 'alarm shift; exec @ARGV' 30 \
+          golangci-lint run -c "$cfg" --path-mode abs \
+          --max-issues-per-linter 0 --max-same-issues 0 . 2>&1)
+        rc=$?
+        # golangci-lint はパッケージ単位で走るため、編集したファイル以外の既存債務は捨てる。
+        # 指摘行が1つも無い出力(設定エラー等)はそのまま見せる
+        if [ "$rc" -ne 0 ] && printf '%s' "$out" | grep -qE '^/.+\.go:[0-9]+:[0-9]+:'; then
+          absfile="$(cd "$dir" && pwd -P)/$(basename "$file")"
+          out=$(printf '%s' "$out" | grep -F "$absfile:")
+        fi
+        if [ "$rc" -ne 0 ] && [ "$rc" -ne 142 ] && [ -n "$out" ]; then
+          add_error "golangci-lint (複雑度の上限超過。関数を分割するか、分割しない理由を報告に明示してください):
+$(printf '%s' "$out" | trunc)"
+        fi
+      fi
     fi
     ;;
-  *.ts|*.tsx)
-    # 最寄りの tsconfig.json とその上方の node_modules/.bin/tsc が揃うときだけ型チェック
-    d="$dir" tsdir=""
+  *.ts|*.tsx|*.js|*.jsx|*.mjs|*.cjs)
+    case "$file" in
+      *.ts|*.tsx)
+        # 最寄りの tsconfig.json とその上方の node_modules/.bin/tsc が揃うときだけ型チェック
+        d="$dir" tsdir=""
+        while [ "$d" != "/" ] && [ "$d" != "$HOME" ]; do
+          [ -f "$d/tsconfig.json" ] && { tsdir="$d"; break; }
+          d=$(dirname "$d")
+        done
+        if [ -n "$tsdir" ]; then
+          d="$tsdir" tscbin=""
+          while [ "$d" != "/" ]; do
+            [ -x "$d/node_modules/.bin/tsc" ] && { tscbin="$d/node_modules/.bin/tsc"; break; }
+            d=$(dirname "$d")
+          done
+          if [ -n "$tscbin" ]; then
+            if ! out=$(cd "$tsdir" && "$tscbin" --noEmit 2>&1); then
+              add_error "tsc --noEmit ($tsdir):
+$(printf '%s' "$out" | trunc)"
+            fi
+          fi
+        fi
+        ;;
+    esac
+
+    # 複雑度の共有チェック。リポジトリ側の ESLint 設定・node_modules の有無に関わらず、
+    # ~/.claude/lint の専用環境で常に実行する(Go 側の共有 golangci 設定と対になる)
+    sharedbin="$HOME/.claude/lint/node_modules/.bin/eslint"
+    sharedcfg="$HOME/.claude/lint/eslint-complexity.mjs"
+    if [ -x "$sharedbin" ] && [ -f "$sharedcfg" ]; then
+      # 対象ファイルが cwd 配下にないと ESLint が「base path 外」として無視するため dir へ移る。
+      # --no-inline-config: 共有環境に無いプラグイン向けの eslint-disable コメントが
+      # 「Definition for rule was not found」の誤検知になるのを防ぐ
+      out=$(cd "$dir" && perl -e 'alarm shift; exec @ARGV' 20 \
+        "$sharedbin" --no-config-lookup --config "$sharedcfg" \
+        --no-inline-config --max-warnings 0 "$file" 2>&1)
+      rc=$?
+      if [ "$rc" -ne 0 ] && [ "$rc" -ne 142 ] && [ -n "$out" ]; then
+        add_error "eslint (複雑度: 共有設定。関数を分割するか、分割しない理由を報告に明示してください):
+$(printf '%s' "$out" | trunc)"
+      fi
+    fi
+
+    # 最寄りの ESLint 設定と、その上方の node_modules/.bin/eslint が揃うときだけ実行。
+    # 設定はリポジトリ側のものを使う(複雑度以外の repo 固有ルール担当)
+    d="$dir" esdir=""
     while [ "$d" != "/" ] && [ "$d" != "$HOME" ]; do
-      [ -f "$d/tsconfig.json" ] && { tsdir="$d"; break; }
+      for c in eslint.config.js eslint.config.mjs eslint.config.cjs eslint.config.ts .eslintrc.js .eslintrc.cjs .eslintrc.json .eslintrc.yml .eslintrc.yaml; do
+        [ -f "$d/$c" ] && { esdir="$d"; break 2; }
+      done
       d=$(dirname "$d")
     done
-    if [ -n "$tsdir" ]; then
-      d="$tsdir" tscbin=""
+    if [ -n "$esdir" ]; then
+      d="$esdir" esbin=""
       while [ "$d" != "/" ]; do
-        [ -x "$d/node_modules/.bin/tsc" ] && { tscbin="$d/node_modules/.bin/tsc"; break; }
+        [ -x "$d/node_modules/.bin/eslint" ] && { esbin="$d/node_modules/.bin/eslint"; break; }
         d=$(dirname "$d")
       done
-      if [ -n "$tscbin" ]; then
-        if ! out=$(cd "$tsdir" && "$tscbin" --noEmit 2>&1); then
-          add_error "tsc --noEmit ($tsdir):
+      if [ -n "$esbin" ]; then
+        # 複雑度ルールは warn から導入する運用のため、warn でも非ゼロ終了させて拾う
+        out=$(cd "$esdir" && perl -e 'alarm shift; exec @ARGV' 30 \
+          "$esbin" --max-warnings 0 "$file" 2>&1)
+        rc=$?
+        # 142 = SIGALRM(タイムアウト)。打ち切りを検出扱いしない
+        if [ "$rc" -ne 0 ] && [ "$rc" -ne 142 ] && [ -n "$out" ]; then
+          add_error "eslint:
 $(printf '%s' "$out" | trunc)"
         fi
       fi
