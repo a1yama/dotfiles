@@ -58,13 +58,42 @@ cd packages/claude/.claude/lint && npm update && npm audit
 
 認知的複雑度（`sonarjs/cognitive-complexity`）が要る場合は、この専用環境に `eslint-plugin-sonarjs` を足す。
 
-## 運用: drain してから ratchet
+## 運用: 既存債務は凍結し、新規分だけ止める
 
-既存コードに対していきなり `error` にすると、無視する習慣が育って層として機能しなくなる。
+このフックは**編集したファイルの指摘しか返さない**。Go はパッケージ単位で走るため他ファイルの指摘を出力から捨て、TS/JS は編集ファイル1件だけを ESLint に渡す。
 
-1. `warn` で導入し、現状の違反数を把握する
-2. 違反をゼロにする（drain）
-3. `error` に引き上げる（ratchet）
-4. CI に載せるのはこの段階から
+つまり既存の違反は普段は表示されず、そのファイルを触ったときだけ出る。既存債務を凍結して新規分だけ止めている状態なので、**導入時に既存違反をゼロにする作業（drain）は要らない**。
 
-新規リポジトリは最初から `error` でよい。
+### drain / ratchet が必要になるとき
+
+記事の「drain してから ratchet」は、リポジトリ全体を毎回見る CI を前提にした手順。
+
+| 用語 | 意味 |
+|---|---|
+| drain | 既存の違反を分割・整理してゼロにする |
+| ratchet | ゼロにした状態を `error` に引き上げて固定する（逆回転しない歯車） |
+
+順番が逆だと層が死ぬ。既存違反を残したまま `error` にすると CI が最初から赤くなり、「既存分だから無視でいい」という判断が常態化して新規の違反も一緒に無視される。だから **CI に載せる段階で初めて** drain → ratchet を行う。
+
+CI を使わない現状ではこの手順は不要。CI に載せるなら:
+
+1. 対象リポジトリの違反数を数える（下記コマンド）
+2. ゼロにする（drain）
+3. リポジトリ側の設定で `error` に上げ、CI に載せる（ratchet）
+
+新規リポジトリは違反ゼロから始まるので、最初から `error` でよい。
+
+### 現状の違反数を数える
+
+```bash
+# TS/JS
+~/.claude/lint/node_modules/.bin/eslint --no-config-lookup \
+  --config ~/.claude/lint/eslint-complexity.mjs --no-inline-config \
+  --no-error-on-unmatched-pattern "src/**/*.{ts,tsx,js,jsx}"
+
+# Go
+golangci-lint run -c ~/.claude/lint/golangci-complexity.yml \
+  --max-issues-per-linter 0 --max-same-issues 0 ./...
+```
+
+ビルド生成物やベンダリングされたバンドルを拾うと桁が変わるので、ソースディレクトリを明示して数える。
