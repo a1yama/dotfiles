@@ -13,7 +13,7 @@ violations=$(printf '%s' "$payload" | jq -r '
     | $q.options[]?
     | (.label // "") as $l
     | if (.preview // null) != null then "preview付き: \($l)"
-      elif ($l | width) > 20 then "ラベル長すぎ(\($l | width)桁): \($l)"
+      elif ($l | width) > 50 then "ラベル長すぎ(\($l | width)桁): \($l)"
       else empty end
   ] | join(" / ")
 ' 2>/dev/null)
@@ -21,5 +21,5 @@ violations=$(printf '%s' "$payload" | jq -r '
 [ -z "$violations" ] && exit 0
 
 jq -n --arg v "$violations" \
-  '{hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"deny",permissionDecisionReason:("AskUserQuestion 制約違反 → " + $v + " | label は表示幅20桁以内(全角10文字目安)、preview は使用禁止(CLAUDE.md)。補足は description に移し、見せたい差分は本文に書いてから出し直してください。")}}'
+  '{hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"deny",permissionDecisionReason:("AskUserQuestion 制約違反 → " + $v + " | label は表示幅50桁以内(全角25文字目安)、preview は使用禁止(CLAUDE.md)。補足は description に移し、見せたい差分は本文に書いてから出し直してください。")}}'
 exit 0
