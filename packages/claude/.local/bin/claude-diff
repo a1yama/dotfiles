@@ -2,8 +2,8 @@
 """claude-diff - Claudeを閉じずにブラウザで差分を見て、行コメントでフィードバックを返す。
 
 サブコマンド:
-  serve   差分ビューアのローカルWebサーバを起動（フォアグラウンド）
-  watch   フィードバックファイルに新規コメントが入るまでブロックし、入ったら出力して終了
+  serve   差分ビューアのローカルWebサーバを起動（フォアグラウンド。完了操作/無操作で自動停止）
+  watch   新規コメント or レビュー終了までブロックし、起きたら出力して終了
   resolve 指定IDのコメントを resolved にする
   status  pending / delivered / resolved の件数を表示
   tmux    別tmuxペインに色付き git diff を定期更新表示（軽量ビューア）
@@ -18,6 +18,7 @@ import json
 import os
 import subprocess
 import sys
+import threading
 import time
 import webbrowser
 from html import escape
@@ -47,6 +48,33 @@ def state_dir(root):
 
 def feedback_path(root):
     return state_dir(root) / "feedback.jsonl"
+
+
+def control_path(root):
+    """レビュー完了の合図を置くファイル。feedback.jsonl とは分けて、コメント一覧を汚さない。"""
+    return state_dir(root) / "control.json"
+
+
+def read_control(path):
+    if not path.exists():
+        return {}
+    try:
+        return json.loads(path.read_text())
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
+def clear_control(path):
+    path.unlink(missing_ok=True)
+
+
+def mark_finished(path, reason):
+    path.write_text(
+        json.dumps(
+            {"finished": True, "reason": reason, "ts": time.strftime("%Y-%m-%d %H:%M")},
+            ensure_ascii=False,
+        )
+    )
 
 
 def read_feedback(path):
@@ -183,8 +211,12 @@ select,button{background:#21262d;color:var(--fg);border:1px solid var(--bd);bord
 button:hover{border-color:var(--accent)}
 .spacer{flex:1}.stat{color:var(--mut)}
 #diff{padding:14px}
-.file{border:1px solid var(--bd);border-radius:8px;margin-bottom:16px;overflow:hidden}
-.file>.fh{background:#161b22;padding:6px 12px;font-weight:600;border-bottom:1px solid var(--bd);position:sticky;top:41px}
+/* overflow:hidden だと .file 自身がスクロールポートになり子の sticky が効かない。clip なら効く */
+.file{border:1px solid var(--bd);border-radius:8px;margin-bottom:16px;overflow:clip}
+/* top はヘッダー実高から JS が --hh に入れる。決め打ちだとヘッダーと重なる */
+.file>.fh{background:#161b22;padding:6px 12px;border-bottom:1px solid var(--bd);position:sticky;top:var(--hh,47px);z-index:3}
+.file>.fh b{font-weight:600}
+.file>.fh .dir{color:var(--mut)}
 table{width:100%;border-collapse:collapse}
 td{padding:0 8px;white-space:pre-wrap;word-break:break-all;vertical-align:top}
 td.ln{width:1%;text-align:right;color:var(--mut);user-select:none;border-right:1px solid var(--bd);min-width:40px}
@@ -213,6 +245,7 @@ tr:hover td.gut{opacity:1}td.gut:hover{color:var(--accent)}
 <label class="stat"><input type="checkbox" id="auto" checked> 自動更新</label>
 <span class="spacer"></span>
 <span class="stat" id="stat"></span>
+<button id="finish" onclick="finish()">レビュー完了</button>
 </header>
 <div id="diff"></div>
 <script>
@@ -240,6 +273,14 @@ function cmtHtml(anchor){
     `<div class="cmt"><div class="meta">${c.ts}<span class="badge b-${c.status}">${c.status}</span></div>${esc(c.comment)}</div>`).join('');
 }
 function esc(s){return (s||'').replace(/[&<>]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[m]))}
+function syncHeaderOffset(){
+  const h=document.querySelector('header').getBoundingClientRect().height;
+  document.documentElement.style.setProperty('--hh',h+'px');
+}
+function pathHtml(p){
+  const i=p.lastIndexOf('/');
+  return i<0?`<b>${esc(p)}</b>`:`<span class="dir">${esc(p.slice(0,i+1))}</span><b>${esc(p.slice(i+1))}</b>`;
+}
 function render(files){
   const root=document.getElementById('diff');root.innerHTML='';
   if(!files.length){root.innerHTML='<div class="empty">差分はありません</div>';return}
@@ -259,7 +300,7 @@ function render(files){
           `<tr><td colspan="2"></td><td></td><td><div data-anchor="${anc}">${cmtHtml(anc)}</div></td></tr>`;
       }
     }
-    div.innerHTML=`<div class="fh">${esc(f.path)}</div><table>${rows}</table>`;
+    div.innerHTML=`<div class="fh">${pathHtml(f.path)}</div><table>${rows}</table>`;
     root.appendChild(div);
   }
 }
@@ -280,7 +321,18 @@ function openBox(file,line,side,gut){
   };
   box.querySelector('.cancel').onclick=()=>box.remove();
 }
-setInterval(()=>{if(document.getElementById('auto').checked&&!document.querySelector('.cbox'))refreshComments()},3000);
+const poll=setInterval(()=>{if(document.getElementById('auto').checked&&!document.querySelector('.cbox'))refreshComments()},3000);
+async function finish(){
+  clearInterval(poll);
+  let c={pending:0,delivered:0,resolved:0};
+  try{c=(await (await fetch('/api/finish',{method:'POST'})).json()).counts||c}catch(e){}
+  const left=c.pending+c.delivered;
+  document.body.innerHTML='<div class="empty">レビュー完了を Claude に通知しました。<br>'+
+    (left?`未対応のコメントが ${left} 件あります。Claude が対応します。<br>`:'')+
+    'サーバは停止したので、このタブは閉じて構いません。</div>';
+}
+addEventListener('resize',syncHeaderOffset);
+syncHeaderOffset();
 load();
 </script></body></html>
 """
@@ -289,9 +341,18 @@ load();
 class Handler(http.server.BaseHTTPRequestHandler):
     root = None
     fb = None
+    ctl = None
+    last_seen = 0.0
 
     def log_message(self, *a):
         pass
+
+    def _touch(self):
+        Handler.last_seen = time.time()
+
+    def _shutdown_later(self):
+        # serve_forever を呼んでいるスレッドから shutdown すると deadlock するので別スレッドで
+        threading.Thread(target=self.server.shutdown, daemon=True).start()
 
     def _json(self, obj, code=200):
         body = json.dumps(obj, ensure_ascii=False).encode()
@@ -302,6 +363,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_GET(self):
+        self._touch()
         u = urlparse(self.path)
         if u.path == "/":
             body = PAGE.encode()
@@ -320,7 +382,18 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.send_error(404)
 
     def do_POST(self):
-        if urlparse(self.path).path != "/api/comment":
+        self._touch()
+        path = urlparse(self.path).path
+        if path == "/api/finish":
+            items = read_feedback(self.fb)
+            counts = {"pending": 0, "delivered": 0, "resolved": 0}
+            for x in items:
+                counts[x["status"]] = counts.get(x["status"], 0) + 1
+            mark_finished(self.ctl, "user")
+            self._json({"ok": True, "counts": counts})
+            self._shutdown_later()
+            return
+        if path != "/api/comment":
             return self.send_error(404)
         ln = int(self.headers.get("Content-Length", 0))
         data = json.loads(self.rfile.read(ln) or b"{}")
@@ -342,26 +415,65 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self._json({"ok": True, "id": item["id"]})
 
 
+def idle_reaper(httpd, ctl, idle_timeout):
+    """ブラウザを閉じたまま放置されたときにサーバを残さないための保険。"""
+    while True:
+        time.sleep(5)
+        if time.time() - Handler.last_seen < idle_timeout:
+            continue
+        mark_finished(ctl, "idle")
+        threading.Thread(target=httpd.shutdown, daemon=True).start()
+        return
+
+
 def cmd_serve(args):
     root = repo_root()
     Handler.root = root
     Handler.fb = feedback_path(root)
+    Handler.ctl = control_path(root)
+    Handler.last_seen = time.time()
+    # 前回の完了マーカーが残っていると watch が即座に DONE を返してしまう
+    clear_control(Handler.ctl)
     httpd = http.server.ThreadingHTTPServer(("127.0.0.1", args.port), Handler)
     url = f"http://127.0.0.1:{args.port}/"
     print(f"claude-diff serving {root}\n  {url}\n  feedback: {Handler.fb}")
     if not args.no_open:
         webbrowser.open(url)
+    if args.idle_timeout > 0:
+        threading.Thread(
+            target=idle_reaper, args=(httpd, Handler.ctl, args.idle_timeout), daemon=True
+        ).start()
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
-        pass
+        mark_finished(Handler.ctl, "interrupted")
+    reason = read_control(Handler.ctl).get("reason", "")
+    print(f"claude-diff stopped ({reason or 'shutdown'})")
 
 
 def cmd_watch(args):
     root = repo_root()
     fb = feedback_path(root)
+    ctl = control_path(root)
     deadline = time.time() + args.timeout
     while time.time() < deadline:
+        ctrl = read_control(ctl)
+        if ctrl.get("finished"):
+            items = read_feedback(fb)
+            c = {"pending": 0, "delivered": 0, "resolved": 0}
+            for x in items:
+                c[x["status"]] = c.get(x["status"], 0) + 1
+            why = {
+                "user": "ユーザーがブラウザで「レビュー完了」を押しました",
+                "idle": f"操作が無いままアイドル時間を超えたため自動終了しました",
+                "interrupted": "サーバが Ctrl-C で停止されました",
+            }.get(ctrl.get("reason", ""), "サーバが停止しました")
+            print(f"=== DONE: レビュー終了 ===\n{why}")
+            print(f"pending {c['pending']} / delivered {c['delivered']} / resolved {c['resolved']}")
+            if c["pending"] or c["delivered"]:
+                print("未 resolved のコメントが残っています。対応後に `claude-diff resolve all`。")
+            print("サーバは停止済みです。watch を再起動する必要はありません。")
+            return
         with FileLock(fb):
             items = read_feedback(fb)
             pending = [x for x in items if x["status"] == "pending"]
@@ -437,6 +549,8 @@ def main():
     s = sub.add_parser("serve")
     s.add_argument("--port", type=int, default=4517)
     s.add_argument("--no-open", action="store_true")
+    s.add_argument("--idle-timeout", type=int, default=1800,
+                   help="無操作がこの秒数続いたらサーバを自動停止する（0で無効）")
     s.set_defaults(func=cmd_serve)
 
     w = sub.add_parser("watch")
