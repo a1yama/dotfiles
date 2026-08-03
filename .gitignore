@@ -3,3 +3,5 @@ packages/git/.config/git/config.d/local.conf
 packages/claude/.claude/lint/node_modules/
 packages/yazi/.local/
 packages/yazi/.cache/
+__pycache__/
+*.pyc
