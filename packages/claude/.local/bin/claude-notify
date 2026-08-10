@@ -10,51 +10,147 @@ echo "$input" > /tmp/claude-notify/last.json
 
 event=$(echo "$input" | jq -r '.hook_event_name // "unknown"')
 cwd=$(echo "$input" | jq -r '.cwd // ""')
-dir_name="${cwd/#$HOME/\~}"
+dir_name="${cwd/#$HOME/~}"
+dir_base="${dir_name##*/}"
 session_id=$(echo "$input" | jq -r '.session_id // ""')
 short_session="${session_id:0:8}"
 transcript_path=$(echo "$input" | jq -r '.transcript_path // ""')
 
-# Stop: 直近のユーザー発話から一定時間未満の短いターンは通知しない(手元にいる想定のため)。
-# 人間の発話は content が string、ツール結果は array であることを利用して区別する。
-# タイムスタンプが取れない場合は通知する側に倒す(長時間ターンの通知を落とさない)。
-min_turn="${CLAUDE_NOTIFY_MIN_TURN_SECONDS:-60}"
-if [[ "$event" == "Stop" && "$min_turn" -gt 0 && -n "$transcript_path" && -f "$transcript_path" ]]; then
+# セッションレジストリから人間が読める名前と tmux 位置を引く。
+# 通知だけ見てどのセッションかを特定できるようにするための情報で、
+# レジストリが無い/壊れている場合は短縮 session_id にフォールバックする。
+resolve_session_meta() {
+  local sid="$1"
+  local reg_dir="${CLAUDE_SESSIONS_DIR:-$HOME/.claude/sessions}"
+  [[ -n "$sid" && -d "$reg_dir" ]] || return 0
+  local f out
+  for f in "$reg_dir"/*.json; do
+    [[ -f "$f" ]] || continue
+    out=$(jq -r --arg sid "$sid" \
+      'select(.sessionId == $sid) | [(.name // ""), (.tmux // "")] | @tsv' \
+      "$f" 2>/dev/null || true)
+    if [[ -n "$out" ]]; then
+      printf '%s' "$out"
+      return 0
+    fi
+  done
+}
+
+# レジストリの tmux 値はペインID("main:@2.%4")なので、そのままだと人には読めない。
+# tmux に問い合わせてウィンドウ名まで解決する。
+resolve_tmux_label() {
+  local ref="$1"
+  [[ -n "$ref" ]] || return 0
+  if ! command -v tmux >/dev/null 2>&1; then
+    printf '%s' "$ref"
+    return 0
+  fi
+  local pane="${ref##*.}" label
+  label=$(tmux display-message -p -t "$pane" '#{session_name}:#{window_index} #{window_name}' 2>/dev/null || true)
+  printf '%s' "${label:-$ref}"
+}
+
+session_meta=$(resolve_session_meta "$session_id")
+session_name="${session_meta%%$'\t'*}"
+tmux_ref=""
+[[ "$session_meta" == *$'\t'* ]] && tmux_ref="${session_meta#*$'\t'}"
+tmux_label=$(resolve_tmux_label "$tmux_ref")
+
+branch=""
+[[ -n "$cwd" && -d "$cwd" ]] && branch=$(git -C "$cwd" rev-parse --abbrev-ref HEAD 2>/dev/null || true)
+
+# トランスクリプトからユーザー発話を取り出す。
+# 人間の発話は content が string、ツール結果は array なので type で区別する。
+# "<" 始まりはコマンドラッパー等の機械生成なので除外する。
+extract_user_message() {
+  local pos="$1" max_chars="${2:-150}"
+  [[ -n "$transcript_path" && -f "$transcript_path" ]] || return 0
+  local src
+  if [[ "$pos" == "first" ]]; then
+    src=$(head -200 "$transcript_path" 2>/dev/null || true)
+  else
+    src=$(tail -200 "$transcript_path" 2>/dev/null || true)
+  fi
+  local msgs
+  msgs=$(printf '%s\n' "$src" | jq -r --argjson max "$max_chars" '
+    select(.type == "user" and (.message.content | type == "string"))
+    | .message.content
+    | select(startswith("<") | not)
+    | select(startswith("Caveat:") | not)
+    | gsub("[\n\r\t]+"; " ")
+    | gsub(" {2,}"; " ")
+    | select(length > 0)
+    | .[0:$max]
+  ' 2>/dev/null || true)
+  [[ -n "$msgs" ]] || return 0
+  if [[ "$pos" == "first" ]]; then
+    printf '%s' "$(printf '%s\n' "$msgs" | head -1)"
+  else
+    printf '%s' "$(printf '%s\n' "$msgs" | tail -1)"
+  fi
+}
+
+extract_last_assistant() {
+  local max_chars="${1:-300}"
+  [[ -n "$transcript_path" && -f "$transcript_path" ]] || return 0
+  tail -50 "$transcript_path" 2>/dev/null | jq -r --argjson max "$max_chars" '
+    select(.type == "assistant")
+    | .message.content
+    | if type == "array" then map(select(.type == "text") | .text) | join("") else empty end
+    | gsub("[\n\r\t]+"; " ")
+    | gsub(" {2,}"; " ")
+    | select(length > 0)
+    | .[0:$max]
+  ' 2>/dev/null | tail -1 || true
+}
+
+# 直近ユーザー発話からの経過秒。短ターン抑制と所要時間表示の両方に使う。
+turn_seconds=""
+if [[ -n "$transcript_path" && -f "$transcript_path" ]]; then
   last_user_ts=$(tail -200 "$transcript_path" 2>/dev/null \
     | jq -r 'select(.type == "user" and (.message.content | type == "string")) | .timestamp // empty' 2>/dev/null \
     | tail -1)
   if [[ -n "$last_user_ts" ]]; then
     ts_epoch=$(date -j -u -f "%Y-%m-%dT%H:%M:%S" "${last_user_ts%%.*}" +%s 2>/dev/null || echo "")
-    now_epoch=$(date -u +%s)
-    if [[ -n "$ts_epoch" ]] && (( now_epoch - ts_epoch < min_turn )); then
-      exit 0
-    fi
+    [[ -n "$ts_epoch" ]] && turn_seconds=$(( $(date -u +%s) - ts_epoch ))
   fi
 fi
 
-# トランスクリプトから直近のメッセージを取得
-extract_last_message() {
-  local role="$1"
-  local max_chars="${2:-150}"
-  if [[ -n "$transcript_path" && -f "$transcript_path" ]]; then
-    local msg
-    msg=$(tail -50 "$transcript_path" 2>/dev/null \
-      | jq -r "select(.type == \"$role\") | .message.content | if type == \"array\" then map(select(.type == \"text\") | .text) | join(\"\") elif type == \"string\" then . else empty end" 2>/dev/null \
-      | tail -1)
-    # 改行を除去して先頭を切り出し
-    msg=$(echo "$msg" | tr '\n' ' ' | head -c "$max_chars")
-    echo "$msg"
+# Stop: 直近のユーザー発話から一定時間未満の短いターンは通知しない(手元にいる想定のため)。
+# タイムスタンプが取れない場合は通知する側に倒す(長時間ターンの通知を落とさない)。
+min_turn="${CLAUDE_NOTIFY_MIN_TURN_SECONDS:-60}"
+if [[ "$event" == "Stop" && "$min_turn" -gt 0 && -n "$turn_seconds" ]] && (( turn_seconds < min_turn )); then
+  exit 0
+fi
+
+format_duration() {
+  local s="$1"
+  if (( s < 60 )); then
+    printf '%d秒' "$s"
+  elif (( s < 3600 )); then
+    printf '%d分%d秒' "$((s / 60))" "$((s % 60))"
+  else
+    printf '%d時間%d分' "$((s / 3600))" "$(((s % 3600) / 60))"
   fi
 }
 
-last_user=$(extract_last_message "user")
-last_assistant=$(extract_last_message "assistant")
+elapsed=""
+[[ -n "$turn_seconds" ]] && elapsed=$(format_duration "$turn_seconds")
+
+last_user=$(extract_user_message "last" 150)
+first_user=$(extract_user_message "first" 120)
+last_assistant=$(extract_last_assistant 300)
+
+# 「レビューが終わったら報告」のような短い追加指示だけだと何のセッションか分からないので、
+# セッション冒頭の指示を主題として併記する(直近指示と同じなら重複させない)。
+[[ "$first_user" == "$last_user" ]] && first_user=""
 
 # イベントに応じたメッセージを組み立て
 case "$event" in
   Stop)
     title="完了"
     emoji=":white_check_mark:"
+    icon="✅"
     color="65280"  # green
     description="$last_assistant"
     ;;
@@ -69,11 +165,13 @@ case "$event" in
       permission_prompt)
         title="許可が必要です"
         emoji=":lock:"
+        icon="🔒"
         color="16776960"  # yellow
         ;;
       *)
         title="通知"
         emoji=":bell:"
+        icon="🔔"
         color="5814783"  # blue
         ;;
     esac
@@ -83,6 +181,7 @@ case "$event" in
     title="$event"
     description=""
     emoji=":robot_face:"
+    icon="🤖"
     color="5814783"  # blue
     ;;
 esac
@@ -93,7 +192,7 @@ esac
 # Slack 通知
 if [[ -n "${CLAUDE_SLACK_WEBHOOK_URL:-}" ]]; then
   # last_user がある場合はコンテキストに追加
-  context_text=":file_folder: \`${dir_name}\` | :label: \`${short_session}\`"
+  context_text=":file_folder: \`${dir_name}\` | :label: \`${session_name:-$short_session}\`"
   [[ -n "$last_user" ]] && context_text=":speech_balloon: ${last_user}\n${context_text}"
 
   slack_payload=$(jq -n \
@@ -129,32 +228,58 @@ fi
 
 # Discord 通知
 if [[ -n "${CLAUDE_DISCORD_WEBHOOK_URL:-}" ]]; then
-  # fields を動的に構築
-  fields="[]"
-  if [[ -n "$last_user" ]]; then
-    fields=$(echo "$fields" | jq --arg v "$last_user" '. + [{ name: "Task", value: $v, inline: false }]')
+  # スマホのプッシュ通知は「送信者名」と content しか出ないため、
+  # どのセッションかが分かる情報をこの2つに寄せる(embed は開いたときの詳細)。
+  if [[ -n "$session_name" ]]; then
+    display_name="$session_name"
+    [[ "$session_name" == "$dir_base"* ]] || display_name="${session_name} @ ${dir_base}"
+  else
+    display_name="${dir_base:-claude} (${short_session})"
   fi
-  fields=$(echo "$fields" | jq \
-    --arg dir "$dir_name" \
-    --arg sid "$short_session" \
-    '. + [
-      { name: "Directory", value: ("`" + $dir + "`"), inline: true },
-      { name: "Session", value: ("`" + $sid + "`"), inline: true }
-    ]')
+
+  content="${icon} ${display_name} — ${title}"
+  [[ -n "$elapsed" ]] && content="${content} (${elapsed})"
+  [[ -n "$last_user" ]] && content="${content}"$'\n'"> ${last_user}"
+
+  fields="[]"
+  if [[ -n "$first_user" ]]; then
+    fields=$(echo "$fields" | jq --arg v "$first_user" '. + [{ name: "🧵 このセッションの発端", value: $v, inline: false }]')
+  fi
+  if [[ -n "$last_user" ]]; then
+    fields=$(echo "$fields" | jq --arg v "$last_user" '. + [{ name: "💬 直近の指示", value: $v, inline: false }]')
+  fi
+  fields=$(echo "$fields" | jq --arg dir "$dir_name" \
+    '. + [{ name: "📁 Directory", value: ("`" + $dir + "`"), inline: true }]')
+  [[ -n "$branch" ]] && fields=$(echo "$fields" | jq --arg v "$branch" \
+    '. + [{ name: "🌿 Branch", value: ("`" + $v + "`"), inline: true }]')
+  [[ -n "$tmux_label" ]] && fields=$(echo "$fields" | jq --arg v "$tmux_label" \
+    '. + [{ name: "🖥 tmux", value: ("`" + $v + "`"), inline: true }]')
+
+  footer="session ${session_name:-$short_session} · ${short_session}"
+  [[ -n "$elapsed" ]] && footer="${footer} · 所要 ${elapsed}"
 
   discord_payload=$(jq -n \
-    --arg title "$title" \
+    --arg username "$display_name" \
+    --arg content "$content" \
+    --arg title "${icon} ${title}" \
     --arg desc "$description" \
+    --arg footer "$footer" \
+    --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
     --argjson color "$color" \
     --argjson fields "$fields" \
     '{
+      username: $username,
+      content: $content,
+      allowed_mentions: { parse: [] },
       embeds: [
-        {
+        ({
           title: $title,
-          description: $desc,
+          description: (if $desc == "" then null else $desc end),
           color: $color,
-          fields: $fields
-        }
+          fields: $fields,
+          footer: { text: $footer },
+          timestamp: $ts
+        } | with_entries(select(.value != null)))
       ]
     }')
   curl -s -X POST "$CLAUDE_DISCORD_WEBHOOK_URL" \
