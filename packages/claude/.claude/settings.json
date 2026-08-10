@@ -10,6 +10,8 @@
       "Glob(*)",
       "Grep(*)",
       "Search(*)",
+      "ListAgents",
+      "SendMessage",
       "WebSearch",
       "WebFetch(domain:*)",
       "Fetch(https://*)",

@@ -12,6 +12,10 @@ idle 通知が来るたびにユーザーへ確認を挟むと、ハブセッシ
 対象は Agent / SendMessage / TaskList などのチーム機能。tmux ペインでの並列実行は
 spawn-agents スキル、手法選択は parallel-dev スキルを参照。
 
+`claude-tmux spawn` で起動した作業者も Cross-session messaging でこのセッション宛に
+質問を送ってくる。宛先は `ListAgents` に出る作業者名で、返信も `SendMessage` で行う。
+チームのタスク管理下には無いため `TaskUpdate` の対象にはならない。
+
 ## 手順
 
 1. **状況を集める**
