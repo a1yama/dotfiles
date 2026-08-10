@@ -93,10 +93,15 @@ one playing devil's advocate.
 
 ## claude-tmux との統合案
 
-### 現在の claude-tmux の課題
+### 現在の claude-tmux の課題（Cross-session messaging で解決済み）
 
-- ヘッドレスモード (`-p`) で実行されるため、対話的な質問ができない
-- エージェントが質問すると処理が停止してしまう
+かつては、ヘッドレスモード (`-p`) の作業者が対話的に質問できず、質問すると処理が
+止まっていた。これは Claude Code v2.1.224 の Cross-session messaging で解決した。
+`claude-tmux spawn` は作業者を `--name <agent名> --settings '{"crossSessionInbound":"accept"}'`
+付きで起動し、作業者は `SendMessage` で spawn 元セッションに直接質問する。
+
+そのため以下の Agent Teams 統合案は、質問経路の解決策としては不要になった。
+複数メンバーでのタスク自動割り当てが必要になった場合に再検討する。
 
 ### Agent Teams を使った改善案
 

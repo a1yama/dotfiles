@@ -2,7 +2,8 @@
 set -euo pipefail
 
 AGENT_PREFIX="🤖"
-AGENTS_DIR="/tmp/claude-agents"
+# テストから隔離したディレクトリを指せるように環境変数で上書きできる
+AGENTS_DIR="${CLAUDE_TMUX_AGENTS_DIR:-/tmp/claude-agents}"
 SKILL_DIR="$HOME/.claude/skills/code-review"
 
 usage() {
@@ -13,9 +14,6 @@ Usage:
   claude-tmux spawn "タスク説明"  [--name NAME] [--dir DIR] [--no-review] [--worktree]
   claude-tmux issues [--worktree] 42 43 44
   claude-tmux status
-  claude-tmux supervise
-  claude-tmux questions
-  claude-tmux answer <name> <回答>
   claude-tmux logs <name>
   claude-tmux kill [name|all]
   claude-tmux clean
@@ -27,16 +25,14 @@ Subcommands:
              指摘があれば修正エージェントを自動再投入する（最大2周、--no-review で無効）
   issues     複数のGitHub Issueを並列エージェントで処理
   status     実行中のエージェント一覧とペイン生存確認
-  supervise  監督モード：質問待ちエージェントを検出して対話的に回答（推奨）
-  questions  質問待ちのエージェント一覧を表示（デバッグ用）
-  answer     質問に回答（answerファイル作成 + ペインに通知）（デバッグ用）
   logs       特定エージェントのログを less で表示
   kill       エージェントペイン停止とディレクトリ削除
   clean      完了/死亡したエージェントのディレクトリをクリーンアップ
 
 Note:
   エージェントはインタラクティブモードでペイン分割実行されます。
-  質問は監督モード (supervise) が自動的に検出して処理します。
+  作業者の質問は Claude Code の Cross-session messaging (SendMessage) で
+  spawn を実行したセッションに直接届きます。
   意図しないファイル変更のリスクがあるため、実行後に git diff で変更内容を確認してください。
 EOF
 }
@@ -60,6 +56,17 @@ get_agent_dir() {
 is_pane_alive() {
   local pane_id="$1"
   tmux list-panes -a -F '#{pane_id}' 2>/dev/null | grep -q "^${pane_id}$"
+}
+
+# spawn を実行した Claude セッションの名前。作業者はこの名前宛に SendMessage で質問する。
+# Claude Code の Bash ツール経由で起動されたときだけ解決でき、素の端末から実行した場合は
+# 空になる（そのときは作業者に質問経路を渡さず、自律判断で進ませる）。
+resolve_hub_session_name() {
+  local registry="${HOME}/.claude/sessions/${CLAUDE_PID:-}.json"
+  if [[ -z "${CLAUDE_PID:-}" ]] || [[ ! -f "$registry" ]] || ! command -v jq >/dev/null 2>&1; then
+    return 0
+  fi
+  jq -r '.name // empty' "$registry" 2>/dev/null || true
 }
 
 # spawn: 新しいtmuxウィンドウで監督+作業者ペインを起動
@@ -152,6 +159,20 @@ cmd_spawn() {
   local prompt_file="${agent_dir}/prompt"
   printf '%s' "$prompt" > "$prompt_file"
 
+  # 質問経路は spawn 元のセッションが特定できるときだけ渡す
+  local hub_name
+  hub_name=$(resolve_hub_session_name)
+  local question_note=""
+  if [[ -n "$hub_name" ]]; then
+    question_note="
+
+【質問がある場合】
+- どうしても判断に迷う場合のみ、SendMessage ツールで \"${hub_name}\" 宛に質問を送ってください
+- 初回送信は名前だけだと確認を求めるエラーになります。エラー文に出る \"${hub_name} [ref]\" の形式でそのまま送り直してください（ref が分からなければ ListAgents で確認）
+- 送信後は返信を待たず、依存しない作業を先に進めてください。返信は会話に自動で届きます
+- ファイルやポーリングでのやりとりは不要です"
+  fi
+
   # 拡張プロンプト作成
   local enhanced_prompt="${prompt}
 
@@ -172,14 +193,7 @@ cmd_spawn() {
 3. 修正後、再度 /code-review を実行する
 4. 指摘事項がなくなるまで 2-3 を繰り返す（最大3回）
 5. レビュー結果（最終）を Write ツールで ${agent_dir}/review-result に書き込む
-6. 完了したら /exit で終了する"; fi)
-
-【質問がある場合】
-- どうしても判断に迷う場合は、以下の手順で監督に確認してください：
-  1. Write ツールで ${agent_dir}/question に質問内容を書き込む
-  2. 数秒待ってから Read ツールで ${agent_dir}/answer を確認してください
-  3. ファイルが存在しない場合は5秒待ってから再度確認してください（最大3回）
-  4. 回答を読み取り、タスクを続行してください"
+6. 完了したら /exit で終了する"; fi)${question_note}"
 
   # プロンプトファイル作成
   echo "$enhanced_prompt" > "${agent_dir}/enhanced_prompt"
@@ -197,8 +211,11 @@ echo "Dir: \$(pwd)"
 echo "---"
 
 # プロンプトは stdin で渡す。--allowedTools は可変長オプションのため、
-# 後続の位置引数をプロンプトとして置くと飲み込まれてしまう
-claude -p --allowedTools "Edit,Write,Read,Grep,Glob,Bash,WebSearch,WebFetch" < "\${prompt_file}"
+# 後続の位置引数をプロンプトとして置くと飲み込まれてしまう。
+# --name は spawn 元が SendMessage の宛先に使う。crossSessionInbound=accept は必須で、
+# -p セッションは承認ダイアログを出せず、既定のまま hold されると返信が永久に届かない。
+claude -p --name "\${name}" --settings '{"crossSessionInbound":"accept"}' \\
+  --allowedTools "Edit,Write,Read,Grep,Glob,Bash,WebSearch,WebFetch,SendMessage,ListAgents" < "\${prompt_file}"
 
 echo "completed" > "\${agent_dir}/status"
 echo ""
@@ -213,11 +230,9 @@ RUNNER
 name="${name}"
 agent_dir="${agent_dir}"
 worker_pane_id_file="\${agent_dir}/worker-pane-id"
-question_file="\${agent_dir}/question"
-answer_file="\${agent_dir}/answer"
 
 echo "=== 監督: \${name} ==="
-echo "作業者の承認リクエストを監視中..."
+echo "作業者の完了を監視中..."
 echo ""
 
 while true; do
@@ -247,42 +262,6 @@ while true; do
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     touch "\${agent_dir}/review-notified"
-  fi
-
-  # 承認リクエストの検出
-  if [[ -f "\${question_file}" ]] && [[ ! -f "\${answer_file}" ]]; then
-    question_content=\$(cat "\${question_file}")
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "📋 承認リクエスト検出"
-    echo ""
-    echo "\${question_content}"
-    echo ""
-    echo "判断中..."
-
-    # claude -p で判断（エラー時は安全のため却下）
-    answer=\$(claude -p "あなたは監督エージェントです。作業者からの以下の承認リクエストを判断してください。
-
-リクエスト内容:
-\${question_content}
-
-判断基準:
-- セキュリティ上の問題がないか
-- 破壊的な操作ではないか
-- タスクの目的に合致しているか
-
-承認する場合は「承認: <簡潔な理由>」、却下する場合は「却下: <理由>」と回答してください。" 2>&1) || {
-      echo "警告: 監督判断に失敗しました" >&2
-      answer="却下: claude -p の実行に失敗しました。手動で確認してください"
-    }
-
-    # 回答を書き込み
-    printf '%s' "\${answer}" > "\${answer_file}"
-    echo "✅ 回答: \${answer}"
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo ""
-
-    # 10秒後にクリーンアップ（次の質問に備える）
-    (sleep 10 && rm -f "\${question_file}" "\${answer_file}") &
   fi
 
   sleep 3
@@ -395,120 +374,6 @@ SUPERVISOR
   echo "  Dir: ${agent_dir}"
 }
 
-# supervise: 監督モード - 質問を検出して対話的に処理
-cmd_supervise() {
-  ensure_agents_dir
-
-  echo "=== 監督モード: 質問待ちエージェントをチェック ==="
-  echo ""
-
-  local questions_found=0
-
-  for agent_dir in "$AGENTS_DIR"/*/; do
-    if [[ ! -d "$agent_dir" ]]; then
-      continue
-    fi
-
-    local name=$(basename "$agent_dir")
-    local question_file="${agent_dir}/question"
-    local answer_file="${agent_dir}/answer"
-
-    if [[ -f "$question_file" ]] && [[ ! -f "$answer_file" ]]; then
-      questions_found=$((questions_found + 1))
-      local question_content=$(cat "$question_file")
-
-      echo "Agent: ${name}"
-      echo "Question:"
-      echo "${question_content}"
-      echo "---"
-    fi
-  done
-
-  if [[ $questions_found -eq 0 ]]; then
-    echo "質問待ちのエージェントはありません"
-    return 0
-  fi
-
-  echo ""
-  echo "${questions_found} 件の質問があります。"
-  echo ""
-  echo "推奨: /supervise スキルを使用すると、自動的に判断して回答できます。"
-}
-
-# questions: 質問待ちエージェント一覧
-cmd_questions() {
-  ensure_agents_dir
-
-  local found=0
-
-  for agent_dir in "$AGENTS_DIR"/*/; do
-    if [[ ! -d "$agent_dir" ]]; then
-      continue
-    fi
-
-    local name=$(basename "$agent_dir")
-    local question_file="${agent_dir}/question"
-    local answer_file="${agent_dir}/answer"
-
-    if [[ -f "$question_file" ]] && [[ ! -f "$answer_file" ]]; then
-      found=1
-      echo "=== Agent: ${name} ==="
-      echo "質問:"
-      cat "$question_file"
-      echo ""
-      echo "回答方法: claude-tmux answer ${name} \"回答内容\""
-      echo ""
-    fi
-  done
-
-  if [[ $found -eq 0 ]]; then
-    echo "質問待ちのエージェントはありません"
-  fi
-}
-
-# answer: 質問に回答
-cmd_answer() {
-  if [[ $# -lt 2 ]]; then
-    echo "Error: エージェント名と回答を指定してください" >&2
-    echo "Usage: claude-tmux answer <name> <回答>" >&2
-    exit 1
-  fi
-
-  local name="$1"
-  shift
-  local answer="$*"
-
-  local agent_dir="$(get_agent_dir "$name")"
-  local question_file="${agent_dir}/question"
-  local answer_file="${agent_dir}/answer"
-  local worker_pane_file="${agent_dir}/worker-pane-id"
-
-  if [[ ! -d "$agent_dir" ]]; then
-    echo "Error: エージェント '${name}' が見つかりません" >&2
-    exit 1
-  fi
-
-  if [[ ! -f "$question_file" ]]; then
-    echo "Error: エージェント '${name}' には質問がありません" >&2
-    exit 1
-  fi
-
-  # 回答をファイルに書き込み
-  printf '%s' "$answer" > "$answer_file"
-  echo "回答を ${answer_file} に書き込みました"
-
-  # 作業者ペインが生きている場合、通知を送信
-  if [[ -f "$worker_pane_file" ]]; then
-    local worker_pane=$(cat "$worker_pane_file")
-    if is_pane_alive "$worker_pane"; then
-      tmux send-keys -t "$worker_pane" "" Enter
-      echo "ペイン ${worker_pane} に通知を送信しました"
-    else
-      echo "Warning: 作業者ペインは既に終了しています"
-    fi
-  fi
-}
-
 # issues: 複数のGitHub Issueを並列エージェントで処理
 cmd_issues() {
   require_tmux
@@ -560,8 +425,6 @@ cmd_status() {
     local worker_pane_file="${agent_dir}/worker-pane-id"
     local supervisor_pane_file="${agent_dir}/supervisor-pane-id"
     local status_file="${agent_dir}/status"
-    local question_file="${agent_dir}/question"
-    local answer_file="${agent_dir}/answer"
 
     count=$((count + 1))
 
@@ -597,13 +460,6 @@ cmd_status() {
     if [[ -f "$status_file" ]]; then
       local status=$(cat "$status_file")
       echo "    Status: ${status}"
-    fi
-
-    # 質問・回答の状態
-    if [[ -f "$question_file" ]] && [[ ! -f "$answer_file" ]]; then
-      echo "    ⚠️  承認待ち"
-    elif [[ -f "$answer_file" ]]; then
-      echo "    ✓ 回答済み"
     fi
 
     if [[ -f "${agent_dir}/worktree-path" ]]; then
@@ -766,16 +622,6 @@ case "${1:-}" in
     ;;
   status)
     cmd_status
-    ;;
-  supervise)
-    cmd_supervise
-    ;;
-  questions)
-    cmd_questions
-    ;;
-  answer)
-    shift
-    cmd_answer "$@"
     ;;
   logs)
     shift

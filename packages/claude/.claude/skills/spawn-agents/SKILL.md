@@ -20,8 +20,7 @@ user-invocable: true
 - 各サブタスクの説明は、他のエージェントが単独で理解・実行できるよう十分に具体的に記述すること
 - 依存関係があるタスクは直列化するのではなく、依存情報をプロンプトに含めること
 - エージェントはインタラクティブモードでtmuxペイン分割実行される
-- エージェントが質問する場合、`claude-tmux supervise` が質問を検知して回答を仲介する
-- すべてのエージェント起動後、`claude-tmux questions` で質問の有無を定期確認し、必要に応じて `claude-tmux supervise` を実行して対応すること
+- **エージェントからの質問は Cross-session messaging でこのセッションに直接届く。** ポーリングは不要で、届いたら `SendMessage` で同じ相手に返信する
 
 ## claude-tmux リファレンス
 
@@ -32,23 +31,26 @@ user-invocable: true
 | `claude-tmux spawn "タスク説明" [--name NAME] [--dir DIR] [--no-review] [--worktree]` | 新しいtmuxペインでエージェントを起動 |
 | `claude-tmux issues [--worktree] 42 43 44` | 複数のGitHub Issueを並列エージェントで処理 |
 | `claude-tmux status` | 実行中のエージェント一覧とペイン生存確認 |
-| `claude-tmux questions` | 質問待ちのエージェント一覧を表示 |
-| `claude-tmux answer <name> <回答>` | 質問に回答 |
 | `claude-tmux kill [name\|all]` | エージェントペイン停止とディレクトリ削除 |
 | `claude-tmux clean` | 完了/死亡したエージェントのディレクトリをクリーンアップ |
 
 ### 仕様
 
 - エージェントディレクトリ: `/tmp/claude-agents/<name>/`
-  - `pane-id`, `prompt`, `question`, `answer`, `status`
+  - `pane-id`, `prompt`, `enhanced_prompt`, `status`, `review-result`
 - ペイン分割: 左右分割（`-h`）、複数なら上下にも分割（`-v`）
 - 実行モード: インタラクティブモード（tmuxセッション外ではエラー）
 
-### オーケストレーション（監督機能）
+### 質問のやりとり（Cross-session messaging）
 
-1. エージェントが `/tmp/claude-agents/<name>/question` に質問を書き込む
-2. 監督が `claude-tmux supervise` で質問を分析・回答
-3. エージェントが `/tmp/claude-agents/<name>/answer` から回答を読み取り続行
+1. `spawn` は起動元セッション名を `~/.claude/sessions/$CLAUDE_PID.json` から取得し、作業者のプロンプトに宛先として埋め込む
+2. 作業者は判断に迷ったとき `SendMessage` でその名前宛に質問を送る。初回は名前だけだと確認を求めるエラーになり、`名前 [ref]` での再送が要る（プロンプトに手順を含めてある）
+3. 質問は起動元セッションの会話にそのまま届く。`SendMessage` で返信すると作業者の会話に届く。作業者がツール実行中でも中断されない
+4. 作業者は `claude -p --name <agent名> --settings '{"crossSessionInbound":"accept"}'` で起動される。`-p` セッションは承認ダイアログを出せないため、`accept` が無いと返信が hold されたまま届かない
+
+起動元が Claude セッションでない（素の端末から `claude-tmux` を叩いた）場合は質問経路を渡さず、作業者は自律判断で進む。
+
+**制約**: Cross-session messaging は Claude Code v2.1.224 以降・macOS/Linux のみ。旧バージョンで起動したままのセッションは宛先として見えない（`/list-agents` で確認できる）。
 
 ### 自動コードレビュー
 
