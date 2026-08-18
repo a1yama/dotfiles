@@ -50,6 +50,7 @@ codex exec review --uncommitted
 - PHP → `languages/php.md`
 - Python → `languages/python.md`
 - Rust → `languages/rust.md`
+- Shell/Bash(フック・スクリプト) → `languages/shell.md`
 
 各ファイルには、言語特有のよくあるミスと参考資料がまとめられています。
 
