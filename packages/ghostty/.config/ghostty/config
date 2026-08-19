@@ -1,0 +1,56 @@
+# Ghostty — tmux を multiplexer として使う前提の設定。
+# タブ・スプリットは tmux と表示が重複するため、Ghostty 側では開けなくしてある。
+
+##### 外観 ###################################################################
+font-family = HackGen Console NF
+font-size = 14
+
+background-opacity = 0.85
+background-blur = 20
+
+# タイトルバーを消し、画面上部を tmux の status-line だけにする
+macos-titlebar-style = hidden
+
+mouse-hide-while-typing = true
+
+##### 入力 ###################################################################
+# alt+hjkl を矢印キーとして使うため、Option を Alt として扱う。
+# 副作用として Option による特殊文字入力は効かなくなる。
+macos-option-as-alt = true
+
+##### ssh 先の terminfo ######################################################
+# TERM=xterm-ghostty を知らないホストで tmux が起動拒否するのを防ぐ。
+# ssh-terminfo が接続先へ terminfo を自動インストールする。
+shell-integration-features = ssh-env,ssh-terminfo
+
+##### タブ・スプリットを封じる ###############################################
+# tmux が window/pane を担うので、Ghostty 側の同等機能は入口ごと塞ぐ。
+keybind = super+t=unbind
+keybind = super+d=unbind
+keybind = super+shift+d=unbind
+keybind = ctrl+tab=unbind
+keybind = ctrl+shift+tab=unbind
+keybind = super+shift+bracket_left=unbind
+keybind = super+shift+bracket_right=unbind
+keybind = super+bracket_left=unbind
+keybind = super+bracket_right=unbind
+
+##### キーバインド ###########################################################
+# Claude Code の複数行入力
+keybind = shift+enter=text:\n
+
+# 矢印キー代替
+keybind = alt+h=text:\x1b[D
+keybind = alt+j=text:\x1b[B
+keybind = alt+k=text:\x1b[A
+keybind = alt+l=text:\x1b[C
+
+# フォントサイズ（Ghostty の既定は super。ctrl でも効くようにする）
+keybind = ctrl+plus=increase_font_size:1
+keybind = ctrl+equal=increase_font_size:1
+keybind = ctrl+minus=decrease_font_size:1
+keybind = ctrl+zero=reset_font_size
+
+keybind = alt+enter=toggle_fullscreen
+keybind = super+p=toggle_command_palette
+keybind = ctrl+shift+r=reload_config

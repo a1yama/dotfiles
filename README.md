@@ -17,7 +17,7 @@ curl -o - https://raw.githubusercontent.com/a1yama/dotfiles/refs/heads/master/in
 | git | gitconfig, global ignore |
 | lazygit | lazygit設定 |
 | yazi | ファイルマネージャ設定 |
-| wezterm | ターミナルエミュレータ設定 |
+| ghostty | ターミナルエミュレータ設定。tmux前提でタブ/スプリットは無効化 |
 | zellij | ターミナルマルチプレクサ設定 |
 | claude | Claude Code設定（CLAUDE.md, skills等） |
 | codex | Codex設定 |
