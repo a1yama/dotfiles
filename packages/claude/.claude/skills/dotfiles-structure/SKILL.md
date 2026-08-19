@@ -18,7 +18,7 @@ GNU Stow でホームディレクトリにシンボリックリンクを展開�
 │   ├── nvim/          # Neovim 設定
 │   ├── starship/      # Starship プロンプト
 │   ├── tmux/          # tmux 設定
-│   ├── wezterm/       # WezTerm 設定
+│   ├── ghostty/       # Ghostty 設定
 │   ├── yazi/          # Yazi ファイルマネージャー
 │   ├── zellij/        # Zellij 設定
 │   └── zsh/           # Zsh 設定・エイリアス
