@@ -32,7 +32,21 @@ make_env() {
   cat >"$d/bin/tmux" <<EOF
 #!/bin/bash
 case "\$1" in
-  list-panes) cat "$d/alive-panes" 2>/dev/null ;;
+  list-panes)
+    # -F に @claude_blocked が含まれるかで出力形を変える。
+    # is_pane_alive はペインIDだけを期待し、statusline は2列を期待するため。
+    want_blocked=0
+    for a in "\$@"; do case "\$a" in *@claude_blocked*) want_blocked=1 ;; esac; done
+    while read -r p; do
+      [ -n "\$p" ] || continue
+      if [ "\$want_blocked" = 1 ]; then
+        f="$d/blocked-\$(printf '%s' "\$p" | tr -d '%')"
+        if [ -f "\$f" ]; then printf '%s %s\n' "\$p" "\$(cat "\$f")"; else printf '%s \n' "\$p"; fi
+      else
+        printf '%s\n' "\$p"
+      fi
+    done < "$d/alive-panes"
+    ;;
   show-options)
     # -t の次の引数がペインID
     p=""
@@ -163,6 +177,44 @@ check "wait: 名前省略は exit 1" "1" \
   "$(run_cli "$d" wait --until idle >/dev/null 2>&1; echo $?)"
 check "wait: 未知のオプションは exit 1" "1" \
   "$(run_cli "$d" wait w --until idle --bogus >/dev/null 2>&1; echo $?)"
+
+# --- statusline: 並び順・切り詰め・除外 -----------------------------------
+# ステータスバーは1行しかないので、人を待たせているものが常に左端に来ることと、
+# 長い名前が幅を食い潰さないことが要件になる。
+# スタイル指定と記号(非ASCII)を落として、名前の並びだけを取り出す
+statusline_plain() {
+  run_cli "$1" statusline 2>/dev/null \
+    | sed -e 's/#\[[^]]*\]//g' -e 's/[^ -~]//g' -e 's/  */ /g' -e 's/^ //' -e 's/ $//'
+}
+
+d="$TMPROOT/statusline"; make_env "$d"
+add_session "$d" 900 "aaa-idle" "%1" "idle"
+add_session "$d" 901 "bbb-busy" "%2" "busy"
+add_session "$d" 902 "ccc-waiting" "%3" "waiting"
+alive "$d" "%1"; alive "$d" "%2"; alive "$d" "%3"
+check "statusline: blocked → busy → idle の順に並ぶ" \
+  "ccc-waiting bbb-busy aaa-idle" "$(statusline_plain "$d")"
+
+# フック由来の blocked でも先頭に来る(harness が busy を返していても上書きされる)
+d="$TMPROOT/statusline2"; make_env "$d"
+add_session "$d" 910 "zzz-idle" "%1" "idle"
+add_session "$d" 911 "yyy-hookblocked" "%2" "busy"
+alive "$d" "%1"; alive "$d" "%2"
+mark_blocked "$d" "%2"
+# harness が busy を返していてもフックの blocked が勝ち、かつ先頭に来る。
+# 併せて 14 桁超の切り詰め("yyy-hookblocked" → "yyy-hookblock…")も見る。
+check "statusline: フックの blocked が先頭に来る／長い名前を切り詰める" \
+  "yyy-hookblock zzz-idle" "$(statusline_plain "$d")"
+
+# 死んだペインは出さない
+d="$TMPROOT/statusline3"; make_env "$d"
+add_session "$d" 920 "ghost" "%9" "busy"
+check "statusline: 死んだペインは出さない" "" "$(statusline_plain "$d")"
+
+# 対象ゼロなら空文字(ステータスバーに余白を作らない)
+d="$TMPROOT/statusline4"; make_env "$d"
+add_offline_session "$d" 930 "desktop"
+check "statusline: 対象ゼロなら空" "" "$(statusline_plain "$d")"
 
 printf '\n%d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]
