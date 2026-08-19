@@ -18,7 +18,6 @@ curl -o - https://raw.githubusercontent.com/a1yama/dotfiles/refs/heads/master/in
 | lazygit | lazygit設定 |
 | yazi | ファイルマネージャ設定 |
 | ghostty | ターミナルエミュレータ設定。tmux前提でタブ/スプリットは無効化 |
-| zellij | ターミナルマルチプレクサ設定 |
 | claude | Claude Code設定（CLAUDE.md, skills等） |
 | codex | Codex設定 |
 | takt | TAKTピースエンジン設定 |
