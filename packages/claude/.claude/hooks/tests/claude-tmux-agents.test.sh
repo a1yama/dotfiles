@@ -95,6 +95,14 @@ mark_blocked "$d" "%1"
 check "blocked が harness の busy を上書きする" "blocked" "$(agent_line "$d" worker-a)"
 check "blocked は他のセッションに漏れない" "idle" "$(agent_line "$d" worker-b)"
 
+# --- harness 自身の waiting も blocked として扱う --------------------------
+# レジストリが "waiting" を返すことがある(実測)。フックが書けていない経路でも
+# 人待ちを取りこぼさないよう、waiting 単独でも blocked になること。
+d="$TMPROOT/waiting"; make_env "$d"
+add_session "$d" 800 "wait-sess" "%6" "waiting"
+alive "$d" "%6"
+check "harness の waiting は blocked 扱い" "blocked" "$(agent_line "$d" wait-sess)"
+
 # --- 境界: 死んだペイン ---------------------------------------------------
 d="$TMPROOT/dead"; make_env "$d"
 add_session "$d" 200 "gone" "%9" "busy"

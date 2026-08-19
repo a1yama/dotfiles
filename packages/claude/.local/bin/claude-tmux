@@ -97,6 +97,14 @@ agent_activity() {
     return 0
   fi
 
+  # harness 自身が "waiting"(人間の入力待ち)を返すことがある。
+  # ただし AskUserQuestion 表示中でも busy のままだった実測例があるため、
+  # harness の waiting とフックの blocked のどちらか一方でも立てば blocked とする。
+  if [[ "$status" == "waiting" ]]; then
+    echo "blocked"
+    return 0
+  fi
+
   # blocked はペインが生きている間だけ有効。値は blocked になった epoch 秒。
   local blocked
   blocked=$(tmux show-options -p -v -t "$pane" "$BLOCKED_OPT" 2>/dev/null || true)
@@ -738,6 +746,57 @@ cmd_wait() {
   done
 }
 
+# tmux の status-right に埋め込む1セグメントを組み立てる。
+# status-interval ごと(既定2秒)に呼ばれるので、tmux への問い合わせは list-panes 1回に
+# まとめ、セッションごとに show-options を叩かない。
+#
+# 人間が即座に動く必要があるのは blocked だけなので、blocked があるときは名前を出し、
+# 無いときは作業中/待機の件数だけに落として幅を食わない。
+cmd_statusline() {
+  command -v jq >/dev/null 2>&1 || return 0
+  command -v tmux >/dev/null 2>&1 || return 0
+
+  # "<ペインID> <blockedの値>" を一括取得。オプション未設定なら第2フィールドは空になる。
+  # ここに出ないペインは死んでいる。
+  local panes
+  panes=$(tmux list-panes -a -F '#{pane_id} #{@claude_blocked}' 2>/dev/null || true)
+  [[ -n "$panes" ]] || return 0
+
+  local blocked="" n_busy=0 n_idle=0 name pane status flag
+  while IFS=$'\t' read -r name pane status; do
+    [[ -n "$name" ]] || continue
+    flag=$(printf '%s\n' "$panes" \
+      | awk -v p="$pane" '$1 == p { print ($2 == "" ? "free" : "blocked"); found = 1 }
+                          END { if (!found) print "dead" }')
+    [[ "$flag" == "dead" ]] && continue
+
+    # harness の waiting とフックの blocked のどちらでも「人待ち」とみなす
+    if [[ "$flag" == "blocked" ]] || [[ "$status" == "waiting" ]]; then
+      blocked="${blocked:+$blocked }${name}"
+      continue
+    fi
+    case "$status" in
+      busy) n_busy=$((n_busy + 1)) ;;
+      idle) n_idle=$((n_idle + 1)) ;;
+    esac
+  done < <(list_registry_sessions)
+
+  # 対象が1つも無ければ何も出さない(常設セグメントが空欄で場所を取らないように)
+  if [[ -z "$blocked" ]] && (( n_busy == 0 )) && (( n_idle == 0 )); then
+    return 0
+  fi
+
+  local bg="#1e1e2e"
+  if [[ -n "$blocked" ]]; then
+    # 人を待たせている状態。目立たせる
+    printf '#[fg=#f38ba8 bg=%s]#[bg=#f38ba8 fg=%s bold] \xe2\x8f\xb8 %s #[fg=#f38ba8 bg=%s] ' \
+      "$bg" "$bg" "$blocked" "$bg"
+  else
+    printf '#[fg=#a6adc8 bg=%s]#[bg=#a6adc8 fg=%s] \xe2\x96\xb6%d \xe2\x9c\x93%d #[fg=#a6adc8 bg=%s] ' \
+      "$bg" "$bg" "$n_busy" "$n_idle" "$bg"
+  fi
+}
+
 # メインルーティング
 case "${1:-}" in
   spawn)
@@ -753,6 +812,9 @@ case "${1:-}" in
     ;;
   agents)
     cmd_agents
+    ;;
+  statusline)
+    cmd_statusline
     ;;
   wait)
     shift

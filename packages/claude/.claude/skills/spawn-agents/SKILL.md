@@ -32,6 +32,7 @@ user-invocable: true
 | `claude-tmux issues [--worktree] 42 43 44` | 複数のGitHub Issueを並列エージェントで処理 |
 | `claude-tmux status` | spawn したエージェントのライフサイクル(running/completed 等)とペイン生存確認 |
 | `claude-tmux agents` | tmux 上の全 Claude セッションの実行状態(busy/idle/blocked/unknown/dead)を一覧 |
+| `claude-tmux statusline` | tmux ステータスバー用の1セグメントを出力（`.tmux.conf` から呼ばれる） |
 | `claude-tmux wait <name> --until <idle\|blocked\|busy> [--timeout 秒]` | 目的の状態になるまでブロックして待つ |
 | `claude-tmux kill [name\|all]` | エージェントペイン停止とディレクトリ削除 |
 | `claude-tmux clean` | 完了/死亡したエージェントのディレクトリをクリーンアップ |
@@ -51,13 +52,16 @@ user-invocable: true
 |---|---|---|
 | `busy` | 実際に作業中 | harness のセッションレジストリ |
 | `idle` | 手が空いている | 同上 |
-| `blocked` | AskUserQuestion や許可待ちで**人間の入力を待っている** | フック(`agent-status.sh`) |
+| `blocked` | AskUserQuestion や許可待ちで**人間の入力を待っている** | レジストリの `waiting` またはフック(`agent-status.sh`) |
 | `unknown` | 状態不明だがペインは生きている | レジストリに status が無い |
 | `dead` | ペインが消滅した | tmux |
 
-**harness の status は `busy` と `idle` の2値しか持たず、AskUserQuestion の回答待ちでも
-`busy` を返す。** そのため「働いている」と「人を待っている」は `blocked` の重ね合わせ
-でしか区別できない。`busy` を見て「作業中だから待とう」と判断してはいけない。
+harness のレジストリは `waiting` を返すことがあるが、**AskUserQuestion 表示中でも
+`busy` のままだった実測例がある**。取りこぼすと人を待たせ続けることになるため、
+レジストリの `waiting` とフックの `blocked` のどちらか一方でも立てば blocked として扱う。
+`busy` を見て「作業中だから待とう」と判断してはいけない。
+
+`blocked` は tmux のステータスバー右端に常時表示される(`claude-tmux statusline`)。
 
 **制約: `spawn` した作業者(`claude -p`)は `status` を持たないため `unknown` になる。**
 ペイン紐付けと `blocked` の検出は効くが、busy/idle の判定はできない。
