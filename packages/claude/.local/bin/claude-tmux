@@ -14,6 +14,8 @@ Usage:
   claude-tmux spawn "タスク説明"  [--name NAME] [--dir DIR] [--no-review] [--worktree]
   claude-tmux issues [--worktree] 42 43 44
   claude-tmux status
+  claude-tmux agents
+  claude-tmux wait <name> --until <idle|blocked|busy> [--timeout 秒] [--interval 秒]
   claude-tmux logs <name>
   claude-tmux kill [name|all]
   claude-tmux clean
@@ -24,7 +26,11 @@ Subcommands:
              worktree モードでは完了後に監督が独立レビュアーで差分を検証し、
              指摘があれば修正エージェントを自動再投入する（最大2周、--no-review で無効）
   issues     複数のGitHub Issueを並列エージェントで処理
-  status     実行中のエージェント一覧とペイン生存確認
+  status     spawn したエージェントのライフサイクル（running/completed 等）とペイン生存確認
+  agents     tmux 上の全 Claude セッションの実行状態（busy/idle/blocked）を一覧
+  wait       指定セッションが目的の状態になるまでブロックして待つ。
+             blocked は「AskUserQuestion や許可待ちで人間の入力を待っている」状態。
+             harness の status は busy/idle しか持たないため、フックで補っている
   logs       特定エージェントのログを less で表示
   kill       エージェントペイン停止とディレクトリ削除
   clean      完了/死亡したエージェントのディレクトリをクリーンアップ
@@ -56,6 +62,51 @@ get_agent_dir() {
 is_pane_alive() {
   local pane_id="$1"
   tmux list-panes -a -F '#{pane_id}' 2>/dev/null | grep -q "^${pane_id}$"
+}
+
+SESSIONS_DIR="${CLAUDE_SESSIONS_DIR:-$HOME/.claude/sessions}"
+BLOCKED_OPT="${CLAUDE_AGENT_STATUS_OPT:-@claude_blocked}"
+
+# harness が持つセッションレジストリから tmux 上のセッションを列挙する。
+# "name<TAB>ペインID<TAB>status" を返す。tmux 外のセッションは status も tmux も
+# null になるため落ちる(デスクトップアプリ経由のセッションが該当)。
+list_registry_sessions() {
+  command -v jq >/dev/null 2>&1 || return 0
+  local f
+  for f in "$SESSIONS_DIR"/*.json; do
+    [[ -f "$f" ]] || continue
+    jq -r 'select(.tmux != null and .status != null)
+           | [(.name // "?"), (.tmux | split(".") | last), .status] | @tsv' \
+      "$f" 2>/dev/null || true
+  done
+}
+
+# レジストリの status(busy/idle)に、agent-status.sh が書いた blocked を重ねて実効状態を出す。
+# レジストリ側は AskUserQuestion や許可待ちで停止中も busy のままになるため、
+# 「働いている」と「人を待っている」はこの合成でしか区別できない。
+agent_activity() {
+  local pane="$1" status="$2"
+
+  if ! is_pane_alive "$pane"; then
+    echo "dead"
+    return 0
+  fi
+
+  # blocked はペインが生きている間だけ有効。値は blocked になった epoch 秒。
+  local blocked
+  blocked=$(tmux show-options -p -v -t "$pane" "$BLOCKED_OPT" 2>/dev/null || true)
+  if [[ -n "$blocked" ]]; then
+    echo "blocked"
+    return 0
+  fi
+
+  echo "$status"
+}
+
+# 名前からレジストリ行を引く。見つからなければ空。
+find_registry_line() {
+  local name="$1"
+  list_registry_sessions | awk -F'\t' -v n="$name" '$1 == n { print; exit }'
 }
 
 # spawn を実行した Claude セッションの名前。作業者はこの名前宛に SendMessage で質問する。
@@ -610,6 +661,78 @@ kill_agent_window() {
   echo "停止: ${name}"
 }
 
+cmd_agents() {
+  local found=0 name pane status act
+
+  echo "=== Claude セッション（tmux 上）==="
+  echo ""
+  while IFS=$'\t' read -r name pane status; do
+    [[ -n "$name" ]] || continue
+    found=1
+    act=$(agent_activity "$pane" "$status")
+    printf '  %s%-24s %-8s %s\n' "$AGENT_PREFIX" "$name" "$act" "$pane"
+  done < <(list_registry_sessions)
+  echo ""
+
+  if [[ $found -eq 0 ]]; then
+    echo "  tmux に紐づく Claude セッションはありません。"
+    echo "  (デスクトップアプリ経由のセッションはレジストリに tmux/status を持ちません)"
+    echo ""
+  fi
+}
+
+# 指定セッションが目的の状態になるまで待つ。ポーリングで足りる粒度なので依存を増やさない。
+cmd_wait() {
+  local name="" until_state="" timeout=300 interval=1
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --until)    until_state="${2:-}"; shift 2 ;;
+      --timeout)  timeout="${2:-}"; shift 2 ;;
+      --interval) interval="${2:-}"; shift 2 ;;
+      -*) echo "Error: 不明なオプション '$1'" >&2; exit 1 ;;
+      *)  name="$1"; shift ;;
+    esac
+  done
+
+  if [[ -z "$name" ]] || [[ -z "$until_state" ]]; then
+    echo "Usage: claude-tmux wait <name> --until <idle|blocked|busy> [--timeout 秒] [--interval 秒]" >&2
+    exit 1
+  fi
+  case "$until_state" in
+    idle | blocked | busy) ;;
+    *) echo "Error: --until は idle / blocked / busy のいずれか（指定: ${until_state}）" >&2; exit 1 ;;
+  esac
+
+  local waited=0 line pane status act
+  while :; do
+    line=$(find_registry_line "$name")
+    if [[ -z "$line" ]]; then
+      echo "Error: セッション '${name}' が見つかりません（claude-tmux agents で一覧を確認）" >&2
+      exit 1
+    fi
+    IFS=$'\t' read -r _ pane status <<<"$line"
+    act=$(agent_activity "$pane" "$status")
+
+    if [[ "$act" == "$until_state" ]]; then
+      echo "$act"
+      return 0
+    fi
+    # ペインが消えたら永遠に到達しないので待ち続けない
+    if [[ "$act" == "dead" ]]; then
+      echo "Error: '${name}' のペイン ${pane} が消滅しました" >&2
+      exit 2
+    fi
+    if (( waited >= timeout )); then
+      echo "Error: timeout (${timeout}秒) — '${name}' は現在 ${act}" >&2
+      exit 3
+    fi
+
+    sleep "$interval"
+    waited=$((waited + interval))
+  done
+}
+
 # メインルーティング
 case "${1:-}" in
   spawn)
@@ -622,6 +745,13 @@ case "${1:-}" in
     ;;
   status)
     cmd_status
+    ;;
+  agents)
+    cmd_agents
+    ;;
+  wait)
+    shift
+    cmd_wait "$@"
     ;;
   logs)
     shift

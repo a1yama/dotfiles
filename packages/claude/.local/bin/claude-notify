@@ -8,6 +8,14 @@ input=$(cat)
 mkdir -p /tmp/claude-notify
 echo "$input" > /tmp/claude-notify/last.json
 
+# 許可待ちを「人間の入力待ち」として tmux ペインに記録するためのヘルパー。
+# 見つからなければ黙って諦める(通知そのものは落とさない)。
+agent_status="${CLAUDE_AGENT_STATUS_BIN:-$HOME/.claude/hooks/agent-status.sh}"
+mark_agent_status() {
+  [ -x "$agent_status" ] || return 0
+  "$agent_status" "$1" </dev/null >/dev/null 2>&1 || true
+}
+
 event=$(echo "$input" | jq -r '.hook_event_name // "unknown"')
 cwd=$(echo "$input" | jq -r '.cwd // ""')
 dir_name="${cwd/#$HOME/~}"
@@ -157,12 +165,16 @@ case "$event" in
   Notification)
     message=$(echo "$input" | jq -r '.message // ""')
     notification_type=$(echo "$input" | jq -r '.notification_type // ""')
-    # idle_prompt は通知不要
+    # idle_prompt は通知不要。
+    # このとき harness 側の status も idle になっているので blocked は落としてよい
+    # (ターン途中の回答待ちではなく、単に手が空いて待っている状態)。
     if [[ "$notification_type" == "idle_prompt" ]]; then
+      mark_agent_status unblock
       exit 0
     fi
     case "$notification_type" in
       permission_prompt)
+        mark_agent_status block
         title="許可が必要です"
         emoji=":lock:"
         icon="🔒"

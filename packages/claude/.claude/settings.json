@@ -132,6 +132,15 @@
             "command": "~/dotfiles/packages/claude/.claude/hooks/post-edit-check.sh"
           }
         ]
+      },
+      {
+        "matcher": "AskUserQuestion",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/dotfiles/packages/claude/.claude/hooks/agent-status.sh unblock"
+          }
+        ]
       }
     ],
     "Notification": [

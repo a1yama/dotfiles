@@ -18,7 +18,14 @@ violations=$(printf '%s' "$payload" | jq -r '
   ] | join(" / ")
 ' 2>/dev/null)
 
-[ -z "$violations" ] && exit 0
+hooks="${CLAUDE_HOOKS_DIR:-$(cd "$(dirname "$0")" && pwd)}"
+
+if [ -z "$violations" ]; then
+  # 違反が無いときだけ選択肢が実際に表示され、そこから人間の入力待ちになる。
+  # deny する場合は質問が出ないまま Claude が出し直すので blocked にしてはいけない。
+  "$hooks/agent-status.sh" block </dev/null >/dev/null 2>&1 || true
+  exit 0
+fi
 
 jq -n --arg v "$violations" \
   '{hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"deny",permissionDecisionReason:("AskUserQuestion 制約違反 → " + $v + " | label は表示幅50桁以内(全角25文字目安)、preview は使用禁止(CLAUDE.md)。補足は description に移し、見せたい差分は本文に書いてから出し直してください。")}}'
