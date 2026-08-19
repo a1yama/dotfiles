@@ -13,14 +13,13 @@ GNU Stow でホームディレクトリにシンボリックリンクを展開�
 ├── packages/          # stow パッケージ群
 │   ├── claude/        # Claude Code 設定・スキル・CLIツール
 │   ├── codex/         # Codex 設定
+│   ├── ghostty/       # Ghostty 設定
 │   ├── git/           # Git 設定・エイリアス・ignore
 │   ├── lazygit/       # lazygit 設定
 │   ├── nvim/          # Neovim 設定
 │   ├── starship/      # Starship プロンプト
 │   ├── tmux/          # tmux 設定
-│   ├── ghostty/       # Ghostty 設定
 │   ├── yazi/          # Yazi ファイルマネージャー
-│   ├── zellij/        # Zellij 設定
 │   └── zsh/           # Zsh 設定・エイリアス
 ├── install            # セットアップスクリプト
 └── Brewfile           # Homebrew パッケージ一覧
