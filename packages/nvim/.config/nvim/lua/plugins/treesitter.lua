@@ -1,5 +1,7 @@
 return {
   "nvim-treesitter/nvim-treesitter",
+  -- main は書き直し版で nvim-treesitter.configs が無い。下の setup を使う限り master に留める。
+  branch = "master",
   lazy = false,
   -- event = { "BufReadPost", "BufNewFile" },
   -- cmd = { "TSInstall", "TSBufEnable", "TSBufDisable", "TSModuleInfo" },
