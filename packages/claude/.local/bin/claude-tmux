@@ -15,6 +15,8 @@ Usage:
   claude-tmux issues [--worktree] 42 43 44
   claude-tmux status
   claude-tmux agents
+  claude-tmux pick
+  claude-tmux goto-blocked
   claude-tmux wait <name> --until <idle|blocked|busy> [--timeout 秒] [--interval 秒]
   claude-tmux logs <name>
   claude-tmux kill [name|all]
@@ -28,6 +30,8 @@ Subcommands:
   issues     複数のGitHub Issueを並列エージェントで処理
   status     spawn したエージェントのライフサイクル（running/completed 等）とペイン生存確認
   agents     tmux 上の全 Claude セッションの実行状態（busy/idle/blocked）を一覧
+  pick       fzf で選んでそのペインへ移動（tmux の prefix + g から呼ばれる）
+  goto-blocked  人を待たせている先頭のエージェントへ直行（prefix + G）
   wait       指定セッションが目的の状態になるまでブロックして待つ。
              blocked は「AskUserQuestion や許可待ちで人間の入力を待っている」状態。
              harness の status は busy/idle しか持たないため、フックで補っている
@@ -839,6 +843,56 @@ cmd_goto() {
   tmux select-pane -t "$pane" 2>/dev/null || true
 }
 
+# 実効状態つきの一覧を "状態<TAB>名前<TAB>ペインID" で返す。死んだペインは落とす。
+# 状態名のアルファベット順が blocked < busy < idle < unknown となり、
+# そのまま「人待ちを先頭に」の優先順位になるので sort をそのまま使う。
+list_live_agents() {
+  local name pane status act
+  while IFS=$'\t' read -r name pane status; do
+    [[ -n "$name" ]] || continue
+    act=$(agent_activity "$pane" "$status")
+    [[ "$act" == "dead" ]] && continue
+    printf '%s\t%s\t%s\n' "$act" "$name" "$pane"
+  done < <(list_registry_sessions) | sort
+}
+
+# prefix + g から display-popup で呼ばれる。fzf で選んでそのペインへ飛ぶ。
+cmd_pick() {
+  local rows
+  rows=$(list_live_agents)
+  if [[ -z "$rows" ]]; then
+    echo "tmux 上に Claude セッションがありません"
+    sleep 1.5
+    return 0
+  fi
+  if ! command -v fzf >/dev/null 2>&1; then
+    printf '%s\n' "$rows"
+    echo "(fzf が無いため一覧表示のみ)"
+    sleep 2
+    return 0
+  fi
+
+  local sel
+  sel=$(printf '%s\n' "$rows" \
+    | awk -F'\t' '{ printf "%-8s %-24s %s\n", $1, $2, $3 }' \
+    | fzf --reverse --header='Enter で移動 / Esc で中止') || return 0
+  [[ -n "$sel" ]] || return 0
+
+  local pane="${sel##* }"
+  cmd_goto "p${pane#%}"
+}
+
+# prefix + G。人を待たせている先頭のエージェントへ直行する。
+cmd_goto_blocked() {
+  local first
+  first=$(list_live_agents | awk -F'\t' '$1 == "blocked" { print $3; exit }')
+  if [[ -z "$first" ]]; then
+    tmux display-message "待ちのエージェントはいません" 2>/dev/null || true
+    return 0
+  fi
+  cmd_goto "p${first#%}"
+}
+
 # メインルーティング
 case "${1:-}" in
   spawn)
@@ -861,6 +915,12 @@ case "${1:-}" in
   goto)
     shift
     cmd_goto "$@"
+    ;;
+  pick)
+    cmd_pick
+    ;;
+  goto-blocked)
+    cmd_goto_blocked
     ;;
   wait)
     shift

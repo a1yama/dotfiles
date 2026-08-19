@@ -57,6 +57,7 @@ case "\$1" in
     f="$d/blocked-\$(printf '%s' "\$p" | tr -d '%')"
     if [ -f "\$f" ]; then cat "\$f"; else exit 1; fi
     ;;
+  switch-client|select-window|select-pane) printf '%s\n' "\$*" >> "$d/goto.log" ;;
   *) exit 0 ;;
 esac
 EOF
@@ -235,6 +236,47 @@ check "statusline: 死んだペインは出さない" "" "$(statusline_plain "$d
 d="$TMPROOT/statusline4"; make_env "$d"
 add_offline_session "$d" 930 "desktop"
 check "statusline: 対象ゼロなら空" "" "$(statusline_plain "$d")"
+
+# --- goto-blocked / pick --------------------------------------------------
+# キーボードからの移動。どのペインを狙ったかを tmux スタブのログで確認する。
+goto_target() { awk '{ print $NF }' "$1/goto.log" 2>/dev/null | sort -u | tr '\n' ' ' | sed 's/ $//'; }
+
+d="$TMPROOT/gotoblocked"; make_env "$d"
+add_session "$d" 1000 "calm" "%1" "idle"
+add_session "$d" 1001 "needs-you" "%2" "busy"
+alive "$d" "%1"; alive "$d" "%2"
+mark_blocked "$d" "%2"
+run_cli "$d" goto-blocked >/dev/null 2>&1
+check "goto-blocked: blocked のペインを狙う" "%2" "$(goto_target "$d")"
+check "goto-blocked: 3段(switch/select-window/select-pane)とも呼ぶ" "3" \
+  "$(wc -l < "$d/goto.log" | tr -d ' ')"
+
+d="$TMPROOT/gotonone"; make_env "$d"
+add_session "$d" 1010 "calm" "%1" "idle"
+alive "$d" "%1"
+check "goto-blocked: 待ちが居なければ何もせず正常終了" "0" \
+  "$(run_cli "$d" goto-blocked >/dev/null 2>&1; echo $?)"
+check "goto-blocked: 待ちが居なければ移動もしない" "" "$(goto_target "$d")"
+
+# pick は fzf をスタブして「先頭行を選んだ」ことにする
+d="$TMPROOT/pick"; make_env "$d"
+add_session "$d" 1020 "calm" "%1" "idle"
+add_session "$d" 1021 "needs-you" "%2" "busy"
+alive "$d" "%1"; alive "$d" "%2"
+mark_blocked "$d" "%2"
+printf '#!/bin/bash\nhead -1\n' > "$d/bin/fzf"; chmod +x "$d/bin/fzf"
+run_cli "$d" pick >/dev/null 2>&1
+check "pick: 先頭候補(blocked)のペインへ移動する" "%2" "$(goto_target "$d")"
+
+d="$TMPROOT/pickcancel"; make_env "$d"
+add_session "$d" 1030 "calm" "%1" "idle"
+alive "$d" "%1"
+printf '#!/bin/bash\ncat >/dev/null\nexit 130\n' > "$d/bin/fzf"; chmod +x "$d/bin/fzf"
+check "pick: Esc で中止しても正常終了" "0" "$(run_cli "$d" pick >/dev/null 2>&1; echo $?)"
+check "pick: 中止したら移動しない" "" "$(goto_target "$d")"
+
+d="$TMPROOT/pickempty"; make_env "$d"
+check "pick: 対象ゼロでも正常終了" "0" "$(run_cli "$d" pick >/dev/null 2>&1; echo $?)"
 
 printf '\n%d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]
