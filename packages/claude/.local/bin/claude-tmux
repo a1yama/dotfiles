@@ -786,15 +786,19 @@ cmd_statusline() {
     short=$(printf '%s' "$name" \
       | awk -v e="$ELLIPSIS" '{ if (length($0) > 14) print substr($0, 1, 13) e; else print }')
 
+    # range=pane|<ペインID> で囲むと、クリック時に MouseDown1Status がそのペインを
+    # ターゲットとして発火する(tmux(1) の "range=pane|X")。.tmux.conf 側で受けて遷移する。
+    local open="#[range=pane|${pane}]" close="#[norange]"
+
     # harness の waiting とフックの blocked のどちらでも「人待ち」とみなす
     if [[ "$flag" == "blocked" ]] || [[ "$status" == "waiting" ]]; then
-      out_blocked+="#[fg=#f38ba8 bg=${BAR_BG} bold]${G_BLOCKED}${short} "
+      out_blocked+="${open}#[fg=#f38ba8 bg=${BAR_BG} bold]${G_BLOCKED}${short}${close} "
       continue
     fi
     case "$status" in
-      busy) out_busy+="#[fg=#89b4fa bg=${BAR_BG}]${G_BUSY}${short} " ;;
-      idle) out_idle+="#[fg=#9399b2 bg=${BAR_BG}]${G_IDLE}${short} " ;;
-      *)    out_idle+="#[fg=#6c7086 bg=${BAR_BG}]${G_UNKNOWN}${short} " ;;
+      busy) out_busy+="${open}#[fg=#89b4fa bg=${BAR_BG}]${G_BUSY}${short}${close} " ;;
+      idle) out_idle+="${open}#[fg=#9399b2 bg=${BAR_BG}]${G_IDLE}${short}${close} " ;;
+      *)    out_idle+="${open}#[fg=#6c7086 bg=${BAR_BG}]${G_UNKNOWN}${short}${close} " ;;
     esac
   done < <(list_registry_sessions)
 
