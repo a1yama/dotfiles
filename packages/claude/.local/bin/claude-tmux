@@ -764,6 +764,10 @@ cmd_statusline() {
   panes=$(tmux list-panes -a -F '#{pane_id} #{@claude_blocked}' 2>/dev/null || true)
   [[ -n "$panes" ]] || return 0
 
+  # 他のセグメントが区切りに使っている色に合わせる。背景を指定しないと
+  # status-style の既定(緑)が透けて読めなくなる
+  local BAR_BG="#1e1e2e"
+
   local G_BLOCKED G_BUSY G_IDLE G_UNKNOWN ELLIPSIS
   G_BLOCKED=$(printf '\xe2\x8f\xb8')   # ⏸
   G_BUSY=$(printf '\xe2\x96\xb6')      # ▶
@@ -784,17 +788,22 @@ cmd_statusline() {
 
     # harness の waiting とフックの blocked のどちらでも「人待ち」とみなす
     if [[ "$flag" == "blocked" ]] || [[ "$status" == "waiting" ]]; then
-      out_blocked+="#[fg=#f38ba8 bold]${G_BLOCKED}${short}#[default] "
+      out_blocked+="#[fg=#f38ba8 bg=${BAR_BG} bold]${G_BLOCKED}${short} "
       continue
     fi
     case "$status" in
-      busy) out_busy+="#[fg=#89b4fa]${G_BUSY}${short}#[default] " ;;
-      idle) out_idle+="#[fg=#6c7086]${G_IDLE}${short}#[default] " ;;
-      *)    out_idle+="#[fg=#585b70]${G_UNKNOWN}${short}#[default] " ;;
+      busy) out_busy+="#[fg=#89b4fa bg=${BAR_BG}]${G_BUSY}${short} " ;;
+      idle) out_idle+="#[fg=#9399b2 bg=${BAR_BG}]${G_IDLE}${short} " ;;
+      *)    out_idle+="#[fg=#6c7086 bg=${BAR_BG}]${G_UNKNOWN}${short} " ;;
     esac
   done < <(list_registry_sessions)
 
-  printf '%s%s%s' "$out_blocked" "$out_busy" "$out_idle"
+  local all="${out_blocked}${out_busy}${out_idle}"
+  [[ -n "$all" ]] || return 0
+
+  # 末尾で明示的に戻す。#[default] は status-style(tmux 既定は緑)に戻ってしまい、
+  # 背景を指定していない要素が緑地に乗って読めなくなる
+  printf '#[bg=%s]%s#[fg=default bg=%s]' "$BAR_BG" "$all" "$BAR_BG"
 }
 
 # メインルーティング
