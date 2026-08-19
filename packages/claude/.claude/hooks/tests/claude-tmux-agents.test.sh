@@ -109,6 +109,23 @@ mark_blocked "$d" "%1"
 check "blocked が harness の busy を上書きする" "blocked" "$(agent_line "$d" worker-a)"
 check "blocked は他のセッションに漏れない" "idle" "$(agent_line "$d" worker-b)"
 
+# --- 再発防止: idle のときは残留フラグを信用しない ------------------------
+# AskUserQuestion を Esc で閉じるとツールがキャンセルされ PostToolUse も Stop も
+# 発火せず、@claude_blocked が立ったまま残る。harness の idle を優先しないと
+# ステータスバーが blocked のまま固まる(実際に発生した)。
+d="$TMPROOT/stale"; make_env "$d"
+add_session "$d" 750 "escaped" "%1" "idle"
+alive "$d" "%1"
+mark_blocked "$d" "%1"
+check "idle + 残留フラグ → idle(フラグを無視)" "idle" "$(agent_line "$d" escaped)"
+
+# busy のときは残留と区別できないので blocked を優先する(取りこぼしを避ける)
+d="$TMPROOT/stale2"; make_env "$d"
+add_session "$d" 751 "working" "%1" "busy"
+alive "$d" "%1"
+mark_blocked "$d" "%1"
+check "busy + フラグ → blocked" "blocked" "$(agent_line "$d" working)"
+
 # --- harness 自身の waiting も blocked として扱う --------------------------
 # レジストリが "waiting" を返すことがある(実測)。フックが書けていない経路でも
 # 人待ちを取りこぼさないよう、waiting 単独でも blocked になること。
@@ -153,6 +170,9 @@ check "wait: 到達しなければ exit 3" "3" \
   "$(run_cli "$d" wait w --until blocked --timeout 0 >/dev/null 2>&1; echo $?)"
 
 # --- wait: blocked を待てる ----------------------------------------------
+# 実際にブロックするときはターンが動いている(harness は busy か waiting)。
+# idle のままフラグだけ立てるのは残留フラグの形なので、ここでは再現にならない。
+add_session "$d" 400 "w" "%1" "busy"
 mark_blocked "$d" "%1"
 check "wait: blocked に遷移していれば返る" "blocked" \
   "$(run_cli "$d" wait w --until blocked --timeout 0 2>/dev/null)"

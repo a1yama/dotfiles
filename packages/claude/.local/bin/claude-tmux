@@ -106,9 +106,13 @@ agent_activity() {
   fi
 
   # blocked はペインが生きている間だけ有効。値は blocked になった epoch 秒。
+  #
+  # ただし harness が idle と言っているときはフラグを信用しない。
+  # AskUserQuestion を Esc で閉じるとツールがキャンセルされ PostToolUse も Stop も
+  # 発火しないため、フラグが立ったまま残る。harness の idle を優先することで自己修復する。
   local blocked
   blocked=$(tmux show-options -p -v -t "$pane" "$BLOCKED_OPT" 2>/dev/null || true)
-  if [[ -n "$blocked" ]]; then
+  if [[ -n "$blocked" ]] && [[ "$status" != "idle" ]]; then
     echo "blocked"
     return 0
   fi
@@ -796,8 +800,10 @@ cmd_statusline() {
     # クリック判定が隣のエントリまで伸びないようにする。
     local sep="  "
 
-    # harness の waiting とフックの blocked のどちらでも「人待ち」とみなす
-    if [[ "$flag" == "blocked" ]] || [[ "$status" == "waiting" ]]; then
+    # harness の waiting とフックの blocked のどちらでも「人待ち」とみなす。
+    # ただし harness が idle と言っているときは残留フラグとして無視する
+    # (Esc で AskUserQuestion を閉じると PostToolUse も Stop も発火せず消し損ねるため)。
+    if [[ "$status" == "waiting" ]] || { [[ "$flag" == "blocked" ]] && [[ "$status" != "idle" ]]; }; then
       out_blocked+="${open}#[fg=#f38ba8 bg=${BAR_BG} bold]${G_BLOCKED} ${short}${close}${sep}"
       continue
     fi

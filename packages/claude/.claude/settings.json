@@ -192,6 +192,14 @@
             "command": "jq -n --arg d \"$(date '+%Y-%m-%d (%a) %H:%M JST')\" '{hookSpecificOutput:{hookEventName:\"UserPromptSubmit\",additionalContext:(\"現在日時: \"+$d)}}'"
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/dotfiles/packages/claude/.claude/hooks/agent-status.sh unblock"
+          }
+        ]
       }
     ],
     "SessionEnd": [
