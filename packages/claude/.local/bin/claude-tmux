@@ -792,15 +792,19 @@ cmd_statusline() {
     # tmux の "=" 記法に頼らずシェルで完結させ、動作を検証できるようにするため。
     local open="#[range=user|p${pane#%}]" close="#[norange]"
 
+    # 記号と名前の間、およびエントリ間に余白を入れる。区切りの空白は range の外に置き、
+    # クリック判定が隣のエントリまで伸びないようにする。
+    local sep="  "
+
     # harness の waiting とフックの blocked のどちらでも「人待ち」とみなす
     if [[ "$flag" == "blocked" ]] || [[ "$status" == "waiting" ]]; then
-      out_blocked+="${open}#[fg=#f38ba8 bg=${BAR_BG} bold]${G_BLOCKED}${short}${close} "
+      out_blocked+="${open}#[fg=#f38ba8 bg=${BAR_BG} bold]${G_BLOCKED} ${short}${close}${sep}"
       continue
     fi
     case "$status" in
-      busy) out_busy+="${open}#[fg=#89b4fa bg=${BAR_BG}]${G_BUSY}${short}${close} " ;;
-      idle) out_idle+="${open}#[fg=#9399b2 bg=${BAR_BG}]${G_IDLE}${short}${close} " ;;
-      *)    out_idle+="${open}#[fg=#6c7086 bg=${BAR_BG}]${G_UNKNOWN}${short}${close} " ;;
+      busy) out_busy+="${open}#[fg=#89b4fa bg=${BAR_BG}]${G_BUSY} ${short}${close}${sep}" ;;
+      idle) out_idle+="${open}#[fg=#9399b2 bg=${BAR_BG}]${G_IDLE} ${short}${close}${sep}" ;;
+      *)    out_idle+="${open}#[fg=#6c7086 bg=${BAR_BG}]${G_UNKNOWN} ${short}${close}${sep}" ;;
     esac
   done < <(list_registry_sessions)
 
@@ -809,7 +813,7 @@ cmd_statusline() {
 
   # 末尾で明示的に戻す。#[default] は status-style(tmux 既定は緑)に戻ってしまい、
   # 背景を指定していない要素が緑地に乗って読めなくなる
-  printf '#[bg=%s]%s#[fg=default bg=%s]' "$BAR_BG" "$all" "$BAR_BG"
+  printf '#[bg=%s]  %s#[fg=default bg=%s]' "$BAR_BG" "$all" "$BAR_BG"
 }
 
 # ステータスバーのクリックから呼ばれる。引数は statusline が range=user に埋めた "p<数字>"。
