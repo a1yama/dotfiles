@@ -68,15 +68,20 @@ SESSIONS_DIR="${CLAUDE_SESSIONS_DIR:-$HOME/.claude/sessions}"
 BLOCKED_OPT="${CLAUDE_AGENT_STATUS_OPT:-@claude_blocked}"
 
 # harness が持つセッションレジストリから tmux 上のセッションを列挙する。
-# "name<TAB>ペインID<TAB>status" を返す。tmux 外のセッションは status も tmux も
-# null になるため落ちる(デスクトップアプリ経由のセッションが該当)。
+# "name<TAB>ペインID<TAB>status" を返す。tmux 外のセッション(デスクトップアプリ経由)は
+# tmux が null なので落ちる。
+#
+# status は null になることがある。spawn した作業者(claude -p)がこれで、
+# ペイン紐付けはされるが harness が busy/idle を書かない(実測)。
+# 落とすと作業者が一覧から消えてしまうので unknown として残し、
+# blocked の重ね合わせとペイン生存判定だけは効かせる。
 list_registry_sessions() {
   command -v jq >/dev/null 2>&1 || return 0
   local f
   for f in "$SESSIONS_DIR"/*.json; do
     [[ -f "$f" ]] || continue
-    jq -r 'select(.tmux != null and .status != null)
-           | [(.name // "?"), (.tmux | split(".") | last), .status] | @tsv' \
+    jq -r 'select(.tmux != null)
+           | [(.name // "?"), (.tmux | split(".") | last), (.status // "unknown")] | @tsv' \
       "$f" 2>/dev/null || true
   done
 }

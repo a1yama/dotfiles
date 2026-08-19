@@ -20,7 +20,9 @@ spawn-agents スキル、手法選択は parallel-dev スキルを参照。
 
 1. **状況を集める**
    - `TaskList` で未着手・進行中・ブロック中のタスクを取得する
-   - 直近の idle 通知から、手が空いているエージェント名を洗い出す
+   - `claude-tmux agents` で tmux 上の各セッションの実行状態を見る。
+     idle 通知の記憶に頼るより確実で、通知を取りこぼしていても現在値が取れる
+   - 直近の idle 通知も併せて、手が空いているエージェント名を洗い出す
 
 2. **依存の解けたタスクを1件だけ割り当てる**
    - ブロッカーが残っているタスクは割り当てない
@@ -33,6 +35,23 @@ spawn-agents スキル、手法選択は parallel-dev スキルを参照。
 4. **報告は最後に1回**
    - 割り当てられるタスクが無い場合、またはユーザーの判断が要るブロッカーがある場合のみ、まとめてユーザーに報告する
    - 個々の idle 通知ごとに報告しない
+
+## 状態の読み方
+
+`claude-tmux agents` の `blocked` は **AskUserQuestion や許可待ちで人間の入力を
+待っている**状態。harness の `busy` は AskUserQuestion の回答待ちでも `busy` のままなので、
+`busy` だけを見て「作業中だから触らない」と判断すると、人間を待っているエージェントを
+放置することになる。**`blocked` を最優先で拾う。**
+
+特定のエージェントの手が空くまで待ちたいときはポーリングを書かずに次を使う。
+
+```bash
+claude-tmux wait <name> --until blocked --timeout 600
+```
+
+ただし `spawn` した作業者(`claude -p`)は `status` を持たず `unknown` になる。
+作業者の完了検知には `claude-tmux status` のライフサイクルか
+Cross-session messaging を使う(詳細は spawn-agents スキル)。
 
 ## やらないこと
 
