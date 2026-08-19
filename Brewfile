@@ -29,7 +29,7 @@ brew "zsh-completions"
 brew "zsh-syntax-highlighting"
 
 cask "1password"
-cask "alfred"
+cask "raycast"
 cask "cleanshot"
 cask "obsidian"
 cask "docker-desktop"
