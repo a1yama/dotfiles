@@ -61,6 +61,13 @@ add_offline_session() {
   printf '{"pid":%s,"name":"%s","status":null,"tmux":null}\n' "$pid" "$name" >"$d/sessions/$pid.json"
 }
 
+# spawn した作業者(claude -p)の形。ペインは紐づくが harness が status を書かない
+add_worker_session() {
+  local d="$1" pid="$2" name="$3" pane="$4"
+  printf '{"pid":%s,"name":"%s","tmux":"main:@1.%s","status":null}\n' \
+    "$pid" "$name" "$pane" >"$d/sessions/$pid.json"
+}
+
 alive() { printf '%s\n' "$2" >>"$1/alive-panes"; }
 mark_blocked() { printf '1700000000\n' >"$1/blocked-$(printf '%s' "$2" | tr -d '%')"; }
 
@@ -92,6 +99,15 @@ check "blocked は他のセッションに漏れない" "idle" "$(agent_line "$d
 d="$TMPROOT/dead"; make_env "$d"
 add_session "$d" 200 "gone" "%9" "busy"
 check "生存していないペインは dead" "dead" "$(agent_line "$d" gone)"
+
+# --- 境界: status が無い作業者(claude -p)も一覧から落とさない --------------
+# 落とすと spawn した作業者が丸ごと見えなくなり、dispatch 用途で使い物にならない。
+d="$TMPROOT/worker"; make_env "$d"
+add_worker_session "$d" 700 "spawned-w" "%4"
+alive "$d" "%4"
+check "status が無い作業者は unknown として残る" "unknown" "$(agent_line "$d" spawned-w)"
+mark_blocked "$d" "%4"
+check "status が無くても blocked は重なる" "blocked" "$(agent_line "$d" spawned-w)"
 
 # --- 境界: tmux 外のセッションは一覧に出ない ------------------------------
 d="$TMPROOT/offline"; make_env "$d"
