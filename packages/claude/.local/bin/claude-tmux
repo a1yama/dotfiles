@@ -786,9 +786,11 @@ cmd_statusline() {
     short=$(printf '%s' "$name" \
       | awk -v e="$ELLIPSIS" '{ if (length($0) > 14) print substr($0, 1, 13) e; else print }')
 
-    # range=pane|<ペインID> で囲むと、クリック時に MouseDown1Status がそのペインを
-    # ターゲットとして発火する(tmux(1) の "range=pane|X")。.tmux.conf 側で受けて遷移する。
-    local open="#[range=pane|${pane}]" close="#[norange]"
+    # クリック領域。range=user|X の X が mouse_status_range に入る(最大15バイト)。
+    # ペインIDの "%" はステータス行が strftime を通るため避け、"p" + 数字で渡して
+    # cmd_goto 側で復元する。range=pane|X を使わないのは、ターゲット解決を
+    # tmux の "=" 記法に頼らずシェルで完結させ、動作を検証できるようにするため。
+    local open="#[range=user|p${pane#%}]" close="#[norange]"
 
     # harness の waiting とフックの blocked のどちらでも「人待ち」とみなす
     if [[ "$flag" == "blocked" ]] || [[ "$status" == "waiting" ]]; then
@@ -810,6 +812,23 @@ cmd_statusline() {
   printf '#[bg=%s]%s#[fg=default bg=%s]' "$BAR_BG" "$all" "$BAR_BG"
 }
 
+# ステータスバーのクリックから呼ばれる。引数は statusline が range=user に埋めた "p<数字>"。
+# セッション・ウィンドウ・ペインが別々になりうるので3段とも指定する。
+cmd_goto() {
+  local arg="${1:-}"
+  [[ -n "$arg" ]] || { echo "Usage: claude-tmux goto p<ペイン番号>" >&2; exit 1; }
+
+  local pane="%${arg#p}"
+  if ! is_pane_alive "$pane"; then
+    tmux display-message "claude-tmux: ペイン ${pane} は存在しません" 2>/dev/null || true
+    exit 1
+  fi
+
+  tmux switch-client -t "$pane" 2>/dev/null || true
+  tmux select-window -t "$pane" 2>/dev/null || true
+  tmux select-pane -t "$pane" 2>/dev/null || true
+}
+
 # メインルーティング
 case "${1:-}" in
   spawn)
@@ -828,6 +847,10 @@ case "${1:-}" in
     ;;
   statusline)
     cmd_statusline
+    ;;
+  goto)
+    shift
+    cmd_goto "$@"
     ;;
   wait)
     shift
