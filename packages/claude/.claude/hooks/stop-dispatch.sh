@@ -17,6 +17,10 @@ input=$(cat)
 hooks="${CLAUDE_HOOKS_DIR:-$HOME/dotfiles/packages/claude/.claude/hooks}"
 notify="${CLAUDE_NOTIFY_BIN:-$HOME/.local/bin/claude-notify}"
 
+# ターンが止まった時点で「人間の入力待ち」は解除される。ゲートが差し戻して継続する場合も
+# 人を待っている状態ではないため、block 分岐を待たずここで一度だけ消す。
+"$hooks/agent-status.sh" unblock </dev/null >/dev/null 2>&1 || true
+
 frame_out=$(printf '%s' "$input" | "$hooks/stop-frame-check.sh")
 gate_out=$(printf '%s' "$input" | "$hooks/stop-quality-gate.sh")
 
