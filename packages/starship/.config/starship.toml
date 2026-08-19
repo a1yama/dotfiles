@@ -2,6 +2,9 @@
 
 add_newline = false
 
+# nodenv の shim 経由で node を起動すると既定の 500ms を超えて警告が出るため延長
+command_timeout = 2000
+
 [character]
 success_symbol = "[❯](bold #00ff00)"
 error_symbol = "[✘](bold #ff4444)"
