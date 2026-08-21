@@ -8,10 +8,20 @@ font-size = 14
 background-opacity = 0.85
 background-blur = 20
 
-# タイトルバーを消し、画面上部を tmux の status-line だけにする
+# タイトルバーを消し、画面上部を tmux の status-line だけにする。
+# 代償としてドラッグ領域が無くなる。ウィンドウの移動は枠のリサイズ可能な部分を
+# option+クリックしてドラッグする (macOS 標準の挙動で Ghostty の機能ではない)。
 macos-titlebar-style = hidden
 
 mouse-hide-while-typing = true
+
+# URL を開くのは super+shift+click (tmux 併用時)。
+# tmux の `set -g mouse on` でマウスレポートが有効な間、Ghostty はクリックを
+# tmux へ丸ごと渡すのでリンク判定が働かない。shift を足すとレポートを
+# バイパスして Ghostty 側に戻る (kitty 由来の慣習)。
+# `never` は、アプリが XTSHIFTESCAPE で shift を奪おうとしても拒否する指定。
+# 既定の `false` でも今は動くが、TUI 次第で壊れるので固定する。
+mouse-shift-capture = never
 
 ##### 入力 ###################################################################
 # alt+hjkl を矢印キーとして使うため、Option を Alt として扱う。
