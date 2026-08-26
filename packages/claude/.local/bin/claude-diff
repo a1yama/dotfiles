@@ -147,6 +147,45 @@ def get_diff_text(root, rng):
     return run_git(["diff", *rng.split()], cwd=root).stdout
 
 
+def new_side_ref(rng):
+    """差分の「新しい側」を指す git ref を返す。None は作業ツリーを意味する。
+
+    プレビューは差分の新しい側を表示しないと、画面に出ている diff と食い違う。
+    `git diff <ref>` は作業ツリーとの比較なので None、`a..b` は b が新しい側。
+    """
+    if rng == "uncommitted":
+        return None
+    if rng == "branch":
+        return "HEAD"
+    spec = rng.split()[0] if rng.split() else ""
+    for sep in ("...", ".."):
+        if sep in spec:
+            right = spec.split(sep, 1)[1].strip()
+            return right or "HEAD"
+    return None
+
+
+def read_new_side(root, rng, path):
+    """プレビュー用に、差分の新しい側のファイル内容を取得する。無ければ None。"""
+    if path.startswith("/") or ".." in Path(path).parts:
+        return None
+    ref = new_side_ref(rng)
+    if ref is None:
+        p = (Path(root) / path).resolve()
+        try:
+            p.relative_to(Path(root).resolve())
+        except ValueError:
+            return None
+        if not p.is_file():
+            return None
+        try:
+            return p.read_text(errors="replace")
+        except OSError:
+            return None
+    r = run_git(["show", f"{ref}:{path}"], cwd=root)
+    return r.stdout if r.returncode == 0 else None
+
+
 def parse_diff(text):
     """unified diff を {path, hunks:[{header, lines:[{type, old, new, text}]}]} の配列に。"""
     files = []
@@ -203,66 +242,120 @@ PAGE = """<!DOCTYPE html>
 <html lang="ja"><head><meta charset="utf-8">
 <title>claude-diff</title>
 <style>
-:root{--bg:#0d1117;--fg:#e6edf3;--mut:#7d8590;--add:#1a3326;--addl:#2ea04326;--del:#3d1f23;--dell:#f8514926;--bd:#30363d;--accent:#58a6ff}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace}
-header{position:sticky;top:0;background:#161b22;border-bottom:1px solid var(--bd);padding:8px 14px;display:flex;gap:10px;align-items:center;z-index:5}
+:root{--bg:#0d1117;--fg:#e6edf3;--mut:#7d8590;--addl:#2ea04326;--dell:#f8514926;--bd:#30363d;--accent:#58a6ff;--panel:#161b22;--hh:47px}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace}
+header{position:sticky;top:0;background:var(--panel);border-bottom:1px solid var(--bd);padding:8px 14px;display:flex;gap:10px;align-items:center;z-index:8;flex-wrap:wrap}
 header h1{font-size:14px;margin:0;color:var(--accent)}
-select,button{background:#21262d;color:var(--fg);border:1px solid var(--bd);border-radius:6px;padding:4px 8px;font:inherit;cursor:pointer}
+select,button,input:not([type=checkbox]){background:#21262d;color:var(--fg);border:1px solid var(--bd);border-radius:6px;padding:4px 8px;font:inherit}
+button{cursor:pointer}
 button:hover{border-color:var(--accent)}
 .spacer{flex:1}.stat{color:var(--mut)}
-#diff{padding:14px}
+
+/* ---- レイアウト: 左ツリー + 右差分 ---- */
+#wrap{display:flex;align-items:flex-start}
+#tree{position:sticky;top:var(--hh);flex:0 0 auto;width:280px;max-height:calc(100vh - var(--hh));overflow:auto;resize:horizontal;
+      border-right:1px solid var(--bd);padding:10px 6px;background:var(--bg)}
+#tree.hide{display:none}
+#diff{flex:1 1 auto;min-width:0;padding:14px}
+.tnode{display:flex;gap:5px;align-items:center;padding:2px 6px;border-radius:5px;cursor:pointer;white-space:nowrap}
+.tnode:hover{background:#21262d}
+.tnode.sel{background:#1f6feb40}
+.tcar{flex:0 0 10px;color:var(--mut);font-size:10px}
+.tname{overflow:hidden;text-overflow:ellipsis}
+.tdir .tname{color:var(--mut)}
+.tstat{margin-left:auto;font-size:11px;padding-left:8px;flex:0 0 auto}
+.tadd{color:#3fb950}.tdel{color:#f85149}
+.tcmt{background:#9e6a03;color:#fff;border-radius:9px;font-size:10px;padding:0 5px;margin-left:4px}
+.tkids{margin-left:9px;border-left:1px solid var(--bd);padding-left:3px}
+.tkids.fold{display:none}
+.tsum{color:var(--mut);padding:0 6px 8px;border-bottom:1px solid var(--bd);margin-bottom:6px}
+
 /* overflow:hidden だと .file 自身がスクロールポートになり子の sticky が効かない。clip なら効く */
-.file{border:1px solid var(--bd);border-radius:8px;margin-bottom:16px;overflow:clip}
+.file{border:1px solid var(--bd);border-radius:8px;margin-bottom:16px;overflow:clip;scroll-margin-top:calc(var(--hh) + 8px)}
 /* top はヘッダー実高から JS が --hh に入れる。決め打ちだとヘッダーと重なる */
-.file>.fh{background:#161b22;padding:6px 12px;border-bottom:1px solid var(--bd);position:sticky;top:var(--hh,47px);z-index:3}
+.file>.fh{background:var(--panel);padding:6px 12px;border-bottom:1px solid var(--bd);position:sticky;top:var(--hh);z-index:3;
+          display:flex;gap:8px;align-items:center}
 .file>.fh b{font-weight:600}
 .file>.fh .dir{color:var(--mut)}
-table{width:100%;border-collapse:collapse}
-td{padding:0 8px;white-space:pre-wrap;word-break:break-all;vertical-align:top}
+.fh .tab{padding:1px 8px;font-size:11px}
+.fh .tab.on{border-color:var(--accent);color:var(--accent)}
+table.dt{width:100%;border-collapse:collapse}
+table.dt td{padding:0 8px;white-space:pre-wrap;word-break:break-all;vertical-align:top}
 td.ln{width:1%;text-align:right;color:var(--mut);user-select:none;border-right:1px solid var(--bd);min-width:40px}
 tr.add td.code{background:var(--addl)}tr.del td.code{background:var(--dell)}
-tr.hh td{background:#161b22;color:var(--accent)}
+tr.hh td{background:var(--panel);color:var(--accent)}
 td.gut{width:24px;text-align:center;color:var(--mut);cursor:pointer;user-select:none;opacity:0}
 tr:hover td.gut{opacity:1}td.gut:hover{color:var(--accent)}
-.cbox{background:#161b22;border:1px solid var(--accent);border-radius:6px;margin:4px 8px;padding:8px}
+.cbox{background:var(--panel);border:1px solid var(--accent);border-radius:6px;margin:4px 8px;padding:8px}
 .cbox textarea{width:100%;background:#0d1117;color:var(--fg);border:1px solid var(--bd);border-radius:4px;font:inherit;padding:6px;min-height:48px;resize:vertical}
 .cbox .row{display:flex;gap:6px;margin-top:6px}
-.cmt{margin:4px 8px;padding:6px 10px;border-left:3px solid var(--accent);background:#161b22;border-radius:0 6px 6px 0}
+.cmt{margin:4px 8px;padding:6px 10px;border-left:3px solid var(--accent);background:var(--panel);border-radius:0 6px 6px 0}
 .cmt .meta{color:var(--mut);font-size:11px}
 .badge{font-size:10px;padding:1px 6px;border-radius:10px;margin-left:6px}
 .b-pending{background:#9e6a03;color:#fff}.b-delivered{background:#1f6feb;color:#fff}.b-resolved{background:#238636;color:#fff}
 .empty{color:var(--mut);padding:30px;text-align:center}
+
+/* ---- Markdown プレビュー ---- */
+.md{padding:22px 30px;max-width:980px;
+    font:14px/1.8 -apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP","Yu Gothic",sans-serif}
+.md>*:first-child{margin-top:0}
+.md h1,.md h2{border-bottom:1px solid var(--bd);padding-bottom:.3em}
+.md h1{font-size:1.7em;margin:1.2em 0 .6em}
+.md h2{font-size:1.35em;margin:1.4em 0 .6em}
+.md h3{font-size:1.15em;margin:1.3em 0 .5em}
+.md h4,.md h5,.md h6{font-size:1em;margin:1.2em 0 .5em}
+.md p{margin:.8em 0}
+.md a{color:var(--accent)}
+.md code{background:#6e768133;padding:.15em .4em;border-radius:4px;font:12px/1.5 ui-monospace,Menlo,monospace}
+.md pre{background:var(--panel);border:1px solid var(--bd);border-radius:6px;padding:12px 14px;overflow-x:auto;margin:1em 0}
+.md pre code{background:none;padding:0;font-size:12px;line-height:1.6}
+.md blockquote{border-left:3px solid var(--bd);margin:1em 0;padding:.1em 1em;color:var(--mut)}
+.md hr{border:0;border-top:1px solid var(--bd);margin:1.8em 0}
+.md img{max-width:100%}
+.md ul,.md ol{padding-left:1.7em;margin:.7em 0}
+.md li{margin:.25em 0}
+.md li>ul,.md li>ol{margin:.2em 0}
+.mdscroll{overflow-x:auto;margin:1em 0}
+.md table{border-collapse:collapse}
+.md th,.md td{border:1px solid var(--bd);padding:6px 12px;line-height:1.6}
+.md th{background:var(--panel);font-weight:600}
+.md .note{color:var(--mut)}
 </style></head>
 <body>
 <header>
 <h1>claude-diff</h1>
+<button id="tt" onclick="toggleTree()" title="ファイルツリーの表示切替">☰</button>
 <select id="range">
 <option value="uncommitted">未コミット差分 (git diff HEAD)</option>
 <option value="branch">ブランチ全体 (base..HEAD)</option>
 </select>
-<input id="custom" placeholder="任意: HEAD~3 / a..b" style="background:#21262d;color:var(--fg);border:1px solid var(--bd);border-radius:6px;padding:4px 8px;font:inherit;width:160px">
+<input id="custom" placeholder="任意: HEAD~3 / a..b" style="width:160px">
 <button onclick="load()">更新</button>
 <label class="stat"><input type="checkbox" id="auto" checked> 自動更新</label>
 <span class="spacer"></span>
 <span class="stat" id="stat"></span>
 <button id="finish" onclick="finish()">レビュー完了</button>
 </header>
-<div id="diff"></div>
+<div id="wrap"><div id="tree"></div><div id="diff"></div></div>
 <script>
-let comments=[];
+let comments=[], FILES=[], MODE={};   // MODE: path -> 'diff' | 'prev'
+const MDEXT=/\\.(md|markdown|mdown|mkd)$/i;
+
 function key(f,l,s){return f+'@'+l+'@'+s}
+function esc(s){return (s||'').replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]))}
+function curRange(){return document.getElementById('custom').value.trim()||document.getElementById('range').value}
+
 async function load(){
-  let r=document.getElementById('custom').value.trim()||document.getElementById('range').value;
-  const res=await fetch('/api/diff?range='+encodeURIComponent(r));
+  const res=await fetch('/api/diff?range='+encodeURIComponent(curRange()));
   const data=await res.json();
-  comments=data.comments;
-  render(data.files);
-  stat();
+  comments=data.comments;FILES=data.files;
+  render(FILES);renderTree(FILES);stat();
 }
 async function refreshComments(){
   const res=await fetch('/api/comments');comments=await res.json();
   document.querySelectorAll('[data-anchor]').forEach(el=>{el.innerHTML=cmtHtml(el.dataset.anchor)});
-  stat();
+  renderTree(FILES);stat();
 }
 function stat(){
   const c={pending:0,delivered:0,resolved:0};comments.forEach(x=>c[x.status]++);
@@ -272,7 +365,6 @@ function cmtHtml(anchor){
   return comments.filter(c=>key(c.file,c.line,c.side)===anchor).map(c=>
     `<div class="cmt"><div class="meta">${c.ts}<span class="badge b-${c.status}">${c.status}</span></div>${esc(c.comment)}</div>`).join('');
 }
-function esc(s){return (s||'').replace(/[&<>]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[m]))}
 function syncHeaderOffset(){
   const h=document.querySelector('header').getBoundingClientRect().height;
   document.documentElement.style.setProperty('--hh',h+'px');
@@ -281,29 +373,232 @@ function pathHtml(p){
   const i=p.lastIndexOf('/');
   return i<0?`<b>${esc(p)}</b>`:`<span class="dir">${esc(p.slice(0,i+1))}</span><b>${esc(p.slice(i+1))}</b>`;
 }
+function fstat(f){
+  let a=0,d=0;
+  for(const h of f.hunks)for(const l of h.lines){if(l.type==='add')a++;else if(l.type==='del')d++}
+  return {a,d};
+}
+
+/* ---------------- ファイルツリー ---------------- */
+function toggleTree(){document.getElementById('tree').classList.toggle('hide')}
+
+function buildTree(files){
+  const root={dirs:new Map(),files:[]};
+  files.forEach((f,idx)=>{
+    const parts=f.path.split('/');
+    let node=root;
+    for(let i=0;i<parts.length-1;i++){
+      if(!node.dirs.has(parts[i]))node.dirs.set(parts[i],{dirs:new Map(),files:[]});
+      node=node.dirs.get(parts[i]);
+    }
+    node.files.push({name:parts[parts.length-1],idx,f});
+  });
+  return root;
+}
+// GitHub と同じく、中身が1ディレクトリだけの階層は a/b/c と畳んで縦を節約する
+function compact(node,name){
+  while(node.files.length===0&&node.dirs.size===1){
+    const [k,v]=[...node.dirs][0];
+    name=name+'/'+k;node=v;
+  }
+  return [name,node];
+}
+function treeHtml(node,depth){
+  let h='';
+  for(let [name,child] of [...node.dirs].sort((a,b)=>a[0].localeCompare(b[0]))){
+    [name,child]=compact(child,name);
+    const id='d'+Math.random().toString(36).slice(2,9);
+    h+=`<div><div class="tnode tdir" onclick="foldDir('${id}',this)">`+
+       `<span class="tcar">▾</span><span class="tname">${esc(name)}</span></div>`+
+       `<div class="tkids" id="${id}">${treeHtml(child,depth+1)}</div></div>`;
+  }
+  for(const fi of node.files.sort((a,b)=>a.name.localeCompare(b.name))){
+    const s=fstat(fi.f);
+    const n=comments.filter(c=>c.file===fi.f.path&&c.status!=='resolved').length;
+    h+=`<div class="tnode" onclick="jump(${fi.idx},this)" title="${esc(fi.f.path)}">`+
+       `<span class="tcar"></span><span class="tname">${esc(fi.name)}</span>`+
+       (n?`<span class="tcmt">${n}</span>`:'')+
+       `<span class="tstat"><span class="tadd">+${s.a}</span> <span class="tdel">-${s.d}</span></span></div>`;
+  }
+  return h;
+}
+function renderTree(files){
+  const el=document.getElementById('tree');
+  if(!files.length){el.innerHTML='<div class="tsum">変更ファイルなし</div>';return}
+  let a=0,d=0;files.forEach(f=>{const s=fstat(f);a+=s.a;d+=s.d});
+  el.innerHTML=`<div class="tsum">${files.length} files <span class="tadd">+${a}</span> <span class="tdel">-${d}</span></div>`
+    +treeHtml(buildTree(files),0);
+}
+function foldDir(id,el){
+  const k=document.getElementById(id);k.classList.toggle('fold');
+  el.querySelector('.tcar').textContent=k.classList.contains('fold')?'▸':'▾';
+}
+function jump(idx,el){
+  document.querySelectorAll('#tree .tnode.sel').forEach(x=>x.classList.remove('sel'));
+  if(el)el.classList.add('sel');
+  const t=document.getElementById('f'+idx);
+  if(t)t.scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+/* ---------------- 差分レンダリング ---------------- */
 function render(files){
   const root=document.getElementById('diff');root.innerHTML='';
   if(!files.length){root.innerHTML='<div class="empty">差分はありません</div>';return}
-  for(const f of files){
-    const div=document.createElement('div');div.className='file';
-    let rows='';
-    for(const h of f.hunks){
-      rows+=`<tr class="hh"><td class="ln"></td><td class="ln"></td><td class="gut"></td><td class="code">${esc(h.header)}</td></tr>`;
-      for(const ln of h.lines){
-        const cls=ln.type==='add'?'add':ln.type==='del'?'del':'';
-        const lno=ln.new!=null?ln.new:(ln.old!=null?ln.old:'');
-        const side=ln.type==='del'?'old':'new';
-        const anc=key(f.path,lno,side);
-        rows+=`<tr class="${cls}"><td class="ln">${ln.old??''}</td><td class="ln">${ln.new??''}</td>`+
-          `<td class="gut" onclick="openBox('${f.path}',${lno||'null'},'${side}',this)">+</td>`+
-          `<td class="code">${esc(ln.text)}</td></tr>`+
-          `<tr><td colspan="2"></td><td></td><td><div data-anchor="${anc}">${cmtHtml(anc)}</div></td></tr>`;
-      }
-    }
-    div.innerHTML=`<div class="fh">${pathHtml(f.path)}</div><table>${rows}</table>`;
+  files.forEach((f,idx)=>{
+    const div=document.createElement('div');div.className='file';div.id='f'+idx;
+    const s=fstat(f);
+    const tabs=MDEXT.test(f.path)
+      ? `<button class="tab" data-m="diff" onclick="setMode(${idx},'diff')">差分</button>`+
+        `<button class="tab" data-m="prev" onclick="setMode(${idx},'prev')">プレビュー</button>`
+      : '';
+    div.innerHTML=`<div class="fh">${pathHtml(f.path)}<span class="spacer"></span>`+
+      `<span class="stat"><span class="tadd">+${s.a}</span> <span class="tdel">-${s.d}</span></span>${tabs}</div>`+
+      `<div class="body"></div>`;
     root.appendChild(div);
-  }
+    setMode(idx,MODE[f.path]||'diff');
+  });
 }
+function diffTable(f){
+  let rows='';
+  for(const h of f.hunks){
+    rows+=`<tr class="hh"><td class="ln"></td><td class="ln"></td><td class="gut"></td><td class="code">${esc(h.header)}</td></tr>`;
+    for(const ln of h.lines){
+      const cls=ln.type==='add'?'add':ln.type==='del'?'del':'';
+      const lno=ln.new!=null?ln.new:(ln.old!=null?ln.old:'');
+      const side=ln.type==='del'?'old':'new';
+      const anc=key(f.path,lno,side);
+      rows+=`<tr class="${cls}"><td class="ln">${ln.old??''}</td><td class="ln">${ln.new??''}</td>`+
+        `<td class="gut" onclick="openBox('${f.path}',${lno||'null'},'${side}',this)">+</td>`+
+        `<td class="code">${esc(ln.text)}</td></tr>`+
+        `<tr><td colspan="2"></td><td></td><td><div data-anchor="${anc}">${cmtHtml(anc)}</div></td></tr>`;
+    }
+  }
+  return `<table class="dt">${rows}</table>`;
+}
+async function setMode(idx,mode){
+  const f=FILES[idx];if(!f)return;
+  MODE[f.path]=mode;
+  const div=document.getElementById('f'+idx);
+  div.querySelectorAll('.tab').forEach(b=>b.classList.toggle('on',b.dataset.m===mode));
+  const body=div.querySelector('.body');
+  if(mode==='diff'){body.innerHTML=diffTable(f);return}
+  body.innerHTML='<div class="md note">読み込み中…</div>';
+  const res=await fetch('/api/file?range='+encodeURIComponent(curRange())+'&path='+encodeURIComponent(f.path));
+  const data=await res.json();
+  if(data.content==null){
+    body.innerHTML='<div class="md note">このリビジョンにファイルがありません（削除など）。差分タブで確認してください。</div>';
+    return;
+  }
+  body.innerHTML='<div class="md">'+mdToHtml(data.content)+'</div>';
+}
+
+/* ---------------- 最小限の Markdown レンダラ ----------------
+   依存を増やさないため CDN も Python ライブラリも使わない。
+   GFM のうち見出し/リスト/表/コード/引用/水平線/インライン装飾だけを扱う。 */
+function safeUrl(u){
+  const t=u.trim();
+  return /^(https?:|mailto:|#|\\/|\\.)/i.test(t)?t:'#';
+}
+function inline(s){
+  s=esc(s);
+  const codes=[];
+  s=s.replace(/`([^`]+)`/g,(m,c)=>{codes.push(c);return '\\u0001'+(codes.length-1)+'\\u0001'});
+  s=s.replace(/!\\[([^\\]]*)\\]\\(([^)\\s]+)[^)]*\\)/g,(m,a,u)=>`<img alt="${a}" src="${safeUrl(u)}">`);
+  s=s.replace(/\\[([^\\]]+)\\]\\(([^)\\s]+)[^)]*\\)/g,(m,t,u)=>`<a href="${safeUrl(u)}" target="_blank" rel="noopener">${t}</a>`);
+  s=s.replace(/\\*\\*([^*]+)\\*\\*/g,'<strong>$1</strong>');
+  s=s.replace(/__([^_]+)__/g,'<strong>$1</strong>');
+  s=s.replace(/(^|[^*\\w])\\*([^*\\n]+)\\*/g,'$1<em>$2</em>');
+  s=s.replace(/~~([^~]+)~~/g,'<del>$1</del>');
+  s=s.replace(/\\u0001(\\d+)\\u0001/g,(m,n)=>'<code>'+codes[+n]+'</code>');
+  return s;
+}
+const ITEM=/^(\\s*)([-*+]|\\d+[.)])\\s+(.*)$/;
+function isBlockStart(l){
+  return /^\\s*$/.test(l)||/^\\s*(```|~~~)/.test(l)||/^ {0,3}#{1,6}\\s/.test(l)
+       ||/^ {0,3}(-{3,}|\\*{3,}|_{3,})\\s*$/.test(l)||/^ {0,3}>/.test(l)||ITEM.test(l);
+}
+function listNodes(items){
+  const root=[];const path=[{indent:-1,children:root}];
+  for(const it of items){
+    while(path.length>1&&it.indent<=path[path.length-1].indent)path.pop();
+    const node={text:it.text,children:[],indent:it.indent};
+    path[path.length-1].children.push(node);path.push(node);
+  }
+  return root;
+}
+function listHtml(nodes,ordered){
+  const tag=ordered?'ol':'ul';
+  return `<${tag}>`+nodes.map(n=>{
+    const cb=n.text.match(/^\\[([ xX])\\]\\s+([\\s\\S]*)$/);
+    const body=cb
+      ? `<input type="checkbox" disabled${/[xX]/.test(cb[1])?' checked':''}> `+inline(cb[2])
+      : inline(n.text);
+    return `<li>${body}${n.children.length?listHtml(n.children,ordered):''}</li>`;
+  }).join('')+`</${tag}>`;
+}
+function mdToHtml(src){
+  const lines=src.replace(/\\r\\n?/g,'\\n').split('\\n');
+  const out=[];let i=0;
+  while(i<lines.length){
+    const l=lines[i];
+    if(/^\\s*$/.test(l)){i++;continue}
+    const fence=l.match(/^\\s*(```+|~~~+)/);
+    if(fence){
+      const mark=fence[1];const buf=[];i++;
+      while(i<lines.length&&!lines[i].trimStart().startsWith(mark)){buf.push(lines[i]);i++}
+      i++;
+      out.push('<pre><code>'+esc(buf.join('\\n'))+'</code></pre>');continue;
+    }
+    if(/^ {0,3}(-{3,}|\\*{3,}|_{3,})\\s*$/.test(l)){out.push('<hr>');i++;continue}
+    const h=l.match(/^ {0,3}(#{1,6})\\s+(.*)$/);
+    if(h){
+      const n=h[1].length;
+      out.push(`<h${n}>${inline(h[2].replace(/\\s+#+\\s*$/,''))}</h${n}>`);i++;continue;
+    }
+    // 表: 1行目にパイプがあり、2行目が --- 区切り行
+    if(l.includes('|')&&i+1<lines.length&&/^\\s*\\|?[\\s:|-]*-[\\s:|-]*$/.test(lines[i+1])&&lines[i+1].includes('|')){
+      const cut=r=>r.replace(/^\\s*\\|/,'').replace(/\\|\\s*$/,'').split('|').map(c=>c.trim());
+      const head=cut(l);
+      const al=cut(lines[i+1]).map(c=>/^:-+:$/.test(c)?'center':/^-+:$/.test(c)?'right':'left');
+      i+=2;
+      let t='<div class="mdscroll"><table><thead><tr>'+
+        head.map((c,k)=>`<th style="text-align:${al[k]||'left'}">${inline(c)}</th>`).join('')+'</tr></thead><tbody>';
+      while(i<lines.length&&lines[i].includes('|')&&!/^\\s*$/.test(lines[i])){
+        t+='<tr>'+cut(lines[i]).map((c,k)=>`<td style="text-align:${al[k]||'left'}">${inline(c)}</td>`).join('')+'</tr>';
+        i++;
+      }
+      out.push(t+'</tbody></table></div>');continue;
+    }
+    if(/^ {0,3}>/.test(l)){
+      const buf=[];
+      while(i<lines.length&&/^ {0,3}>/.test(lines[i])){buf.push(lines[i].replace(/^ {0,3}>\\s?/,''));i++}
+      out.push('<blockquote>'+mdToHtml(buf.join('\\n'))+'</blockquote>');continue;
+    }
+    if(ITEM.test(l)){
+      const items=[];let ordered=null;
+      while(i<lines.length){
+        const m=lines[i].match(ITEM);
+        if(m){
+          if(ordered===null)ordered=/\\d/.test(m[2]);
+          items.push({indent:m[1].replace(/\\t/g,'    ').length,text:m[3]});i++;
+        }else if(/^\\s*$/.test(lines[i])){
+          if(i+1<lines.length&&(ITEM.test(lines[i+1])||/^\\s{2,}\\S/.test(lines[i+1]))){i++;continue}
+          break;
+        }else if(/^\\s{2,}\\S/.test(lines[i])&&items.length){
+          items[items.length-1].text+='\\n'+lines[i].trim();i++;
+        }else break;
+      }
+      out.push(listHtml(listNodes(items),ordered));continue;
+    }
+    const buf=[];
+    while(i<lines.length&&!isBlockStart(lines[i])){buf.push(lines[i]);i++}
+    if(buf.length)out.push('<p>'+inline(buf.join('\\n'))+'</p>');
+    else i++;  // isBlockStart を通り抜けた未対応行で止まらないための保険
+  }
+  return out.join('\\n');
+}
+
+/* ---------------- コメント入力 ---------------- */
 function openBox(file,line,side,gut){
   const tr=gut.closest('tr');
   if(tr.nextSibling&&tr.nextSibling.querySelector&&tr.nextSibling.querySelector('.cbox'))return;
@@ -378,6 +673,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self._json({"files": files, "comments": read_feedback(self.fb)})
         elif u.path == "/api/comments":
             self._json(read_feedback(self.fb))
+        elif u.path == "/api/file":
+            q = parse_qs(u.query)
+            rng = q.get("range", ["uncommitted"])[0]
+            path = q.get("path", [""])[0]
+            self._json({"path": path, "content": read_new_side(self.root, rng, path)})
         else:
             self.send_error(404)
 
