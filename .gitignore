@@ -6,3 +6,5 @@ packages/yazi/.cache/
 __pycache__/
 *.pyc
 .claude/notes/
+# packages/ に入ると stow が ~/.DS_Store と衝突し、全リンク作成が中止される
+.DS_Store
