@@ -190,6 +190,14 @@
             "command": "~/dotfiles/packages/claude/.claude/hooks/agent-status.sh unblock"
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/dotfiles/packages/claude/.claude/hooks/premise-check.sh"
+          }
+        ]
       }
     ],
     "SessionEnd": [

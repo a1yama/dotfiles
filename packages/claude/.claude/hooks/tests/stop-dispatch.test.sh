@@ -24,12 +24,12 @@ check() {
   fi
 }
 
-# 差し替え用のスタブ置き場。$1 に frame-check、$2 に quality-gate が返す reason
-# (空文字なら何も出力しない = allow)
+# 差し替え用のスタブ置き場。$1 に frame-check、$2 に quality-gate、$3 に premise-gate が
+# 返す reason(空文字なら何も出力しない = allow)
 stub_dir() {
   local dir
   dir=$(mktemp -d "$TMPDIR/hooks.XXXXXX")
-  for pair in "stop-frame-check.sh:$1" "stop-quality-gate.sh:$2"; do
+  for pair in "stop-frame-check.sh:$1" "stop-quality-gate.sh:$2" "stop-premise-gate.sh:${3:-}"; do
     local name="${pair%%:*}" reason="${pair#*:}"
     printf '#!/bin/bash\ncat >"%s/%s.stdin"\n' "$dir" "$name" > "$dir/$name"
     if [ -n "$reason" ]; then
@@ -114,11 +114,30 @@ out=$(run_dispatch "$dir")
 check "block なし: 出力は空" "" "$out"
 check "block なし: 通知する" "yes" "$([ -f "$dir/notify.stdin" ] && echo yes || echo no)"
 
+# premise-gate だけが差し戻す
+dir=$(stub_dir "" "" "指示された手段を検証してください")
+out=$(run_dispatch "$dir")
+check "premise だけ block: reason" "指示された手段を検証してください" "$(printf '%s' "$out" | jq -r '.reason')"
+check "premise だけ block: 通知しない" "no" "$([ -f "$dir/notify.stdin" ] && echo yes || echo no)"
+
+# 回帰: 前段が block しても premise-gate は必ず走り、理由が3つとも載る
+dir=$(stub_dir "方針を点検してください" "テストが失敗しました" "指示された手段を検証してください")
+out=$(run_dispatch "$dir")
+check "3つ block: premise も実行される" "yes" \
+  "$([ -f "$dir/stop-premise-gate.sh.stdin" ] && echo yes || echo no)"
+check "3つ block: 理由を連結する" \
+  "方針を点検してください
+
+テストが失敗しました
+
+指示された手段を検証してください" "$(printf '%s' "$out" | jq -r '.reason')"
+
 # 入力は各ゲートにそのまま渡る
-dir=$(stub_dir "" "")
+dir=$(stub_dir "" "" "")
 run_dispatch "$dir" >/dev/null
 check "frame へ入力が渡る" '{"stop_hook_active":false,"cwd":"/tmp"}' "$(cat "$dir/stop-frame-check.sh.stdin")"
 check "gate へ入力が渡る"  '{"stop_hook_active":false,"cwd":"/tmp"}' "$(cat "$dir/stop-quality-gate.sh.stdin")"
+check "premise へ入力が渡る" '{"stop_hook_active":false,"cwd":"/tmp"}' "$(cat "$dir/stop-premise-gate.sh.stdin")"
 
 printf '\n%d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]
