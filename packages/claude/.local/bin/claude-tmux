@@ -64,8 +64,13 @@ get_agent_dir() {
 }
 
 is_pane_alive() {
-  local pane_id="$1"
-  tmux list-panes -a -F '#{pane_id}' 2>/dev/null | grep -q "^${pane_id}$"
+  local pane_id="$1" panes
+  # パイプで grep -q に渡さない。grep -q は最初の一致で即終了するため、tmux が
+  # 書き終える前にパイプが閉じて SIGPIPE(141)で死ぬ。このスクリプトは pipefail なので
+  # パイプライン全体が失敗になり、生きているペインが dead と判定される。
+  # 一致が先頭に近いほど起きやすく、再現も間欠的だった
+  panes=$(tmux list-panes -a -F '#{pane_id}' 2>/dev/null) || return 1
+  grep -q "^${pane_id}$" <<<"$panes"
 }
 
 SESSIONS_DIR="${CLAUDE_SESSIONS_DIR:-$HOME/.claude/sessions}"
@@ -371,7 +376,11 @@ if [[ "${use_worktree}" == "true" && "${no_review}" != "true" ]]; then
       echo "--- 変更差分 ---"
       printf '%s\n' "\${diff}"
     } > "\${review_prompt}"
-    review=\$(cd "\${wt}" && claude -p --allowedTools "Read,Grep,Glob" < "\${review_prompt}" 2>&1) || {
+    # 対話用フックを黙らせる。この出力は人間ではなく下の grep が読む。
+    # 前提チェックが発火すると最終応答に別の節が足され、VERDICT 行が最後に来なくなって
+    # 判定不能で中断する。AskUserQuestion を促す文面も allowedTools に無いので従えない
+    review=\$(cd "\${wt}" && CLAUDE_PREMISE_CHECK_OFF=1 CLAUDE_FRAME_CHECK_OFF=1 \\
+      claude -p --allowedTools "Read,Grep,Glob" < "\${review_prompt}" 2>&1) || {
       echo "警告: 外部レビューの実行に失敗しました。人間が確認してください" >&2
       break
     }
@@ -397,7 +406,10 @@ if [[ "${use_worktree}" == "true" && "${no_review}" != "true" ]]; then
           echo ""
           printf '%s\n' "\${review}"
         } > "\${fix_prompt}"
-        (cd "\${wt}" && claude -p --allowedTools "Edit,Write,Read,Grep,Glob,Bash,WebSearch,WebFetch" < "\${fix_prompt}") || {
+        # 同上。プロンプトが「ユーザーへの質問はできません」と明示しているのに
+        # 前提チェックは AskUserQuestion を促すため、指示同士が矛盾する
+        (cd "\${wt}" && CLAUDE_PREMISE_CHECK_OFF=1 CLAUDE_FRAME_CHECK_OFF=1 \\
+          claude -p --allowedTools "Edit,Write,Read,Grep,Glob,Bash,WebSearch,WebFetch" < "\${fix_prompt}") || {
           echo "警告: 修正エージェントの実行に失敗しました" >&2
           break
         }

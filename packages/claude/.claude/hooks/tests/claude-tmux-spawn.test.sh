@@ -81,6 +81,17 @@ ok "runner が --name を渡す" "$(contains "$runner" '--name "${name}"')"
 ok "runner が crossSessionInbound=accept を渡す" "$(contains "$runner" '{"crossSessionInbound":"accept"}')"
 ok "runner が SendMessage を許可する" "$(contains "$runner" 'SendMessage')"
 
+# supervisor の claude -p は出力を grep が読む(VERDICT 判定)。対話用フックが発火すると
+# 最終応答に別の節が足されて VERDICT 行が最後から外れ、判定不能で中断する。
+# 修正側はプロンプトが「ユーザーへの質問はできません」と書いているのに
+# 前提チェックが AskUserQuestion を促すため、指示同士が矛盾する
+ok "レビューは前提チェックを止める" "$(contains "$supervisor" 'CLAUDE_PREMISE_CHECK_OFF=1 CLAUDE_FRAME_CHECK_OFF=1')"
+ok "レビューと修正の両方で止める" \
+  "$([ "$(grep -c 'CLAUDE_PREMISE_CHECK_OFF=1' "$supervisor")" -ge 2 ] && echo 1 || echo 0)"
+# 作業者本体はゲートを効かせたままにする(実開発なので発火が妥当)
+ok "runner は前提チェックを止めない" \
+  "$([ "$(contains "$runner" 'CLAUDE_PREMISE_CHECK_OFF')" = "0" ] && echo 1 || echo 0)"
+
 # 生成スクリプトが壊れていないこと
 ok "runner.sh の構文が通る" "$(bash -n "$runner" 2>/dev/null && echo 1 || echo 0)"
 ok "supervisor.sh の構文が通る" "$(bash -n "$supervisor" 2>/dev/null && echo 1 || echo 0)"
