@@ -55,6 +55,10 @@ run rework "元に戻して"         'さっきの変更を元に戻して'
 run rework "そうじゃない"       'そうじゃない、もっと単純でいい'
 run rework "英語 fix it"        'this is broken, fix it'
 run rework "英語 not working"   'the gate is not working'
+# 回帰: 事後の指摘。初版は拾えず、規約違反のコミットを指摘されたターンで発火しなかった
+run rework "〜が正しいのに"     'git commit -m "update" が正しいのに余計なコメント入れたな'
+run rework "〜すべきだった"     '規約どおりに書くべきだった'
+run rework "残念"               '残念だったな'
 
 # 数値目標: 数字を形式的に満たすだけの成果物を返してしまう形
 run target "カバレッジ"         'カバレッジを80%まで上げて'
