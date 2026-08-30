@@ -1,5 +1,6 @@
 #!/bin/bash
-# Stop フック: frame-check(方向の監査)と quality-gate(コードの質)を実行するディスパッチャー。
+# Stop フック: frame-check(方向の監査)・quality-gate(コードの質)・
+# premise-gate(指示された手段の検証)を実行するディスパッチャー。
 # Stop フックは並列実行されるため、個別登録だと gate に差し戻された未完了の時点で
 # 「完了」通知が飛んでしまう。いずれかが block したときは通知を出さない。
 #
@@ -21,14 +22,21 @@ notify="${CLAUDE_NOTIFY_BIN:-$HOME/.local/bin/claude-notify}"
 # 人を待っている状態ではないため、block 分岐を待たずここで一度だけ消す。
 "$hooks/agent-status.sh" unblock </dev/null >/dev/null 2>&1 || true
 
-frame_out=$(printf '%s' "$input" | "$hooks/stop-frame-check.sh")
-gate_out=$(printf '%s' "$input" | "$hooks/stop-quality-gate.sh")
+gates="stop-frame-check.sh stop-quality-gate.sh stop-premise-gate.sh"
 
-if [ -n "$frame_out" ] || [ -n "$gate_out" ]; then
+outs=()
+raw=""
+for g in $gates; do
+  out=$(printf '%s' "$input" | "$hooks/$g")
+  outs+=("$out")
+  raw="$raw$out"
+done
+
+if [ -n "$raw" ]; then
   # 各ゲートの出力を個別に検証して reason を集める。まとめて jq に流すと、片方が壊れた出力を
   # 返しただけで全体が失敗し、もう片方の正当な差し戻し(テスト失敗など)まで捨ててしまう
   reasons=""
-  for out in "$frame_out" "$gate_out"; do
+  for out in "${outs[@]}"; do
     [ -n "$out" ] || continue
     reason=$(printf '%s' "$out" \
       | jq -r 'if type == "object" then (.reason // empty) else empty end' 2>/dev/null)
@@ -46,7 +54,7 @@ if [ -n "$frame_out" ] || [ -n "$gate_out" ]; then
   # 有効な JSON が1つも無い場合でも差し戻しは落とさない(素通しより安全)。
   # ただし出力をそのまま連結すると有効な JSON にならず harness に無視され、
   # 差し戻しも通知も消える。整形した block にして必ず伝える
-  jq -n --arg o "$frame_out$gate_out" \
+  jq -n --arg o "$raw" \
     '{decision:"block", reason:("Stop フックのゲートが不正な出力を返しました。フックを確認してください:\n"+($o[0:500]))}'
   exit 0
 fi
