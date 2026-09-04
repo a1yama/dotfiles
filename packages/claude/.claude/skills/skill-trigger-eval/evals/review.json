@@ -1,0 +1,50 @@
+[
+  {
+    "expected": "code-review",
+    "query": "internal/payment/charge.go の実装が終わったのでレビューしてください"
+  },
+  {
+    "expected": "code-review",
+    "query": "今の差分、バグ入ってないか見てほしい。特に境界値まわりが不安"
+  },
+  {
+    "expected": "code-review",
+    "query": "コードレビューお願いします。未コミットの変更が対象です"
+  },
+  {
+    "expected": "diff-review",
+    "query": "差分をブラウザで見たい。行コメントで指摘を返したいです"
+  },
+  {
+    "expected": "diff-review",
+    "query": "diff確認したい。Claudeは閉じたくない"
+  },
+  {
+    "expected": "diff-review",
+    "query": "diff-review を立ち上げて、今の変更を目視で確認させて"
+  },
+  {
+    "expected": "update-review-checklist",
+    "query": "レビューで見逃したパターンがあった。nil チェック漏れの観点をチェックリストに追加して"
+  },
+  {
+    "expected": "update-review-checklist",
+    "query": "レビュー項目を1つ足したい。エラーを握りつぶしてないか見る観点"
+  },
+  {
+    "expected": "frame-check",
+    "query": "ここまで2時間くらい作業してるんだけど、今のやり方で合っているか見て"
+  },
+  {
+    "expected": "frame-check",
+    "query": "方針を点検してほしい。進め方がずれていないか確認したい"
+  },
+  {
+    "expected": null,
+    "query": "この Charge 関数が何をやっているのか、意図を説明してほしい"
+  },
+  {
+    "expected": null,
+    "query": "internal/payment のテストを書いて。境界値も含めてカバーしてほしい"
+  }
+]

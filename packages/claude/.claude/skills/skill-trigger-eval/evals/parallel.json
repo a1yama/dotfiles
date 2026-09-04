@@ -1,0 +1,50 @@
+[
+  {
+    "expected": "spawn-agents",
+    "query": "このリファクタ、internal/auth と internal/payment に分かれてるから並列で進めたい。エージェント立てて"
+  },
+  {
+    "expected": "spawn-agents",
+    "query": "テストの修正を並列でやりたい。パッケージごとに3つに分けて走らせて"
+  },
+  {
+    "expected": "spawn-agents",
+    "query": "spawn で3つ起動して、それぞれ別のディレクトリを調べさせたい"
+  },
+  {
+    "expected": "spawn-agents",
+    "query": "機能追加とドキュメント更新とテスト追加、同時に走らせたい。エージェント起動して"
+  },
+  {
+    "expected": "parallel-dev",
+    "query": "並列開発したいんだけど、worktree と fork とサブエージェントのどれを選ぶべきか分からない。整理して"
+  },
+  {
+    "expected": "parallel-dev",
+    "query": "Claude Code で並列に作業するとき、どの並列手法を選ぶのが正解ですか"
+  },
+  {
+    "expected": "parallel-dev",
+    "query": "parallel の手法を比較したい。branch を切るのと worktree の使い分けが知りたい"
+  },
+  {
+    "expected": "agent-dispatch",
+    "query": "エージェントから idle 通知が5件来てる。次のタスクを配って"
+  },
+  {
+    "expected": "agent-dispatch",
+    "query": "サブエージェントに次のタスクを割り当ててほしい。今の状況を見て判断して"
+  },
+  {
+    "expected": null,
+    "query": "Go の goroutine で内部の集計処理を並列化したい。errgroup を使う書き方を教えて"
+  },
+  {
+    "expected": null,
+    "query": "このテストを並列実行して速くしたい。go test の -parallel の設定はどう書きますか"
+  },
+  {
+    "expected": null,
+    "query": "CI のジョブが直列で遅い。GitHub Actions の matrix で並列化して時間を短縮したい"
+  }
+]

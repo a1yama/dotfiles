@@ -1,6 +1,6 @@
 ---
 name: spawn-agents
-description: タスクを並列サブタスクに分解し、claude-tmux spawnで複数エージェントを起動する。"並列で"、"エージェント起動"、"spawn"と言われたら使用する。
+description: タスクを並列サブタスクに分解し、claude-tmux spawn で tmux ペインに複数の Claude エージェントを起動する。「並列で進めたい」「並列でやりたい」「エージェントを立てて」「エージェント起動」「spawn で起動して」「同時に走らせたい」「3つに分けて走らせて」と言われたら必ず使う。作業を自分で分解して Task サブエージェントを起動しようとする前に、まずこのスキルを読むこと。tmux ペインの別セッションとして起動するか同一セッション内で済ませるかはここで決まる。まだ手法を選んでいる段階なら parallel-dev、起動済みエージェントへの再割り当てなら agent-dispatch を使う。goroutine での並列化、go test -parallel、CI ジョブの並列化のような「コードやCIを並列にする」話には使わない。
 user-invocable: true
 ---
 
