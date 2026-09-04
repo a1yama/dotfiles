@@ -282,7 +282,11 @@ button:hover{border-color:var(--accent)}
 .fh .tab.on{border-color:var(--accent);color:var(--accent)}
 table.dt{width:100%;border-collapse:collapse}
 table.dt td{padding:0 8px;white-space:pre-wrap;word-break:break-all;vertical-align:top}
-td.ln{width:1%;text-align:right;color:var(--mut);user-select:none;border-right:1px solid var(--bd);min-width:40px}
+/* border-box なので min-width から padding 16px + border 1px を引いた分しか数字に使えない。
+   nowrap を付けないと上の table.dt td の word-break:break-all を継ぎ、行番号が桁の途中で折り返す。
+   セレクタは table.dt td より詳細度を上げる必要がある(td.ln だけだと負ける) */
+table.dt td.ln{width:1%;text-align:right;color:var(--mut);user-select:none;border-right:1px solid var(--bd);
+      min-width:48px;white-space:nowrap;word-break:normal}
 tr.add td.code{background:var(--addl)}tr.del td.code{background:var(--dell)}
 tr.hh td{background:var(--panel);color:var(--accent)}
 td.gut{width:24px;text-align:center;color:var(--mut);cursor:pointer;user-select:none;opacity:0}
