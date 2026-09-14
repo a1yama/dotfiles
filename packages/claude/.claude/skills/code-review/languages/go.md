@@ -61,6 +61,43 @@
   - 説明: 日付フォーマット等のマジックリテラルを const に切り出す変更で、着手した1〜2箇所だけ置換して同ファイル内の残りがリテラルのまま、という中途半端な抽出が起きやすい
   - 対策: const を新設した差分を見たら、そのファイル（できれば同パッケージ）を同じリテラルで grep して取り残しが無いか確認する。取り残すなら抽出自体を見送る方が一貫する
 
+### 画像・バイナリ変換
+- **透過 PNG をアルファ無しフォーマットへ変換すると透過部が黒に潰れる**
+  - 説明: `image/draw` は乗算済みアルファを扱うため、`image.NewRGBA` の初期値 `(0,0,0,0)` に `draw.Over` で合成すると alpha = 0 の領域が `(0,0,0)` になる。これを RGB565 や RGB888 など alpha を持たない形式へ書き出すと、透過背景や白抜き部分が一律で黒になる。コンパイルもテストも通り、実機の表示を見るまで気づけない
+  - 対策: 合成先を先に不透明色で塗ってから元画像を重ねる。レビュー時は、アルファ無し形式への変換コードで合成先キャンバスが初期化されているかを確認する
+  - 例:
+    ```go
+    // NG: 初期値が透明（乗算済みで黒）のキャンバスに Over で合成
+    dst := image.NewRGBA(image.Rect(0, 0, w, h))
+    draw.ApproxBiLinear.Scale(dst, dst.Bounds(), src, src.Bounds(), draw.Over, nil)
+
+    // OK: 背景を不透明色で塗ってから重ねる
+    dst := image.NewRGBA(image.Rect(0, 0, w, h))
+    draw.Draw(dst, dst.Bounds(), image.NewUniform(color.White), image.Point{}, draw.Src)
+    draw.ApproxBiLinear.Scale(dst, dst.Bounds(), src, src.Bounds(), draw.Over, nil)
+    ```
+
+### 組込み・TinyGo
+- **移動平均や差分計算を符号なし整数で書くと減算のラップで巨大値になる**
+  - 説明: `smoothed += (x - smoothed) / 4` のような指数移動平均・差分フィルタを `uint32` / `uint16` で書くと、入力が下降した瞬間に `x - smoothed` が 2^32 近傍にラップし、÷4 して約 1.07e9 という値が残り続ける。コンパイルもテストも通り、センサー値が上昇するケースだけ試すと気づけない
+  - 対策: 中間計算を `int32` など符号付きにする。レビュー時は符号なし変数どうしの減算を探し、被減数が減数より小さくなり得るかを確認する
+  - 例:
+    ```go
+    // NG: 値が下降すると (raw - smoothed) がラップする
+    var smoothed uint32
+    smoothed += (uint32(sensor.Get()) - smoothed) / 4 // 40000 -> 1000 で 1073772074
+
+    // OK: 符号付きで計算する
+    var smoothed int32
+    smoothed += (int32(sensor.Get()) - smoothed) / 4 // 30250
+    ```
+- **ドライバが設定済みのピンを PWM や別機能として奪うとき、ドライバ側の参照箇所を全数確認していない**
+  - 説明: `st7789` のように `Configure()` でバックライトピンを Output + High にするドライバの場合、その後 `machine.PWMx.Channel(pin)` で FUNCSEL を奪うのは動く。しかしドライバの他メソッド（`EnableBacklight` 等）が後から `pin.High()` / `pin.Low()` を呼ぶと PWM 設定が壊れる
+  - 対策: ドライバのソースを当該ピンのフィールド名で grep し、参照が初期化系メソッドだけに閉じているかを確認する。呼んではいけないメソッドはコード側のコメントに明示する
+- **RP2040 の PWM はスライス単位で周期を共有するのにピン割り当てで衝突を確認していない**
+  - 説明: RP2040 の PWM スライス番号は `(gpio >> 1) & 7`、チャネルは `gpio & 1` で決まる。GPIO14 と GPIO15 のような隣接ピンは同一スライスになり TOP / DIV を共有するため、片方を 1kHz の調光、もう片方を 38kHz の赤外線搬送波のように使うことはできない
+  - 対策: 新たに PWM 化したピンについてスライス番号を計算し、同一スライスの相方ピンが他の用途で PWM を使っていないかを確認する
+
 ## 参考資料
 - [Effective Go](https://go.dev/doc/effective_go)
 - [Go Code Review Comments](https://github.com/golang/go/wiki/CodeReviewComments)
