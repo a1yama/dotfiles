@@ -1,0 +1,22 @@
+[
+  {
+    "expected": "tighten-writing",
+    "query": "昨日のアーキテクチャ会議の議事録、情報は合ってるんだけど冗長。推敲してもらえますか。docs/minutes-0903.md です"
+  },
+  {
+    "expected": "tighten-writing",
+    "query": "設計提案の資料、明日部長に出す前に一回見てほしい。docs/design-proposal-v3.md"
+  },
+  {
+    "expected": "tighten-writing",
+    "query": "この記事の下書き、書き上げたはいいけど無駄が多い。文章を整えてほしい。zenn/articles/claude-hooks.md"
+  },
+  {
+    "expected": "writing-style",
+    "query": "Zennに記事を書きたい。dotfilesのClaude Codeフック機構について、まだ何も書いてないのでゼロから起こしたい"
+  },
+  {
+    "expected": "writing-style",
+    "query": "go-compat-check っていう自作スキルの紹介ブログを新しく書き起こしたいです。読者は社内のGoエンジニア想定"
+  }
+]

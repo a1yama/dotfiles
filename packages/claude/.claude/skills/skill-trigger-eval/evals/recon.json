@@ -1,0 +1,38 @@
+[
+  {
+    "expected": "codebase-recon",
+    "query": "初めて触るリポジトリなんだけど、全体の構造を把握したい。どこに何があるか教えて"
+  },
+  {
+    "expected": "codebase-recon",
+    "query": "Token の Valid がどこで定義されているか調べて。呼び出し元も知りたい"
+  },
+  {
+    "expected": "codebase-recon",
+    "query": "認証まわりの処理がどう実装されているか、流れを追ってほしい"
+  },
+  {
+    "expected": null,
+    "query": "この Charge 関数が何をやっているのか、意図を説明してほしい"
+  },
+  {
+    "expected": null,
+    "query": "この決済フローの仕様、ビジネス的にどういう意図なのか調査してドキュメントにまとめて"
+  },
+  {
+    "expected": null,
+    "query": "CI が昨日から落ちてる。なぜ落ちるのか原因を調査して"
+  },
+  {
+    "expected": null,
+    "query": "go-chi の最新バージョンが何か調べて。v5 系で破壊的変更があったかも知りたい"
+  },
+  {
+    "expected": "qa-error-check",
+    "query": "stg環境でエラーログが出てないかDatadogで調査して"
+  },
+  {
+    "expected": "go-compat-check",
+    "query": "go.mod の依存を更新したので、自コードへの影響を調査してほしい"
+  }
+]

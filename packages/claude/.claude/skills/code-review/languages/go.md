@@ -35,6 +35,18 @@
 - **エラーのラップ不足**
   - 説明: `fmt.Errorf` で `%w` を使わずにエラー情報が失われる
 
+- **共通エラーレスポンスが拾わない型でエラーを返して本文が unexpected_error に潰れる**
+  - 説明: `adapter/webapi/error_response.go` の `newErrorResponse` は `perror.PError` と `werrors.InvalidArgument` しか本文に反映しない。`werrors.NotFoundErrorWith(err)` / `UnprocessableEntityErrorWith(err)` を素の error に対して使うと、HTTP ステータスは意図どおりでも本文は `{"code":"unexpected_error","message":"unexpected error"}` になる。さらに `renderErrorResponse` は 500 以外でも `datadog.SetErrorTag` を呼び `ext.Error=true` / `ManualKeep=true` を立てるため、想定内の 404/422 が APM の予期しないエラーとして強制サンプリングで積まれる
+  - 対策: 新しいステータスコードを返す差分を見たら `werrors.XxxErrorWith(perror.NewPError(code, msg))` の形になっているかを確認する（既存例: `error/error.go` の `ErrNotFoundUser`、`ErrInsufficientAccountMoney`）
+  - 例: PR #2512 `adapter/webapi/monthly_fee_invoice_pdf.go`。PDF 未生成の 422 も他サービスの 404 も、本文は同じ `unexpected_error` になり console が区別できない
+
+### テスト
+
+- **テナント分離を SQL の WHERE 句で担保したのに、テストがリポジトリモックだけ**
+  - 説明: 「取得後に照合するのではなく検索条件に `service_id` を入れる」という設計は正しいが、その保証は WHERE 句1行に集約される。usecase / handler のテストで `FindByXxx` のモックに NotFound を返させても、条件が消えた回帰は検知できない
+  - 対策: 検索条件に認可用のカラムを足す差分では、同じディレクトリの `*_integration_test.go`（実 PostgreSQL の suite）に「別テナントの id で NotFound」ケースが追加されているかを確認する。判定は「その条件を差分から削ってテストが落ちるか」
+  - 例: PR #2512 `adapter/domainimpl/repository/monthly_fee_invoice.go` の `FindByIDAndServiceID`。`AND service_id = ?` を削除して全テストを回したが、統合テストを含めて全部緑のままだった
+
 ### 並行処理
 - **goroutine リーク**
   - 説明: context のキャンセルや done チャネルでの適切な終了処理がない
@@ -97,6 +109,17 @@
 - **RP2040 の PWM はスライス単位で周期を共有するのにピン割り当てで衝突を確認していない**
   - 説明: RP2040 の PWM スライス番号は `(gpio >> 1) & 7`、チャネルは `gpio & 1` で決まる。GPIO14 と GPIO15 のような隣接ピンは同一スライスになり TOP / DIV を共有するため、片方を 1kHz の調光、もう片方を 38kHz の赤外線搬送波のように使うことはできない
   - 対策: 新たに PWM 化したピンについてスライス番号を計算し、同一スライスの相方ピンが他の用途で PWM を使っていないかを確認する
+### 数値・型変換
+- **表示・帳票への詰め替えで float64 を int64 に素キャストして検算が崩れる**
+  - 説明: DB が float64（numeric）で持つ単価・数量を、PDF や CSV など「受け取った側が数量×単価で検算する」出力に `int64(v)` で詰め替えると、小数分が黙って切り捨てられ、同時に出力する合計金額（DB 側で decimal 計算済み）と辻褄が合わなくなる。丸め誤差対策として `math.Round` を使っている箇所が同じファイルにあるのに、別の箇所だけ素キャスト、という不揃いになりやすい
+  - 対策: 差分内の float から `int64(` / `int(` への変換を洗い出し、(1) 元の値が小数を取りうるか、(2) 出力先で他の値との整合が要求されるか を確認する。整数前提なら黙って切り捨てず、明示的にバリデーションしてエラーにする
+  - 例: PR #2510 `usecase/store_monthly_fee_invoice_pdf.go` の `toInvoiceItem`。単価 27.5 円 × 10 件で明細金額 275 円なのに、請求書には「数量 10 / 単価 27 / 金額 275」と出て検算が合わない
+
+### データ整合性
+- **過去の証憑を再生成する処理でマスタの一部だけ Unscoped にして片手落ちになる**
+  - 説明: 発行済みの請求書・帳票を後から組み立て直す処理では、参照するマスタが論理削除・名称変更されている可能性がある。片方（消費税マスタなど）だけ Unscoped 取得を用意し、他方（パートナー名・サービス名など）は通常スコープのままにすると、論理削除された瞬間に再生成が恒久的に失敗したり、発行時と異なる内容の証憑ができたりする
+  - 対策: 「発行時点の値が要る」と説明されている参照が差分にあれば、同じ再生成パスで引く他のマスタ参照もすべて同じ扱い（スナップショット保存 or Unscoped）になっているかを確認する
+  - 例: PR #2510。消費税マスタは Unscoped で引くのに宛名は通常スコープで、`disable-partner` が partners を論理削除すると PDF 再生成が NotFound で恒久失敗する
 
 ## 参考資料
 - [Effective Go](https://go.dev/doc/effective_go)
