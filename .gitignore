@@ -8,3 +8,6 @@ __pycache__/
 .claude/notes/
 # packages/ に入ると stow が ~/.DS_Store と衝突し、全リンク作成が中止される
 .DS_Store
+
+# claude.ai から同期される組み込みスキル。~/.claude の実体と同一なので削除せず除外する
+packages/claude/.claude/skills/synced/
