@@ -51,6 +51,7 @@ codex exec review --uncommitted
 - Python → `languages/python.md`
 - Rust → `languages/rust.md`
 - Shell/Bash(フック・スクリプト) → `languages/shell.md`
+- Terraform/HCL(infra/) → `languages/terraform.md`
 
 各ファイルには、言語特有のよくあるミスと参考資料がまとめられています。
 
