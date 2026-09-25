@@ -21,8 +21,6 @@
       "Bash(make *)",
       "Bash(mkdir *)",
       "Bash(cp *)",
-      "Bash(chmod *)",
-      "Bash(chown *)",
       "Bash(find *)",
       "Bash(grep *)",
       "Bash(awk *)",
