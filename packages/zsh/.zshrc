@@ -36,6 +36,11 @@ fi
 # Editor settings
 export EDITOR=nvim
 
+# zsh は EDITOR/VISUAL に "vi" が含まれると main キーマップを viins にする。
+# "nvim" も部分一致するため、指定しないと ^A/^E が self-insert になる。
+# 以降の bindkey は main(=emacs) に入るので、fzf.zsh を読む前に固定する。
+bindkey -e
+
 ZSH_DIR="${HOME}/.zsh"
 
 if [ -d $ZSH_DIR ] && [ -r $ZSH_DIR ] && [ -x $ZSH_DIR ]; then
