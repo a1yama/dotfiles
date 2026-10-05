@@ -3,6 +3,8 @@ packages/git/.config/git/config.d/local.conf
 packages/claude/.claude/lint/node_modules/
 packages/yazi/.local/
 packages/yazi/.cache/
+# Karabiner が設定変更のたびに書き出すバックアップ
+packages/karabiner/.config/karabiner/automatic_backups/
 __pycache__/
 *.pyc
 .claude/notes/

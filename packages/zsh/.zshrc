@@ -5,7 +5,12 @@ fpath=()
 precmd() {
   print -Pn "\e]0;%~\a"
 }
-eval "$(/opt/homebrew/bin/brew shellenv)"
+# Workbrew 管理下の PC では wrapper 経由でないと brew が拒否される
+if [[ -x /opt/workbrew/bin/brew ]]; then
+  eval "$(/opt/workbrew/bin/brew shellenv)"
+else
+  eval "$(/opt/homebrew/bin/brew shellenv)"
+fi
 
 # Load zsh completion system first
 # Ensure system function paths are included

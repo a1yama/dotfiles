@@ -1,0 +1,38 @@
+{
+  "global": {
+    "show_in_menu_bar": false
+  },
+  "profiles": [
+    {
+      "name": "Default profile",
+      "selected": true,
+      "complex_modifications": {
+        "rules": [
+          {
+            "description": "Option 単押しで英数/かな(左: 英数, 右: かな)",
+            "manipulators": [
+              {
+                "type": "basic",
+                "from": {
+                  "key_code": "left_option",
+                  "modifiers": { "optional": ["any"] }
+                },
+                "to": [{ "key_code": "left_option", "lazy": true }],
+                "to_if_alone": [{ "key_code": "japanese_eisuu" }]
+              },
+              {
+                "type": "basic",
+                "from": {
+                  "key_code": "right_option",
+                  "modifiers": { "optional": ["any"] }
+                },
+                "to": [{ "key_code": "right_option", "lazy": true }],
+                "to_if_alone": [{ "key_code": "japanese_kana" }]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}
