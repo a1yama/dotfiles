@@ -15,8 +15,20 @@ if type brew &>/dev/null; then
   fpath=($(brew --prefix)/share/zsh-completions $fpath)
 fi
 
-autoload -Uz compinit add-zsh-hook is-at-least
-compinit
+autoload -Uz compinit compaudit add-zsh-hook is-at-least
+# Homebrew is managed by Workbrew, so /opt/homebrew is owned by the `workbrew`
+# user and compaudit flags it. Trust it unless it is group/world-writable;
+# anything else insecure still gets the interactive prompt.
+() {
+  setopt local_options extended_glob
+  local -a insecure=(${(f)"$(compaudit 2>/dev/null)"})
+  local -a writable=(${^${(M)insecure:#/opt/homebrew/*}}(N^f:go-w:))
+  if (( ${#${insecure:#/opt/homebrew/*}} + ${#writable} )); then
+    compinit
+  else
+    compinit -u
+  fi
+}
 
 # Initialize rbenv
 if command -v rbenv >/dev/null 2>&1; then
