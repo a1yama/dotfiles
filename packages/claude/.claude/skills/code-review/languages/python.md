@@ -103,6 +103,9 @@
 - **認証失敗時に別経路へ自動フォールバックすると、認証が壊れていることに気づけない**
   - 説明: 「ID/パスワードで失敗したら Cookie を使う」のような降格は、可用性のつもりで劣化を隠す。とくに取得データの品質が認証状態で変わる場合（有料項目・全件/一部）、壊れたまま走り続けて劣化データが蓄積する。別経路は「主経路を設定しない場合の選択肢」に留め、主経路の失敗時は止める。ドキュメントの「代替手段」という表現も実挙動に合わせること。
 
+- **Slack に流す外部由来テキストの無害化が `<!channel>` / `<!here>` / `<!everyone>` だけで、ユーザーグループへのメンションが漏れる**
+  - 説明: LLM の出力やログ由来の文字列を Slack に投稿するとき、`<!subteam^ID>` 形式のユーザーグループへのメンションが残ると特定チームに通知が飛ぶ。`<!` で始まる制御シーケンスをまとめて扱い、無害なもの（`<!date^...>` など）だけを残す形にする
+
 ### ライブラリ固有（requests）
 - **`session.cookies[name]` は同名Cookieが複数あると `CookieConflictError` を投げる**
   - 説明: `RequestsCookieJar.__getitem__` は `_find_no_duplicates` を通るため、同名Cookieが複数の domain / path に存在すると `CookieConflictError`（`RuntimeError` 派生で `KeyError` ではない）を送出する。リダイレクトを伴うログインでは、同名Cookieが親ドメインとサブドメインの両方に付くことが実際にある。なお `name in session.cookies` は requests 2.34.2 では `RequestsCookieJar` 独自の `__contains__` があり例外にならないが、バージョンを固定していないなら `any(c.name == NAME for c in session.cookies)` と書くのが版に依存せず安全。
@@ -176,6 +179,11 @@
     # NG: bucket ごとに欠損で母集団が変わる／fallback が比較軸と相関する
     payout_sum += official_payout or odds_at_that_bucket * 100
     ```
+
+### 互換性
+- **`X | None` の型注釈は Python 3.9 では import 時に TypeError になる**
+  - 説明: 関数シグネチャの注釈は定義時に評価されるため、PEP 604 の union 構文は 3.10 未満でモジュールの読み込み自体を失敗させる。CI は新しい Python で通るのに、macOS 標準の python3（3.9）でのローカル実行やテストだけが落ちる
+  - 対策: `from __future__ import annotations` を入れるか、対応バージョンを明記する
 
 ### パフォーマンス
 - **ループ内での文字列連結**
