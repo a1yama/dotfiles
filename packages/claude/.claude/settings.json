@@ -6,9 +6,9 @@
   "permissions": {
     "allow": [
       "List(*)",
-      "Read(*)",
-      "Glob(*)",
-      "Grep(*)",
+      "Read",
+      "Glob",
+      "Grep",
       "Search(*)",
       "ListAgents",
       "SendMessage",
