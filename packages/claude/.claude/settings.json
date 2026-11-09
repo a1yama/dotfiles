@@ -245,33 +245,5 @@
   "skipDangerousModePermissionPrompt": true,
   "remoteControlAtStartup": false,
   "skipAutoPermissionPrompt": true,
-  "useAutoModeDuringPlan": true,
-  "autoMode": {
-    "environment": [
-      "### Org-wide",
-      "**Organization**: None configured",
-      "**Cloud provider(s)**: AWS (ECR registry `060222174856.dkr.ecr.ap-northeast-1.amazonaws.com` observed in config scan)",
-      "**Repository visibility**: Not queryable here — no git remotes configured in this repo (0 tracked files, no origin). Treat as unknown/possibly public until a remote is added",
-      "**Internal sharing / snippet hosting**: None configured — treat public paste/gist services as outside the trust boundary",
-      "**Secrets management**: Credential helper files and export scripts present in sibling directories (e.g. `credentials.go`, `exportsecrets.sh`, `.circleci/aws/credentials.tmpl`) — config-derived only, not usage-corroborated",
-      "**Default / protected branches**: Unknown — origin/HEAD unset, no remote configured, not queryable via gh",
-      "**CI/CD deploy targets**: None configured",
-      "**Network posture**: None configured — assume Claude Code runs on an ordinary developer machine with open internet",
-      "**Host containment**: None configured",
-      "**Source control**: The trusted repo and its remote(s) only (no remotes currently configured; no additional orgs configured)",
-      "**Trusted internal domains**: None configured",
-      "**Trusted cloud buckets**: None configured — config-scan found many generic/placeholder bucket names (e.g. `bucket-name`, `my-bucket`, `example-bucket`) and one org-flavored prefix `kyash-wallet-` (4×, 2 files), but none are usage-corroborated by transcript-mining (no bucket names appear in the Hosts/CLI usage sections), so none are adopted",
-      "**Key internal services**: None configured",
-      "**Internal package registry**: None configured",
-      "**Sensitive data locations & audiences**: Paths under sibling project directories referencing encrypted PAN/credential/salt data (e.g. `platform-crypto/models/pre_hash_encrypted_salt.go`, `platform-issuing/domain/service/generate_encrypted_pan_service.go`, `.env.production`, `.env.staging`, `credentials.go` files) — config-derived only, treat as sensitive and do not port or expose outside cleared audiences",
-      "**Data retention / declassification**: None configured",
-      "**Sensitive remote targets**: any namespace, host, or container whose name carries `prod` or `production` as a whole word or name segment — note config scan shows `production.kyash.circleci` and multiple `.env.production` files as examples of this pattern in sibling paths",
-      "**Protected deployment namespaces / environments**: None configured — fall back to the Sensitive remote targets heuristic",
-      "**Protected IaC scopes**: IAM, RBAC, networking, quota, and node-pool resources; anything whose name or tag carries `prod` or `production` as a whole word or name segment — note numerous `main.tf` / `.terraform-version` files exist under sibling `platform-*` directories (config-derived only, not usage-corroborated)",
-      "### User-specific",
-      "**Primary use of Claude Code**: software development",
-      "**Trusted repo**: The git repository at /Users/eiichi.yamazaki/go/src/github.com/Kyash and its configured remote(s) — currently no remotes are configured; this repo also has 0 tracked files",
-      "**Org-specific CLIs**: None confirmed as org-specific — frequently used generic/dev CLIs observed include `brew`, `lsof`, `pbcopy`, `sqlfluff`, `ghq`, `op`, `shellcheck`, `gofmt`, `goimports`"
-    ]
-  }
+  "useAutoModeDuringPlan": true
 }
