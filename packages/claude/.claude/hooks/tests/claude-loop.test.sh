@@ -207,6 +207,8 @@ echo x > "$ROOT/repo/untracked-link"
 run_cli run demo >/dev/null
 out=$(run_cli run demo); rc=$?
 ok "LINKS で張った管理外ファイルがあっても2回目が通る" "$(eq "$rc" 0)"
+ok "張ったリンクは git から未追跡として見えない(再発防止: 無人実行がリンクをコミットに含めうる)" "$(eq "$(git -C "$ROOT/state/worktrees/demo" status --porcelain)" "")"
+ok "除外の登録は重複させない" "$(eq "$(grep -c '^/untracked-link$' "$ROOT/repo/.git/info/exclude")" 1)"
 
 # --- 失敗と時間切れ ---
 setup; conf demo

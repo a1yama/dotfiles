@@ -194,7 +194,7 @@ leftover_changes() {
 }
 
 prepare_worktree() {
-  local name="$1" wt="$2" f leftover
+  local name="$1" wt="$2" f leftover exclude
   [ -d "$REPO/.git" ] || [ -f "$REPO/.git" ] || { echo "REPO が git リポジトリではありません: $REPO"; return 1; }
   git -C "$REPO" fetch -q origin || { echo "git fetch に失敗しました"; return 1; }
   if [ ! -d "$wt" ]; then
@@ -223,6 +223,11 @@ prepare_worktree() {
       # 確かめないと、認証情報が無いまま Claude が動く
       ln -s "$REPO/$f" "$wt/$f" || { set +f; echo "LINKS を張れません: $wt/$f"; return 1; }
     fi
+    # リンクを git から見えなくする。`dir/` の形の .gitignore は symlink に効かないので、
+    # そのままだと未追跡として見え、無人実行が `git add -A` でリンクをコミットに含めうる
+    exclude="$(cd "$wt" && cd "$(git rev-parse --git-common-dir)" && pwd)/info/exclude"
+    mkdir -p "$(dirname "$exclude")"
+    grep -qxF "/$f" "$exclude" 2>/dev/null || printf '/%s\n' "$f" >> "$exclude"
   done
   set +f
   if [ -n "$SETUP" ]; then
