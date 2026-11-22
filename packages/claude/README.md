@@ -36,6 +36,30 @@ claude-tmux kill translate-readme
 claude-tmux kill all
 ```
 
+## claude-loop
+
+リポジトリごとの改善ループを、専用マシンで無人の定時実行にする。
+`~/.local/bin/claude-loop` にリンクされる。
+
+```bash
+claude-loop list                  # 設定されているループと直近の結果
+claude-loop run <name> --dry-run  # 準備(専用 worktree・リンク・SETUP)までを確かめる
+claude-loop run <name>            # 1回実行する
+claude-loop install               # このマシン向けのループを launchd に登録する
+claude-loop uninstall             # 登録を外す
+```
+
+- 設定は `~/.config/claude-loop/<name>.conf`(このパッケージの `.config/claude-loop/`)。項目は `claude-loop` 冒頭のコメントを参照
+- `HOST` が `hostname -s` と一致するマシンでしか登録も実行もしない。dotfiles を入れた全マシンで動くことはない
+- 対話用の clone では作業しない。`~/.local/state/claude-loop/worktrees/<name>` の専用 worktree を毎回 `origin/main` に合わせてから始める
+- 前回の変更が worktree に残っていたら実行せず止まる(捨てない)。中身を確かめてから手で片付ける
+- 結果は `~/.local/state/claude-loop/<name>.last.json`、ログは `~/.local/state/claude-loop/logs/<name>/`
+- ループの手順そのもの(何を判定し、何を提案するか)は各リポジトリの手順書に置く。ここに書くのは「いつ・どこで・何を起動するか」だけ
+- 新しいマシンで使うとき: `stow -d packages -t ~ -R claude` のあと `claude-loop install`。設定を変えたときも `claude-loop install` をやり直す
+- launchd の登録先は画面にログインしているユーザーの領域(`gui/<uid>`)。専用マシンは自動ログインにしておく。ログインしていない間は起動しない
+- launchd から起動したシェルは `.zshrc` を読まない。失敗の通知を受けるには `~/.config/claude-loop/env` に `CLAUDE_SLACK_WEBHOOK_URL=` か `CLAUDE_DISCORD_WEBHOOK_URL=` を書く(秘密の値なので dotfiles には入れない)
+- 導入の直後は `claude-loop run <name> --dry-run` で準備が通ることを確かめる。`env -i HOME=$HOME /bin/zsh -lc 'claude-loop run <name> --dry-run'` なら launchd に近い環境で確かめられる
+
 ## スキル
 
 | スキル | 種類 | 説明 |

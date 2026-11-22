@@ -1,0 +1,407 @@
+#!/usr/bin/env bash
+# claude-loop — リポジトリごとの改善ループを、専用マシンで無人の定時実行にする。
+#
+# なぜ専用の実行器が要るか:
+#   - 定時実行は人が見ていない。常駐の対話セッションと同じ作業ツリーで動かすと、
+#     互いの変更を踏む(同じ repo の別セッションが互いを知らずに同じ作業をした実例がある)。
+#     ループは専用の git worktree で動かし、対話セッションの作業ツリーには触らない。
+#   - 前回の変更が残った作業ツリーを黙って捨てない。失敗の痕跡なので、止めて知らせる。
+#   - 設定は dotfiles で全マシンに配られる。HOST が一致するマシンでしか動かさない。
+#
+# 使い方:
+#   claude-loop list                 設定されているループと直近の結果
+#   claude-loop run <name>           1回実行(launchd から呼ばれる)
+#   claude-loop run <name> --dry-run 準備までを確かめ、Claude は起動しない
+#   claude-loop install              このマシン向けのループを launchd に登録
+#   claude-loop uninstall            登録を外す
+#   claude-loop render <name>        launchd の plist を標準出力に出す
+#
+# 設定: ~/.config/claude-loop/<name>.conf (KEY=VALUE。1行1項目)
+#   REPO=~/ghq/github.com/owner/repo   対話用の clone(worktree の親。ここでは作業しない)
+#   PROMPT=...                         Claude に渡す指示(1行)
+#   HOST=Macmini                       実行してよいマシン(hostname -s)。必須
+#   HOUR=6 / MINUTE=40                 毎日の起動時刻
+#   WEEKDAY=1                          任意。指定した曜日だけ(0=日 … 6=土)
+#   TIMEOUT_MIN=90                     任意。超えたら止める
+#   BASE=origin/main                   任意。毎回この位置から始める
+#   LINKS=.env .note-session           任意。対話用 clone から symlink する git 管理外のファイル
+#   SETUP=npm ci                       任意。Claude の前に worktree で実行する準備コマンド
+#   ENABLED=0                          任意。0 なら登録も実行もしない
+#
+# 通知: ~/.config/claude-loop/env に CLAUDE_SLACK_WEBHOOK_URL= / CLAUDE_DISCORD_WEBHOOK_URL= を書く。
+#   launchd から起動したシェルは .zshrc を読まないので、対話シェル用に設定した環境変数は届かない。
+#   このファイルは秘密の値を含むので dotfiles には入れない(マシンごとに手で置く)。
+set -uo pipefail
+
+# launchd の環境には対話シェルの PATH が無い。claude / git / node が見つからないまま
+# 毎日失敗し続けるのを避けるため、ここで補う。
+# 後ろに足す。前に足すと、呼び出し側が PATH の先頭に置いたもの(テストの偽コマンドなど)より
+# こちらが優先され、テストから本物の claude が起動する(2026-11-22 に実際に起きた)
+PATH="$PATH:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:$HOME/.local/bin"
+export PATH
+export GIT_TERMINAL_PROMPT=0
+
+CONF_DIR="${CLAUDE_LOOP_CONF_DIR:-$HOME/.config/claude-loop}"
+STATE_DIR="${CLAUDE_LOOP_STATE_DIR:-$HOME/.local/state/claude-loop}"
+AGENTS_DIR="${CLAUDE_LOOP_LAUNCH_AGENTS_DIR:-$HOME/Library/LaunchAgents}"
+LABEL_PREFIX="local.claude-loop"
+SELF="${CLAUDE_LOOP_SELF:-$HOME/.local/bin/claude-loop}"
+
+PREPARE_TIMEOUT_SEC="${CLAUDE_LOOP_PREPARE_TIMEOUT_SEC:-900}"
+KILL_GRACE_SEC="${CLAUDE_LOOP_KILL_GRACE_SEC:-30}"
+
+die() { printf 'claude-loop: %s\n' "$*" >&2; exit 1; }
+
+# 通知用の値だけを env ファイルから読む。source しない(設定の読み取りと同じ理由)
+load_env_file() {
+  local file="$CONF_DIR/env" line key
+  [ -f "$file" ] || return 0
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in ''|'#'*) continue ;; esac
+    key="${line%%=*}"
+    case "$key" in
+      CLAUDE_SLACK_WEBHOOK_URL|CLAUDE_DISCORD_WEBHOOK_URL) export "$key=${line#*=}" ;;
+    esac
+  done < "$file"
+}
+log() { printf '%s %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*"; }
+this_host() { hostname -s; }
+
+valid_name() { [[ "$1" =~ ^[a-z0-9][a-z0-9-]*$ ]]; }
+
+list_names() {
+  local f
+  [ -d "$CONF_DIR" ] || return 0
+  for f in "$CONF_DIR"/*.conf; do
+    [ -f "$f" ] || continue
+    basename "$f" .conf
+  done
+}
+
+# 設定を読む。source しない(設定ファイルに書かれた任意のコードを実行しないため)。
+# 知らないキーは打ち間違いとして止める。黙って無視すると、効かない設定のまま動き続ける。
+load_conf() {
+  local name="$1" file="$CONF_DIR/$1.conf" line key value
+  valid_name "$name" || die "ループ名は英小文字・数字・ハイフンのみ: $name"
+  [ -f "$file" ] || die "設定がありません: $file"
+  REPO="" PROMPT="" HOST="" HOUR="" MINUTE="" WEEKDAY="" TIMEOUT_MIN="90"
+  BASE="origin/main" LINKS="" SETUP="" ENABLED="1"
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in ''|'#'*) continue ;; esac
+    [[ "$line" == *=* ]] || die "$file: KEY=VALUE の形ではありません: $line"
+    key="${line%%=*}" value="${line#*=}"
+    case "$key" in
+      REPO|PROMPT|HOST|HOUR|MINUTE|WEEKDAY|TIMEOUT_MIN|BASE|LINKS|SETUP|ENABLED)
+        printf -v "$key" '%s' "$value" ;;
+      *) die "$file: 不明なキーです: $key" ;;
+    esac
+  done < "$file"
+  REPO="${REPO/#\~/$HOME}"
+  [ -n "$REPO" ] || die "$file: REPO がありません"
+  [ -n "$PROMPT" ] || die "$file: PROMPT がありません"
+  # HOST を省略可にすると、dotfiles を入れた全マシンで同じループが動いてしまう
+  [ -n "$HOST" ] || die "$file: HOST がありません(実行してよいマシンの hostname -s)"
+  [[ "$HOUR" =~ ^([0-9]|1[0-9]|2[0-3])$ ]] || die "$file: HOUR は 0〜23: $HOUR"
+  [[ "$MINUTE" =~ ^([0-9]|[1-5][0-9])$ ]] || die "$file: MINUTE は 0〜59: $MINUTE"
+  [[ -z "$WEEKDAY" || "$WEEKDAY" =~ ^[0-6]$ ]] || die "$file: WEEKDAY は 0〜6: $WEEKDAY"
+  [[ "$TIMEOUT_MIN" =~ ^[1-9][0-9]*$ ]] || die "$file: TIMEOUT_MIN は正の整数: $TIMEOUT_MIN"
+  [[ "$ENABLED" == "0" || "$ENABLED" == "1" ]] || die "$file: ENABLED は 0 か 1: $ENABLED"
+}
+
+xml_escape() {
+  local s="$1"
+  s="${s//&/&amp;}"; s="${s//</&lt;}"; s="${s//>/&gt;}"
+  printf '%s' "$s"
+}
+
+render_plist() {
+  local name="$1" weekday_xml=""
+  load_conf "$name"
+  [ -n "$WEEKDAY" ] && weekday_xml="
+    <key>Weekday</key><integer>$WEEKDAY</integer>"
+  cat <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>$LABEL_PREFIX.$name</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/zsh</string>
+    <string>-lc</string>
+    <string>exec $(xml_escape "$SELF") run $name</string>
+  </array>
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key><integer>$HOUR</integer>
+    <key>Minute</key><integer>$MINUTE</integer>$weekday_xml
+  </dict>
+  <key>StandardOutPath</key><string>$(xml_escape "$STATE_DIR/logs/$name.launchd.log")</string>
+  <key>StandardErrorPath</key><string>$(xml_escape "$STATE_DIR/logs/$name.launchd.log")</string>
+  <key>RunAtLoad</key><false/>
+</dict>
+</plist>
+PLIST
+}
+
+notify() {
+  # 通知先が無くても実行は止めない。結果は必ず <name>.last.json に残っている
+  local text="$1" payload
+  command -v curl >/dev/null 2>&1 || return 0
+  payload=$(printf '%s' "$text" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))' 2>/dev/null) || return 0
+  if [ -n "${CLAUDE_SLACK_WEBHOOK_URL:-}" ]; then
+    curl -s -m 10 -X POST -H 'Content-Type: application/json' \
+      -d "{\"text\":$payload}" "$CLAUDE_SLACK_WEBHOOK_URL" >/dev/null 2>&1 || true
+  fi
+  if [ -n "${CLAUDE_DISCORD_WEBHOOK_URL:-}" ]; then
+    curl -s -m 10 -X POST -H 'Content-Type: application/json' \
+      -d "{\"content\":$payload}" "$CLAUDE_DISCORD_WEBHOOK_URL" >/dev/null 2>&1 || true
+  fi
+}
+
+write_result() {
+  local name="$1" status="$2" detail="$3" started="$4" logfile="$5"
+  mkdir -p "$STATE_DIR"
+  python3 - "$STATE_DIR/$name.last.json" "$name" "$status" "$detail" "$started" "$logfile" <<'PY'
+import json, sys, time
+path, name, status, detail, started, logfile = sys.argv[1:7]
+json.dump({"name": name, "status": status, "detail": detail, "started": started,
+           "finished": time.strftime("%Y-%m-%d %H:%M:%S"), "log": logfile},
+          open(path, "w"), ensure_ascii=False, indent=2)
+PY
+}
+
+# 作業ツリーに残った変更を返す。LINKS で張った symlink は「前回の変更」ではないので除く
+leftover_changes() {
+  local wt="$1" links="$2" line path keep link orphan
+  set -f # LINKS の値をグロブ展開させない(launchd の作業ディレクトリは /)
+  git -C "$wt" status --porcelain 2>/dev/null | while IFS= read -r line; do
+    path="${line:3}"; path="${path%/}"; keep=1
+    for link in $links; do [ "$path" = "$link" ] && keep=0; done
+    [ "$keep" = "1" ] && printf '%s\n' "$line"
+  done
+  set +f
+  # ブランチを切らずに detached HEAD へ積まれ、push もされていないコミット。
+  # 次の checkout でどこからも参照されなくなるので、これも前回の変更として止める
+  orphan=$(git -C "$wt" rev-list HEAD --not --remotes --branches 2>/dev/null | head -5)
+  [ -n "$orphan" ] && printf '未 push のコミット(ブランチ無し): %s\n' $orphan
+  return 0
+}
+
+prepare_worktree() {
+  local name="$1" wt="$2" f leftover
+  [ -d "$REPO/.git" ] || [ -f "$REPO/.git" ] || { echo "REPO が git リポジトリではありません: $REPO"; return 1; }
+  git -C "$REPO" fetch -q origin || { echo "git fetch に失敗しました"; return 1; }
+  if [ ! -d "$wt" ]; then
+    # ディレクトリだけ手で消されていると git 側の登録が残り、add が毎回失敗する
+    git -C "$REPO" worktree prune
+    mkdir -p "$(dirname "$wt")"
+    git -C "$REPO" worktree add -q --detach "$wt" "$BASE" || { echo "worktree を作れません: $wt"; return 1; }
+  fi
+  leftover=$(leftover_changes "$wt" "$LINKS")
+  if [ -n "$leftover" ]; then
+    echo "前回の変更が作業ツリーに残っています。中身を確かめてから片付けてください: $wt"
+    printf '%s\n' "$leftover" | head -20
+    return 1
+  fi
+  git -C "$wt" checkout -q --detach "$BASE" || { echo "$BASE に切り替えられません"; return 1; }
+  set -f
+  for f in $LINKS; do
+    [ -e "$REPO/$f" ] || { set +f; echo "LINKS の元がありません: $REPO/$f"; return 1; }
+    [ -e "$wt/$f" ] || [ -L "$wt/$f" ] || ln -s "$REPO/$f" "$wt/$f"
+  done
+  set +f
+  if [ -n "$SETUP" ]; then
+    (cd "$wt" && bash -c "$SETUP") || { echo "SETUP が失敗しました: $SETUP"; return 1; }
+  fi
+}
+
+UNATTENDED_NOTE='これは無人の定時実行です。質問に答える人はいません。AskUserQuestion を使わず、確認が必要なことや判断できないことは実行せずに最終報告へ書いて終了してください。作業は現在の作業ツリー(専用の git worktree)の中だけで行い、ブランチを切って PR にしてください。'
+
+# 制限時間つきで実行する。超えたらプロセスグループごと TERM し、猶予のあと KILL する。
+#   $1: 制限秒 / $2: 出力先 / $3: 時間切れの目印ファイル / 残り: コマンド(シェル関数も可)
+# TERM を1回送るだけだと、相手が終わらないとき wait が戻らず、ロックを握ったまま翌日以降の
+# 実行を黙って止め続ける。Claude が起動した子プロセス(npm など)も取り残される。
+run_limited() {
+  local limit="$1" out="$2" marker="$3" pid watchdog sleeper rc
+  shift 3
+  rm -f "$marker"
+  set -m # バックグラウンドのジョブを別のプロセスグループにする(グループごと止めるため)
+  ( "$@" ) > "$out" 2>&1 &
+  pid=$!
+  set +m
+  (
+    trap 'kill "$sleeper" 2>/dev/null; exit 0' TERM
+    sleep "$limit" & sleeper=$!; wait "$sleeper"
+    # 目印を先に置く。kill の後だと、本体側の判定が先に走って「失敗」と記録される
+    touch "$marker"
+    kill -TERM -- "-$pid" 2>/dev/null
+    sleep "$KILL_GRACE_SEC" & sleeper=$!; wait "$sleeper"
+    kill -KILL -- "-$pid" 2>/dev/null
+  ) &
+  watchdog=$!
+  wait "$pid"; rc=$?
+  kill -TERM "$watchdog" 2>/dev/null; wait "$watchdog" 2>/dev/null
+  return "$rc"
+}
+
+launch_claude() {
+  cd "$1" || exit 1
+  # 標準入力を閉じる。開いたままだと claude が入力を数秒待ってから始める
+  exec claude -p "$PROMPT" --permission-mode auto --name "loop-$2" \
+    --append-system-prompt "$UNATTENDED_NOTE" < /dev/null
+}
+
+# ロックを取る。取れたら 0、前回が実行中なら 1
+acquire_lock() {
+  local name="$1" lock="$2" old age
+  if mkdir "$lock" 2>/dev/null; then
+    echo $$ > "$lock/pid"
+    return 0
+  fi
+  old=$(cat "$lock/pid" 2>/dev/null || true)
+  age=$(( $(date +%s) - $(stat -f %m "$lock" 2>/dev/null || stat -c %Y "$lock" 2>/dev/null || echo 0) ))
+  # pid がまだ書かれていない直後のロックは、別の実行が取ったばかりのもの。古いロックと取り違えない
+  if { [ -n "$old" ] && kill -0 "$old" 2>/dev/null; } || { [ -z "$old" ] && [ "$age" -lt 60 ]; }; then
+    if [ "$age" -gt $((TIMEOUT_MIN * 120)) ]; then
+      # 制限時間の2倍を超えても動いているのは異常。黙ってスキップし続けない
+      write_result "$name" "stuck" "前回の実行(pid $old)が ${age}秒 動いたままです" "$(date '+%Y-%m-%d %H:%M:%S')" ""
+      notify "claude-loop [$name] stuck: 前回の実行(pid $old)が ${age}秒 動いたままです"
+    fi
+    log "[$name] 前回の実行がまだ動いています(pid ${old:-不明})。今回は実行しません"
+    return 1
+  fi
+  # 持ち主のいないロックは、前回が異常終了した跡。外して続ける
+  rm -rf "$lock"
+  mkdir "$lock" 2>/dev/null || { log "[$name] ロックを取れません: $lock"; return 1; }
+  echo $$ > "$lock/pid"
+}
+
+cmd_run() {
+  local name="${1:-}" dry_run=0
+  [ -n "$name" ] || die "使い方: claude-loop run <name> [--dry-run]"
+  [ "${2:-}" = "--dry-run" ] && dry_run=1
+  load_conf "$name"
+  load_env_file
+  [ "$ENABLED" = "1" ] || { log "[$name] ENABLED=0 のため実行しません"; return 0; }
+  [ "$(this_host)" = "$HOST" ] || { log "[$name] このマシン($(this_host))は対象外です(HOST=$HOST)"; return 0; }
+
+  local lock="$STATE_DIR/$name.lock" wt="$STATE_DIR/worktrees/$name"
+  local started logfile rc=0 status detail missing="" c
+  started=$(date '+%Y-%m-%d %H:%M:%S')
+  logfile="$STATE_DIR/logs/$name/$(date '+%Y%m%d-%H%M%S').log"
+  mkdir -p "$STATE_DIR/logs/$name"
+
+  acquire_lock "$name" "$lock" || return 0
+  # trap は関数を抜けた後(スクリプト終了時)に走る。local 変数は見えないのでグローバルに渡す
+  LOCK_TO_RELEASE="$lock"
+  trap 'rm -rf "$LOCK_TO_RELEASE"' EXIT
+
+  # 必要なコマンドが無い環境(PATH の違うシェルからの起動)を、準備の失敗として記録に残す
+  for c in claude git python3; do command -v "$c" >/dev/null 2>&1 || missing="$missing $c"; done
+  if [ -n "$missing" ]; then
+    detail="コマンドが見つかりません:$missing (PATH=$PATH)"
+    rc=1
+  else
+    run_limited "$PREPARE_TIMEOUT_SEC" "$logfile" "$lock/timed_out" prepare_worktree "$name" "$wt"; rc=$?
+    detail=$(cat "$logfile" 2>/dev/null)
+    [ -f "$lock/timed_out" ] && detail="準備が ${PREPARE_TIMEOUT_SEC}秒 を超えたため停止しました
+$detail"
+  fi
+  if [ "$rc" -ne 0 ]; then
+    log "[$name] 準備に失敗: $detail"
+    printf '%s\n' "$detail" > "$logfile"
+    write_result "$name" "prepare_failed" "$detail" "$started" "$logfile"
+    notify "claude-loop [$name] 準備に失敗しました: ${detail%%$'\n'*}"
+    return 1
+  fi
+
+  if [ "$dry_run" = "1" ]; then
+    log "[$name] --dry-run: 準備まで成功。Claude は起動しません($wt)"
+    write_result "$name" "dry_run" "準備まで成功" "$started" "$logfile"
+    return 0
+  fi
+
+  log "[$name] 開始: $wt"
+  run_limited $((TIMEOUT_MIN * 60)) "$logfile" "$lock/timed_out" launch_claude "$wt" "$name"; rc=$?
+
+  if [ -f "$lock/timed_out" ]; then
+    status="timeout"; detail="${TIMEOUT_MIN}分を超えたため停止しました"
+  elif [ "$rc" -eq 0 ]; then
+    status="ok"; detail="正常終了"
+  else
+    status="failed"; detail="終了コード $rc"
+  fi
+  write_result "$name" "$status" "$detail" "$started" "$logfile"
+  log "[$name] $status: $detail (ログ: $logfile)"
+  [ "$status" = "ok" ] || notify "claude-loop [$name] $status: $detail (ログ: $logfile)"
+  [ "$status" = "ok" ]
+}
+
+cmd_list() {
+  local name last
+  for name in $(list_names); do
+    load_conf "$name"
+    last="未実行"
+    [ -f "$STATE_DIR/$name.last.json" ] && last=$(python3 -c '
+import json,sys; d=json.load(open(sys.argv[1])); print(d["finished"], d["status"], d["detail"])' "$STATE_DIR/$name.last.json" 2>/dev/null || echo "結果を読めません")
+    printf '%s\t%02d:%02d%s\tHOST=%s\tENABLED=%s\t%s\n' "$name" "$HOUR" "$MINUTE" \
+      "${WEEKDAY:+ 曜日$WEEKDAY}" "$HOST" "$ENABLED" "$last"
+  done
+}
+
+cmd_install() {
+  local name plist uid target count=0
+  uid=$(id -u)
+  mkdir -p "$AGENTS_DIR" "$STATE_DIR/logs"
+  # 設定を消した・改名したループの登録が残ると、毎日起動して「設定がありません」で失敗し続ける
+  for plist in "$AGENTS_DIR/$LABEL_PREFIX".*.plist; do
+    [ -f "$plist" ] || continue
+    name=$(basename "$plist" .plist); name="${name#"$LABEL_PREFIX".}"
+    [ -f "$CONF_DIR/$name.conf" ] && continue
+    launchctl bootout "gui/$uid/$LABEL_PREFIX.$name" >/dev/null 2>&1 || true
+    rm -f "$plist"
+    log "[$name] 設定が無いので登録を外しました"
+  done
+  for name in $(list_names); do
+    load_conf "$name"
+    plist="$AGENTS_DIR/$LABEL_PREFIX.$name.plist"
+    target="gui/$uid/$LABEL_PREFIX.$name"
+    # 無効にした・別マシン向けにしたループは、登録が残らないよう必ず外す
+    launchctl bootout "$target" >/dev/null 2>&1 || true
+    if [ "$ENABLED" != "1" ] || [ "$(this_host)" != "$HOST" ]; then
+      rm -f "$plist"
+      log "[$name] 対象外(HOST=$HOST ENABLED=$ENABLED)。登録しません"
+      continue
+    fi
+    render_plist "$name" > "$plist"
+    # bootout の直後は登録が Input/output error で失敗することがある。1回だけ待って試し直す
+    launchctl bootstrap "gui/$uid" "$plist" 2>/dev/null \
+      || { sleep 1; launchctl bootstrap "gui/$uid" "$plist"; } \
+      || die "launchd への登録に失敗: $plist"
+    log "[$name] 登録しました: 毎日 $(printf '%02d:%02d' "$HOUR" "$MINUTE")${WEEKDAY:+ (曜日 $WEEKDAY)}"
+    count=$((count + 1))
+  done
+  log "登録 $count 件"
+}
+
+cmd_uninstall() {
+  local plist uid label
+  uid=$(id -u)
+  for plist in "$AGENTS_DIR/$LABEL_PREFIX".*.plist; do
+    [ -f "$plist" ] || continue
+    label=$(basename "$plist" .plist)
+    launchctl bootout "gui/$uid/$label" >/dev/null 2>&1 || true
+    rm -f "$plist"
+    log "外しました: $label"
+  done
+}
+
+case "${1:-}" in
+  list) cmd_list ;;
+  run) shift; cmd_run "$@" ;;
+  install) cmd_install ;;
+  uninstall) cmd_uninstall ;;
+  render) [ -n "${2:-}" ] || die "使い方: claude-loop render <name>"; render_plist "$2" ;;
+  *) sed -n '2,31p' "$0" | sed 's/^# \{0,1\}//'; exit 1 ;;
+esac
