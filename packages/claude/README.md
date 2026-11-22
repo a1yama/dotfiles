@@ -58,6 +58,7 @@ claude-loop uninstall             # 登録を外す
 - 新しいマシンで使うとき: `stow -d packages -t ~ -R claude` のあと `claude-loop install`。設定を変えたときも `claude-loop install` をやり直す
 - launchd の登録先は画面にログインしているユーザーの領域(`gui/<uid>`)。専用マシンは自動ログインにしておく。ログインしていない間は起動しない
 - launchd から起動したシェルは `.zshrc` を読まない。失敗の通知を受けるには `~/.config/claude-loop/env` に `CLAUDE_SLACK_WEBHOOK_URL=` か `CLAUDE_DISCORD_WEBHOOK_URL=` を書く(秘密の値なので dotfiles には入れない)
+- PR は merge コミットでマージする手順にする。squash してブランチを消すと、worktree に残ったコミットがどこからも参照されなくなり、次の回が「未 push のコミット」で止まる
 - 導入の直後は `claude-loop run <name> --dry-run` で準備が通ることを確かめる。`env -i HOME=$HOME /bin/zsh -lc 'claude-loop run <name> --dry-run'` なら launchd に近い環境で確かめられる
 
 ## スキル

@@ -134,15 +134,54 @@ ok "未 push のコミットがあると知らせる" "$(has "$out" "未 push �
 ok "未 push のコミットがあるとき claude を起動しない" "$(eq "$(grep -c '^cwd=' "$STUB_LOG")" 0)"
 
 # --- 必要なコマンドが無い環境は準備の失敗として記録する ---
+# 補う PATH を空にして、どのマシンでも本物の claude が見つからない状態を作る。
+# ここを環境まかせにすると、claude が標準の場所にあるマシンで本物が起動する
 setup; conf demo
 rm "$ROOT/bin/claude"
-out=$(PATH="$ROOT/bin:/usr/bin:/bin" CLAUDE_LOOP_CONF_DIR="$ROOT/conf" CLAUDE_LOOP_STATE_DIR="$ROOT/state" HOME="$ROOT/nohome" /bin/bash "$CLI" run demo 2>&1); rc=$?
-if PATH="/usr/bin:/bin:/opt/homebrew/bin:/usr/local/bin" command -v claude >/dev/null 2>&1; then
-  : # このマシンには本物の claude が標準の場所にあり、「見つからない」状況を作れないので検査しない
+if PATH="$ROOT/bin:/usr/bin:/bin" command -v claude >/dev/null 2>&1; then
+  ok "検査の前提: /usr/bin と /bin に claude が無いこと" 0
 else
+  out=$(PATH="$ROOT/bin:/usr/bin:/bin" CLAUDE_LOOP_EXTRA_PATH="" \
+    CLAUDE_LOOP_CONF_DIR="$ROOT/conf" CLAUDE_LOOP_STATE_DIR="$ROOT/state" /bin/bash "$CLI" run demo 2>&1); rc=$?
   ok "claude が見つからなければ exit 1" "$(eq "$rc" 1)"
   ok "見つからないコマンド名を記録する" "$(has "$out" "コマンドが見つかりません: claude")"
+  ok "結果は prepare_failed" "$(eq "$(status_of demo)" prepare_failed)"
 fi
+
+# --- LINKS の先が対話用 clone でなければ止める ---
+setup; conf demo "LINKS=.env"
+run_cli run demo >/dev/null
+rm "$ROOT/state/worktrees/demo/.env"; echo "OLD=1" > "$ROOT/state/worktrees/demo/.env"
+: > "$STUB_LOG"
+out=$(run_cli run demo); rc=$?
+ok "リンクが実ファイルに置き換わっていたら exit 1" "$(eq "$rc" 1)"
+ok "置き換わったパスを知らせる" "$(has "$out" "LINKS の先が対話用 clone を指していません")"
+ok "そのとき claude を起動しない" "$(eq "$(grep -c '^cwd=' "$STUB_LOG")" 0)"
+
+# --- 知らない引数では起動しない ---
+setup; conf demo
+out=$(run_cli run demo --dryrun); rc=$?
+ok "--dryrun の打ち間違いはエラー" "$(has "$out" "不明な引数です")"
+ok "打ち間違いで claude を起動しない" "$(eq "$(grep -c '^cwd=' "$STUB_LOG")" 0)"
+out=$(run_cli run demo --dry-run extra)
+ok "余分な引数もエラー" "$(has "$out" "不明な引数です")"
+
+# --- 準備の出力は Claude のログとは別に残る ---
+setup; conf demo "SETUP=echo 準備の出力です"
+run_cli run demo >/dev/null
+ok "準備の出力が残る" "$(has "$(cat "$ROOT"/state/logs/demo/*.prepare.log)" "準備の出力です")"
+ok "Claude のログは別ファイル" "$(has "$(cat "$ROOT"/state/logs/demo/*[0-9].log)" "claude の出力")"
+
+# --- 通知用の env ファイル: 引用符と export を外して読む ---
+setup; conf demo
+cat > "$ROOT/bin/curl" <<'STUB'
+#!/bin/bash
+echo "curl ${*: -1}" >> "$STUB_LOG"
+STUB
+chmod +x "$ROOT/bin/curl"
+printf 'export CLAUDE_SLACK_WEBHOOK_URL="https://hooks.example.test/a"\nOTHER=x\n' > "$ROOT/conf/env"
+STUB_CLAUDE_RC=3 run_cli run demo >/dev/null
+ok "引用符と export を外した URL に通知する" "$(has "$(cat "$STUB_LOG")" "curl https://hooks.example.test/a")"
 
 # --- LINKS の symlink は残骸として数えない(gitignore の書き方に依らず) ---
 setup; conf demo "LINKS=untracked-link"

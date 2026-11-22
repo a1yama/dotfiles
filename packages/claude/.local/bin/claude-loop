@@ -37,7 +37,7 @@ set -uo pipefail
 # 毎日失敗し続けるのを避けるため、ここで補う。
 # 後ろに足す。前に足すと、呼び出し側が PATH の先頭に置いたもの(テストの偽コマンドなど)より
 # こちらが優先され、テストから本物の claude が起動する(2026-11-22 に実際に起きた)
-PATH="$PATH:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:$HOME/.local/bin"
+PATH="$PATH:${CLAUDE_LOOP_EXTRA_PATH-/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:$HOME/.local/bin}"
 export PATH
 export GIT_TERMINAL_PROMPT=0
 
@@ -54,13 +54,16 @@ die() { printf 'claude-loop: %s\n' "$*" >&2; exit 1; }
 
 # 通知用の値だけを env ファイルから読む。source しない(設定の読み取りと同じ理由)
 load_env_file() {
-  local file="$CONF_DIR/env" line key
+  local file="$CONF_DIR/env" line key value
   [ -f "$file" ] || return 0
   while IFS= read -r line || [ -n "$line" ]; do
     case "$line" in ''|'#'*) continue ;; esac
-    key="${line%%=*}"
+    # `export KEY="値"` の書き方でも読めるようにする。引用符ごと URL にすると送信だけが黙って失敗する
+    line="${line#export }"
+    key="${line%%=*}" value="${line#*=}"
+    value="${value#[\"\']}"; value="${value%[\"\']}"
     case "$key" in
-      CLAUDE_SLACK_WEBHOOK_URL|CLAUDE_DISCORD_WEBHOOK_URL) export "$key=${line#*=}" ;;
+      CLAUDE_SLACK_WEBHOOK_URL|CLAUDE_DISCORD_WEBHOOK_URL) export "$key=$value" ;;
     esac
   done < "$file"
 }
@@ -208,7 +211,14 @@ prepare_worktree() {
   set -f
   for f in $LINKS; do
     [ -e "$REPO/$f" ] || { set +f; echo "LINKS の元がありません: $REPO/$f"; return 1; }
-    [ -e "$wt/$f" ] || [ -L "$wt/$f" ] || ln -s "$REPO/$f" "$wt/$f"
+    if [ -e "$wt/$f" ] || [ -L "$wt/$f" ]; then
+      # リンクが実ファイルに置き換わっていたり、REPO を変える前のリンクが残っていたりすると、
+      # 古い認証情報を黙って使い続ける。残骸の検査は LINKS を除外するので、ここで確かめる
+      [ -L "$wt/$f" ] && [ "$(readlink "$wt/$f")" = "$REPO/$f" ] \
+        || { set +f; echo "LINKS の先が対話用 clone を指していません: $wt/$f"; return 1; }
+    else
+      ln -s "$REPO/$f" "$wt/$f"
+    fi
   done
   set +f
   if [ -n "$SETUP" ]; then
@@ -240,7 +250,12 @@ run_limited() {
     kill -KILL -- "-$pid" 2>/dev/null
   ) &
   watchdog=$!
+  # 別グループにしたので、launchd がこのスクリプトを止めても TERM は対象に届かない。
+  # 伝えないと、対象が取り残されたままロックだけが外れ、次の回と同時に動く
+  RUNNING_GROUP="$pid"
+  trap 'kill -TERM -- "-$RUNNING_GROUP" 2>/dev/null; exit 143' TERM INT
   wait "$pid"; rc=$?
+  trap - TERM INT
   kill -TERM "$watchdog" 2>/dev/null; wait "$watchdog" 2>/dev/null
   return "$rc"
 }
@@ -271,7 +286,9 @@ acquire_lock() {
     log "[$name] 前回の実行がまだ動いています(pid ${old:-不明})。今回は実行しません"
     return 1
   fi
-  # 持ち主のいないロックは、前回が異常終了した跡。外して続ける
+  # 持ち主のいないロックは、前回が異常終了した跡。外して続ける。
+  # 外す直前に持ち主を読み直す。別の実行が先に取り直していたら、そのロックを消してはいけない
+  [ "$(cat "$lock/pid" 2>/dev/null || true)" = "$old" ] || { log "[$name] 別の実行がロックを取りました。今回は実行しません"; return 1; }
   rm -rf "$lock"
   mkdir "$lock" 2>/dev/null || { log "[$name] ロックを取れません: $lock"; return 1; }
   echo $$ > "$lock/pid"
@@ -280,6 +297,10 @@ acquire_lock() {
 cmd_run() {
   local name="${1:-}" dry_run=0
   [ -n "$name" ] || die "使い方: claude-loop run <name> [--dry-run]"
+  # 知らない引数を無視すると、--dryrun の打ち間違いで Claude が起動し、PR のマージまで進む
+  if [ "$#" -gt 2 ] || { [ "$#" -eq 2 ] && [ "$2" != "--dry-run" ]; }; then
+    die "不明な引数です: ${*:2} (使えるのは --dry-run だけ)"
+  fi
   [ "${2:-}" = "--dry-run" ] && dry_run=1
   load_conf "$name"
   load_env_file
@@ -287,9 +308,10 @@ cmd_run() {
   [ "$(this_host)" = "$HOST" ] || { log "[$name] このマシン($(this_host))は対象外です(HOST=$HOST)"; return 0; }
 
   local lock="$STATE_DIR/$name.lock" wt="$STATE_DIR/worktrees/$name"
-  local started logfile rc=0 status detail missing="" c
+  local started logfile preplog rc=0 status detail missing="" c
   started=$(date '+%Y-%m-%d %H:%M:%S')
   logfile="$STATE_DIR/logs/$name/$(date '+%Y%m%d-%H%M%S').log"
+  preplog="${logfile%.log}.prepare.log" # Claude の出力で上書きされないよう、準備の出力は別に残す
   mkdir -p "$STATE_DIR/logs/$name"
 
   acquire_lock "$name" "$lock" || return 0
@@ -303,8 +325,8 @@ cmd_run() {
     detail="コマンドが見つかりません:$missing (PATH=$PATH)"
     rc=1
   else
-    run_limited "$PREPARE_TIMEOUT_SEC" "$logfile" "$lock/timed_out" prepare_worktree "$name" "$wt"; rc=$?
-    detail=$(cat "$logfile" 2>/dev/null)
+    run_limited "$PREPARE_TIMEOUT_SEC" "$preplog" "$lock/timed_out" prepare_worktree "$name" "$wt"; rc=$?
+    detail=$(cat "$preplog" 2>/dev/null)
     [ -f "$lock/timed_out" ] && detail="準備が ${PREPARE_TIMEOUT_SEC}秒 を超えたため停止しました
 $detail"
   fi
