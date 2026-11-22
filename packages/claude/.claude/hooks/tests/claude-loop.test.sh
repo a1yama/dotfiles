@@ -172,6 +172,24 @@ run_cli run demo >/dev/null
 ok "準備の出力が残る" "$(has "$(cat "$ROOT"/state/logs/demo/*.prepare.log)" "準備の出力です")"
 ok "Claude のログは別ファイル" "$(has "$(cat "$ROOT"/state/logs/demo/*[0-9].log)" "claude の出力")"
 
+# --- 実行中に外から止められたら、対象を止めてから結果を残す ---
+setup; conf demo
+STUB_CLAUDE_SLEEP=30 PATH="$ROOT/bin:$PATH" CLAUDE_LOOP_CONF_DIR="$ROOT/conf" CLAUDE_LOOP_STATE_DIR="$ROOT/state" \
+  CLAUDE_LOOP_KILL_GRACE_SEC=2 bash "$CLI" run demo >/dev/null 2>&1 &
+loop_pid=$!
+for _ in 1 2 3 4 5 6 7 8 9 10; do grep -q '^cwd=' "$STUB_LOG" 2>/dev/null && break; /bin/sleep 0.5; done
+kill -TERM "$loop_pid"; wait "$loop_pid" 2>/dev/null
+ok "外から止められたら結果は interrupted" "$(eq "$(status_of demo)" interrupted)"
+ok "止められたあとロックを外す" "$([ ! -e "$ROOT/state/demo.lock" ] && echo 1 || echo 0)"
+ok "対象のプロセスを残さない" "$(eq "$(pgrep -f "$ROOT/bin/claude" | wc -l | tr -d ' ')" 0)"
+
+# --- LINKS を張れなければ止める ---
+setup; conf demo "LINKS=sub/secret.json"
+mkdir -p "$ROOT/repo/sub"; echo '{}' > "$ROOT/repo/sub/secret.json"
+out=$(run_cli run demo); rc=$?
+ok "リンク先の親ディレクトリが無ければ exit 1" "$(eq "$rc" 1)"
+ok "張れなかったパスを知らせる" "$(has "$out" "LINKS を張れません")"
+
 # --- 通知用の env ファイル: 引用符と export を外して読む ---
 setup; conf demo
 cat > "$ROOT/bin/curl" <<'STUB'
@@ -179,7 +197,7 @@ cat > "$ROOT/bin/curl" <<'STUB'
 echo "curl ${*: -1}" >> "$STUB_LOG"
 STUB
 chmod +x "$ROOT/bin/curl"
-printf 'export CLAUDE_SLACK_WEBHOOK_URL="https://hooks.example.test/a"\nOTHER=x\n' > "$ROOT/conf/env"
+printf 'export CLAUDE_SLACK_WEBHOOK_URL="https://hooks.example.test/a"  \r\nOTHER=x\n' > "$ROOT/conf/env"
 STUB_CLAUDE_RC=3 run_cli run demo >/dev/null
 ok "引用符と export を外した URL に通知する" "$(has "$(cat "$STUB_LOG")" "curl https://hooks.example.test/a")"
 
@@ -223,6 +241,7 @@ setup; conf demo
 out=$(STUB_HOST=laptop run_cli run demo); rc=$?
 ok "HOST が違うマシンでは実行しない(exit 0)" "$(eq "$rc" 0)"
 ok "HOST が違うとき claude を起動しない" "$(eq "$(grep -c '^cwd=' "$STUB_LOG")" 0)"
+ok "HOST が違ったことを結果に残す(ホスト名が変わって黙って止まるのを防ぐ)" "$(eq "$(status_of demo)" skipped_host)"
 
 setup; conf demo "ENABLED=0"
 out=$(run_cli run demo)

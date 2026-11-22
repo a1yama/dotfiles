@@ -61,6 +61,8 @@ load_env_file() {
     # `export KEY="値"` の書き方でも読めるようにする。引用符ごと URL にすると送信だけが黙って失敗する
     line="${line#export }"
     key="${line%%=*}" value="${line#*=}"
+    # 行末の空白と CR も URL に混ざると送信だけが黙って失敗する
+    value="${value%$'\r'}"; value="${value%"${value##*[![:space:]]}"}"
     value="${value#[\"\']}"; value="${value%[\"\']}"
     case "$key" in
       CLAUDE_SLACK_WEBHOOK_URL|CLAUDE_DISCORD_WEBHOOK_URL) export "$key=$value" ;;
@@ -217,7 +219,9 @@ prepare_worktree() {
       [ -L "$wt/$f" ] && [ "$(readlink "$wt/$f")" = "$REPO/$f" ] \
         || { set +f; echo "LINKS の先が対話用 clone を指していません: $wt/$f"; return 1; }
     else
-      ln -s "$REPO/$f" "$wt/$f"
+      # 親ディレクトリが git 管理外で worktree に無い場合などに失敗する。
+      # 確かめないと、認証情報が無いまま Claude が動く
+      ln -s "$REPO/$f" "$wt/$f" || { set +f; echo "LINKS を張れません: $wt/$f"; return 1; }
     fi
   done
   set +f
@@ -252,12 +256,30 @@ run_limited() {
   watchdog=$!
   # 別グループにしたので、launchd がこのスクリプトを止めても TERM は対象に届かない。
   # 伝えないと、対象が取り残されたままロックだけが外れ、次の回と同時に動く
-  RUNNING_GROUP="$pid"
-  trap 'kill -TERM -- "-$RUNNING_GROUP" 2>/dev/null; exit 143' TERM INT
+  RUNNING_GROUP="$pid" RUNNING_WATCHDOG="$watchdog"
+  trap on_interrupt TERM INT
   wait "$pid"; rc=$?
   trap - TERM INT
   kill -TERM "$watchdog" 2>/dev/null; wait "$watchdog" 2>/dev/null
   return "$rc"
+}
+
+# 外から止められたとき(launchd の再登録、ログアウト)も、時間切れと同じ手順で終える。
+# TERM を送っただけで抜けると、止まりきっていない対象を残したままロックが外れて次の回と重なり、
+# 結果ファイルには前回の成功が残る
+on_interrupt() {
+  trap - TERM INT
+  kill -TERM "$RUNNING_WATCHDOG" 2>/dev/null
+  kill -TERM -- "-$RUNNING_GROUP" 2>/dev/null
+  local waited=0
+  while kill -0 -- "-$RUNNING_GROUP" 2>/dev/null && [ "$waited" -lt "$KILL_GRACE_SEC" ]; do
+    sleep 1; waited=$((waited + 1))
+  done
+  kill -KILL -- "-$RUNNING_GROUP" 2>/dev/null
+  wait 2>/dev/null
+  write_result "$CURRENT_NAME" "interrupted" "実行中に外から停止されました" "$CURRENT_STARTED" "$CURRENT_LOG"
+  notify "claude-loop [$CURRENT_NAME] interrupted: 実行中に外から停止されました"
+  exit 143
 }
 
 launch_claude() {
@@ -287,9 +309,10 @@ acquire_lock() {
     return 1
   fi
   # 持ち主のいないロックは、前回が異常終了した跡。外して続ける。
-  # 外す直前に持ち主を読み直す。別の実行が先に取り直していたら、そのロックを消してはいけない
-  [ "$(cat "$lock/pid" 2>/dev/null || true)" = "$old" ] || { log "[$name] 別の実行がロックを取りました。今回は実行しません"; return 1; }
-  rm -rf "$lock"
+  # 名前を変えてから消す。rename は同時に1つしか成功しないので、2つの実行が同じ古いロックを
+  # 見つけても回収するのは片方だけになる(rm してから mkdir だと互いのロックを消し合う)
+  mv "$lock" "$lock.stale.$$" 2>/dev/null || { log "[$name] 別の実行がロックを取りました。今回は実行しません"; return 1; }
+  rm -rf "$lock.stale.$$"
   mkdir "$lock" 2>/dev/null || { log "[$name] ロックを取れません: $lock"; return 1; }
   echo $$ > "$lock/pid"
 }
@@ -305,13 +328,21 @@ cmd_run() {
   load_conf "$name"
   load_env_file
   [ "$ENABLED" = "1" ] || { log "[$name] ENABLED=0 のため実行しません"; return 0; }
-  [ "$(this_host)" = "$HOST" ] || { log "[$name] このマシン($(this_host))は対象外です(HOST=$HOST)"; return 0; }
+  if [ "$(this_host)" != "$HOST" ]; then
+    # launchd に登録されているのはこのマシン向けのループだけ。それでも名前が合わないのは、
+    # ホスト名が変わった(macOS では接続先のネットワークで変わりうる)ということ。黙って止まらない
+    log "[$name] このマシン($(this_host))は対象外です(HOST=$HOST)"
+    write_result "$name" "skipped_host" "hostname -s が $(this_host) で、HOST=$HOST と一致しません" "$(date '+%Y-%m-%d %H:%M:%S')" ""
+    notify "claude-loop [$name] skipped_host: hostname -s が $(this_host) で、HOST=$HOST と一致しません"
+    return 0
+  fi
 
   local lock="$STATE_DIR/$name.lock" wt="$STATE_DIR/worktrees/$name"
   local started logfile preplog rc=0 status detail missing="" c
   started=$(date '+%Y-%m-%d %H:%M:%S')
   logfile="$STATE_DIR/logs/$name/$(date '+%Y%m%d-%H%M%S').log"
   preplog="${logfile%.log}.prepare.log" # Claude の出力で上書きされないよう、準備の出力は別に残す
+  CURRENT_NAME="$name" CURRENT_STARTED="$started" CURRENT_LOG="$logfile"
   mkdir -p "$STATE_DIR/logs/$name"
 
   acquire_lock "$name" "$lock" || return 0
