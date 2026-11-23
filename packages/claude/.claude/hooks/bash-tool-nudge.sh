@@ -62,8 +62,19 @@ seg=$(printf '%s' "$line" | awk '{
 }')
 
 alt=""
+# alt は先頭のコマンド名だけで決まるので、使い方と合わない名前になることがある
+# (範囲表示の sed に Edit、書き込みの cat に Read)。案内どおりにしても進めず、例外の注記や
+# 別のコマンドでの書き込みに流れていた。alt は「そのツールが無ければ通す」判定の鍵でもあるので
+# 変えず、使い方に合うツールは文面にだけ足す。
+hint=""
 case "$first" in
-  cat|head)  alt="Read" ;;
+  cat|head)
+    alt="Read"
+    # 2>/dev/null や 2>&1 は出力先の指定であって、ファイルへの書き込みではない
+    if printf '%s' "$seg" | grep -qE '(^|[^0-9&>])>'; then
+      hint="ファイルへ書き込むなら Write(新規・上書き)か Edit(追記・一部の変更)が該当します。"
+    fi
+    ;;
   tail)
     # -f/-F の追従は Read で代替できない
     case "$seg" in *" -f"*|*" -F"*) exit 0 ;; esac
@@ -94,7 +105,13 @@ case "$first" in
     esac
     alt="Glob"
     ;;
-  sed|awk)   alt="Edit" ;;
+  sed|awk)
+    alt="Edit"
+    case " $seg " in
+      *" -i"*|*" --in-place"*) ;;
+      *) hint="書き換えではなく表示や抜き出しなら Read(行の範囲は offset / limit で指定)が該当します。" ;;
+    esac
+    ;;
   echo)
     # 追記・上書きリダイレクトのときだけ Write を促す
     case "$seg" in
@@ -171,10 +188,10 @@ tool_unavailable() {
 # 差し戻しても代替手段が無いセッションでは黙って通す
 tool_unavailable "$alt" && exit 0
 
-jq -n --arg t "$first" --arg a "$alt" \
+jq -n --arg t "$first" --arg a "$alt" --arg h "$hint" \
   '{hookSpecificOutput:{
       hookEventName:"PreToolUse",
       permissionDecision:"deny",
-      permissionDecisionReason:("ツール選択ルール(CLAUDE.md): `"+$t+"` は専用ツール "+$a+" を使ってください。Bash は最後の手段です。専用ツールで代替できない場合のみ、コマンドに `# tool-exception: <理由>` を添えて再実行してください(理由を書けないなら例外ではありません)。なお "+$a+" がこのセッションに存在しない場合は、一度 "+$a+" を呼んで `No such tool available` エラーを出せば、以降この種の Bash コマンドは自動で許可されます。")
+      permissionDecisionReason:("ツール選択ルール(CLAUDE.md): `"+$t+"` は専用ツール "+$a+" を使ってください。"+$h+"Bash は最後の手段です。専用ツールで代替できない場合のみ、コマンドに `# tool-exception: <理由>` を添えて再実行してください(理由を書けないなら例外ではありません)。なお "+$a+" がこのセッションに存在しない場合は、一度 "+$a+" を呼んで `No such tool available` エラーを出せば、以降この種の Bash コマンドは自動で許可されます。")
    }}'
 exit 0

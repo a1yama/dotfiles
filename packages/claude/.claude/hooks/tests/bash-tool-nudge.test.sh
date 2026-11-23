@@ -219,6 +219,48 @@ run_session allow "一覧に Grep が無い間は通す" 'grep foo a.ts' sess-t 
 run_session deny  "同じ transcript で後から Grep が入ったら止める(再発防止: 許可を残し続けた)" 'grep foo a.ts' sess-t \
   "$(shape_line Bash Read; printf '\n'; shape_line Bash Read Grep)"
 
+# 案内の文面: 代替ツールは先頭のコマンド名だけで決めているので、使い方と合わない名前が出ることがある
+# (範囲表示の sed に Edit、書き込みの cat に Read)。案内どおりにしても進めず、例外の注記か
+# 別のコマンドでの書き込みに流れていた。止める範囲は変えず、使い方に合うツールを文面に添える。
+# check_reason <has|lacks> <説明> <コマンド> <文面に含まれる/含まれない文字列>
+check_reason() {
+  local mode="$1" desc="$2" command="$3" needle="$4"
+  local reason actual=lacks
+  reason=$(jq -n --arg c "$command" '{tool_name:"Bash",tool_input:{command:$c}}' \
+    | bash "$HOOK" | jq -r '.hookSpecificOutput.permissionDecisionReason // ""')
+  case "$reason" in *"$needle"*) actual=has ;; esac
+  [ -n "$reason" ] || actual="no-deny"
+  check "$mode" "$desc" "$actual" "$command"
+}
+
+READ_HINT='offset / limit'
+WRITE_HINT='Write(新規・上書き)'
+# shellcheck disable=SC2016 # awk のプログラムを文字のまま渡す
+{
+check_reason has   "範囲表示の sed には Read を案内する(再発防止)" "sed -n '60,70p' a.md" "$READ_HINT"
+check_reason has   "後段の -i は先頭の sed の判定に使わない" "sed -n 1,5p a.md && sed -i s/a/b/ b.md" "$READ_HINT"
+check_reason has   "awk の抜き出しには Read を案内する" "awk '{print \$1}' a.txt" "$READ_HINT"
+check_reason lacks "書き換えの sed -i には Read を案内しない" "sed -i '' 's/a/b/' a.ts" "$READ_HINT"
+check_reason lacks "sed --in-place にも Read を案内しない" "sed --in-place 's/a/b/' a.ts" "$READ_HINT"
+check_reason has   "追記の cat には Write / Edit を案内する(再発防止)" "cat >> a.md <<'EOF'
+x
+EOF" "$WRITE_HINT"
+check_reason has   "上書きの cat には Write / Edit を案内する" 'cat > a.md' "$WRITE_HINT"
+check_reason has   "head の出力を書き込む形にも案内する" 'head -n 3 a.ts > b.ts' "$WRITE_HINT"
+check_reason lacks "読むだけの cat には書き込みの案内を出さない" 'cat a.ts' "$WRITE_HINT"
+check_reason lacks "エラー出力の捨て先は書き込みに数えない" 'cat a.ts 2>/dev/null' "$WRITE_HINT"
+check_reason lacks "2>&1 は書き込みに数えない" 'cat a.ts 2>&1' "$WRITE_HINT"
+check_reason lacks "後段のリダイレクトは先頭の cat の判定に使わない" 'cat a.ts | sort > b.ts' "$WRITE_HINT"
+check_reason lacks "grep には読み書きの案内を足さない" 'grep foo a.ts' "$READ_HINT"
+check_reason lacks "grep には書き込みの案内を足さない" 'grep foo a.ts' "$WRITE_HINT"
+# 文頭は変えない(拒否の集計が文頭の1文を種類の名前にしている)
+check_reason has   "sed の文頭は変えない" "sed -n '60,70p' a.md" 'ツール選択ルール(CLAUDE.md): `sed` は専用ツール Edit を使ってください。'
+check_reason has   "cat の文頭は変えない" 'cat > a.md' 'ツール選択ルール(CLAUDE.md): `cat` は専用ツール Read を使ってください。'
+}
+# 案内を足しても止める範囲は同じ
+run deny  "範囲表示の sed は止める" "sed -n '60,70p' a.md"
+run deny  "追記の cat は止める" 'cat >> a.md'
+
 # 手動オプトアウト
 out=$(jq -n '{tool_name:"Bash",tool_input:{command:"grep foo a.ts"}}' \
   | CLAUDE_BASH_NUDGE_OFF=1 bash "$HOOK")
