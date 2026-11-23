@@ -13,3 +13,5 @@ __pycache__/
 
 # claude.ai から同期される組み込みスキル。~/.claude の実体と同一なので削除せず除外する
 packages/claude/.claude/skills/synced/
+# claude-loop の通知先と認証トークン。stow で ~/.config/claude-loop がこのディレクトリを指すため、置いた実体がここに入る
+packages/claude/.config/claude-loop/env
