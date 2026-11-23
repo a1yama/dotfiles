@@ -47,7 +47,7 @@ STUB
   # 呼ばれた引数と作業ディレクトリを記録する。STUB_CLAUDE_* で挙動を変える
   cat > "$ROOT/bin/claude" <<'STUB'
 #!/bin/bash
-{ echo "cwd=$PWD"; printf 'arg=%s\n' "$@"; } >> "$STUB_LOG"
+{ echo "cwd=$PWD"; printf 'arg=%s\n' "$@"; echo "token=${CLAUDE_CODE_OAUTH_TOKEN:-none}"; } >> "$STUB_LOG"
 [ -n "${STUB_CLAUDE_TOUCH:-}" ] && echo leftover > "$PWD/$STUB_CLAUDE_TOUCH"
 if [ -n "${STUB_CLAUDE_COMMIT:-}" ]; then
   echo c > "$PWD/committed.txt"; git add committed.txt
@@ -67,7 +67,7 @@ STUB
   export STUB_LOG="$ROOT/stub.log"
   : > "$STUB_LOG"
   unset STUB_HOST STUB_CLAUDE_TOUCH STUB_CLAUDE_SLEEP STUB_CLAUDE_RC STUB_CLAUDE_COMMIT STUB_CLAUDE_IGNORE_TERM
-  unset CLAUDE_SLACK_WEBHOOK_URL CLAUDE_DISCORD_WEBHOOK_URL
+  unset CLAUDE_SLACK_WEBHOOK_URL CLAUDE_DISCORD_WEBHOOK_URL CLAUDE_CODE_OAUTH_TOKEN
 }
 
 conf() { # $1: 名前 / 残り: 追加・上書きする行
@@ -200,6 +200,17 @@ chmod +x "$ROOT/bin/curl"
 printf 'export CLAUDE_SLACK_WEBHOOK_URL="https://hooks.example.test/a"  \r\nOTHER=x\n' > "$ROOT/conf/env"
 STUB_CLAUDE_RC=3 run_cli run demo >/dev/null
 ok "引用符と export を外した URL に通知する" "$(has "$(cat "$STUB_LOG")" "curl https://hooks.example.test/a")"
+
+# --- 認証トークン: env ファイルにあれば claude に渡し、無ければ渡さない ---
+setup; conf demo
+run_cli run demo >/dev/null
+ok "env ファイルが無ければトークンを渡さない" "$(has "$(cat "$STUB_LOG")" "token=none")"
+setup; conf demo 'SETUP=printf "setup_token=%s\n" "${CLAUDE_CODE_OAUTH_TOKEN:-none}" >> "$STUB_LOG"'
+printf "CLAUDE_CODE_OAUTH_TOKEN='dummy-token-for-test'\n" > "$ROOT/conf/env"
+out=$(run_cli run demo)
+ok "env ファイルのトークンを claude に渡す" "$(has "$(cat "$STUB_LOG")" "token=dummy-token-for-test")"
+ok "準備コマンド(SETUP)にはトークンを渡さない(再発防止: 依存のスクリプトが長期トークンを読める)" "$(has "$(cat "$STUB_LOG")" "setup_token=none")"
+ok "トークンを実行ログや出力に書かない" "$(eq "$(grep -rc 'dummy-token-for-test' "$ROOT/state" | grep -vc ':0$')$(has "$out" dummy-token-for-test)" 00)"
 
 # --- LINKS の symlink は残骸として数えない(gitignore の書き方に依らず) ---
 setup; conf demo "LINKS=untracked-link"
