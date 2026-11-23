@@ -106,8 +106,9 @@ esac
 [ -z "$alt" ] && exit 0
 
 # $1 のツールが「この実行コンテキストには存在しない」と harness が返した痕跡があるか。
-# 走査は deny 手前でしか走らず、見つかったらマーカーに残して以降は transcript を読み直さない
-# (ツールの有無は同一 transcript の間は変わらない)。
+# 走査は deny 手前でしか走らない。エラーの証跡で判定したときだけマーカーに残し、以降は読み直さない。
+# ツールの一覧で判定したときは残さない。一覧は途中で増えることがあり(後から読み込まれるツール)、
+# 残すと、専用ツールが使えるようになった後も許可が続く。
 #
 # マーカーのキーは session_id ではなく transcript_path。session_id は親セッションと
 # サブエージェントで共有される一方、利用可能なツールはコンテキストごとに異なるため、
@@ -123,6 +124,24 @@ tool_unavailable() {
   tu_dir="${TMPDIR:-/tmp}/claude-bash-tool-nudge"
   tu_marker="$tu_dir/$(printf '%s' "$tu_transcript" | shasum | awk '{print $1}').${tu_tool}"
   [ -f "$tu_marker" ] && return 0
+
+  # harness はリクエストの形(渡したツールの一覧)を transcript に記録する。一覧があれば、それで決まる。
+  # 以前は「一度そのツールを呼んで、存在しないというエラーを出す」ことだけを証跡にしていたが、
+  # モデルは一覧に無いツールをわざわざ呼ばない。案内は実行されず、専用ツールが無いセッションで
+  # 例外の注記が毎回書かれるだけになっていた。
+  # 行頭の type で選ぶので、Bash の出力に同じ文字列を出しても一覧には成りすませない
+  # (出力は別の type のレコードの中に入る)。
+  # 一覧の記録は形が変わったときにしか書かれず、ファイル全体に散らばるので、全体を読む。
+  # grep だけなので 90MB の transcript でも 0.3 秒ほど。走るのは deny の手前だけで、毎回の Bash では走らない。
+  tu_shape=$(grep -a '^{"type":"api-request-shape"' "$tu_transcript" 2>/dev/null | tail -n 1)
+  if [ -n "$tu_shape" ] && printf '%s' "$tu_shape" | jq -e --arg tool "$tu_tool" '
+        .type == "api-request-shape"
+        and ([.shape.tools[]? | .name? // empty] as $names
+             # 一覧として読めていること(Bash を呼べている以上、Bash は必ず入っている)を確かめてから不在を言う
+             | ($names | index("Bash")) != null and ($names | index($tool)) == null)
+      ' >/dev/null 2>&1; then
+    return 0
+  fi
 
   # 判定は tool_use_id での突き合わせで行う。
   # 「同じ行にエラー文言と is_error:true がある」だけでは、並列呼び出しで別レコードの

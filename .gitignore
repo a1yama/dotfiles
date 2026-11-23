@@ -15,3 +15,5 @@ __pycache__/
 packages/claude/.claude/skills/synced/
 # claude-loop の通知先と認証トークン。stow で ~/.config/claude-loop がこのディレクトリを指すため、置いた実体がここに入る
 packages/claude/.config/claude-loop/env
+# ハーネス改善ループが公開前に弾く固有名の一覧。一覧そのものが非公開の情報
+packages/claude/.config/claude-loop/denylist

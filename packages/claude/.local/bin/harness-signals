@@ -1,0 +1,232 @@
+#!/usr/bin/env python3
+"""会話ログから、ハーネス(フック・規約・スキル)の改善の手がかりを数える。
+
+使い方: harness-signals [--projects-dir DIR] [--days N] [--now EPOCH] [--signals-file FILE]
+
+出力は JSON。ハーネス改善ループが「どこを直すか」を件数で選ぶために使う。
+出力には会話の一部(発言の冒頭、コマンドの理由)が入る。公開リポジトリには書き写さない。
+"""
+import argparse
+import collections
+import datetime
+import glob
+import json
+import os
+import re
+import sys
+import time
+
+DEFAULT_PROJECTS = os.path.expanduser("~/.claude/projects")
+DEFAULT_SIGNALS = os.path.join(
+    os.path.dirname(os.path.realpath(__file__)), "..", "..", ".claude", "hooks", "premise-signals.sh"
+)
+SAMPLE_LIMIT = 5
+EXCERPT_LEN = 80
+LOOP_WORKTREE_MARK = "claude-loop-worktrees-"
+
+
+def load_rework_pattern(signals_file):
+    """手戻りの語は premise-signals.sh が正本。写しを持つと片方だけ直してずれる。"""
+    parts = []
+    with open(signals_file, encoding="utf-8") as f:
+        for line in f:
+            m = re.match(r"^(PREMISE_RE_REWORK(?:_EN)?)='(.*)'\s*$", line)
+            if m:
+                parts.append(m.group(2))
+    if not parts:
+        raise ValueError(f"手戻りのパターンが見つかりません: {signals_file}")
+    return re.compile("|".join(parts), re.IGNORECASE)
+
+
+def recent_files(projects_dir, days, now):
+    """直下の会話ログだけを見る。サブエージェントのログは親と同じ出来事の重複になる。"""
+    cutoff = now - days * 86400
+    files = []
+    for path in glob.glob(os.path.join(projects_dir, "*", "*.jsonl")):
+        # 無人ループ自身の実行ログを数えると、ループの動きがループの手がかりになる
+        if LOOP_WORKTREE_MARK in os.path.basename(os.path.dirname(path)):
+            continue
+        try:
+            if os.path.getmtime(path) >= cutoff:
+                files.append(path)
+        except OSError:
+            continue
+    return sorted(files)
+
+
+def read_events(path):
+    with open(path, encoding="utf-8", errors="replace") as f:
+        for line in f:
+            try:
+                event = json.loads(line)
+            except ValueError:
+                continue
+            if isinstance(event, dict):
+                yield event
+
+
+def denial_key(text):
+    """同じ種類の拒否をまとめる。先頭の1文に、どのフックがどのコマンドを止めたかが入っている。"""
+    # MCP のツール名はハイフンやドットを含む
+    m = re.search(r"(\w+:[\w.-]+ hook error: .*)", text, re.DOTALL)
+    if not m:
+        return None
+    head = re.split(r"[。\n]", m.group(1), maxsplit=1)[0]
+    return head[:120]
+
+
+def exception_entry(command):
+    m = re.search(r"#\s*tool-exception:\s*(.*)", command)
+    if not m:
+        return None
+    reason = m.group(1).strip()[:EXCERPT_LEN]
+    for line in command.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        # `cd dir && grep …` の形が多い。先頭の cd を数えると、どのコマンドの例外かが分からなくなる
+        for segment in re.split(r"&&|;", line):
+            words = segment.split()
+            if words and words[0] != "cd":
+                return words[0], reason
+    return "(不明)", reason
+
+
+def is_user_utterance(event):
+    if event.get("type") != "user" or event.get("isSidechain") or event.get("isMeta"):
+        return None
+    content = event.get("message", {}).get("content")
+    if isinstance(content, list):
+        # 画像を貼った発言などは text ブロックの並びで記録される。tool_result だけの並びは発言ではない
+        if any(isinstance(b, dict) and b.get("type") == "tool_result" for b in content):
+            return None
+        content = "\n".join(b.get("text", "") for b in content if isinstance(b, dict) and b.get("type") == "text")
+    if not isinstance(content, str):
+        return None
+    text = content.strip()
+    # スラッシュコマンドやローカルコマンドの出力は発言ではない
+    if not text or text.startswith("<"):
+        return None
+    return text
+
+
+def tool_result_texts(event):
+    content = event.get("message", {}).get("content")
+    if not isinstance(content, list):
+        return
+    for block in content:
+        if isinstance(block, dict) and block.get("type") == "tool_result" and block.get("is_error"):
+            body = block.get("content")
+            if isinstance(body, list):
+                body = " ".join(b.get("text", "") for b in body if isinstance(b, dict))
+            if isinstance(body, str):
+                yield body
+
+
+def bash_commands(event):
+    if event.get("type") != "assistant":
+        return
+    content = event.get("message", {}).get("content")
+    if not isinstance(content, list):
+        return
+    for block in content:
+        if isinstance(block, dict) and block.get("type") == "tool_use" and block.get("name") == "Bash":
+            command = (block.get("input") or {}).get("command")
+            if isinstance(command, str):
+                yield command
+
+
+def event_epoch(event):
+    stamp = event.get("timestamp")
+    if not isinstance(stamp, str):
+        return None
+    try:
+        return datetime.datetime.fromisoformat(stamp.replace("Z", "+00:00")).timestamp()
+    except ValueError:
+        return None
+
+
+def in_period(event, cutoff, seen):
+    """ファイルの更新時刻だけで絞ると、古い会話を再開したときに過去の出来事までまとめて数える。
+    会話を分岐させると同じ出来事が別ファイルに写るので、uuid で重複も除く。"""
+    epoch = event_epoch(event)
+    if epoch is not None and epoch < cutoff:
+        return False
+    uuid = event.get("uuid")
+    if uuid:
+        if uuid in seen:
+            return False
+        seen.add(uuid)
+    return True
+
+
+def collect(files, rework_re, cutoff=0.0):
+    denials = collections.Counter()
+    denial_sessions = collections.defaultdict(set)
+    exceptions = collections.Counter()
+    exception_reasons = collections.defaultdict(list)
+    rework = []
+    seen = set()
+    for path in files:
+        session = os.path.splitext(os.path.basename(path))[0]
+        for event in read_events(path):
+            if not in_period(event, cutoff, seen):
+                continue
+            if event.get("type") == "user":
+                for text in tool_result_texts(event):
+                    key = denial_key(text)
+                    if key:
+                        denials[key] += 1
+                        denial_sessions[key].add(session)
+                utterance = is_user_utterance(event)
+                if utterance and rework_re.search(utterance):
+                    rework.append({
+                        "file": path,
+                        "timestamp": event.get("timestamp"),
+                        "excerpt": utterance[:EXCERPT_LEN],
+                    })
+            for command in bash_commands(event):
+                entry = exception_entry(command)
+                if entry:
+                    exceptions[entry[0]] += 1
+                    if len(exception_reasons[entry[0]]) < SAMPLE_LIMIT:
+                        exception_reasons[entry[0]].append(entry[1])
+    return {
+        "files_scanned": len(files),
+        "hook_denials": [
+            {"key": k, "count": c, "sessions": len(denial_sessions[k])} for k, c in denials.most_common()
+        ],
+        "tool_exceptions": [
+            {"command": k, "count": c, "reasons": exception_reasons[k]} for k, c in exceptions.most_common()
+        ],
+        "rework": {"count": len(rework), "items": rework},
+    }
+
+
+def main(argv):
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--projects-dir", default=DEFAULT_PROJECTS)
+    parser.add_argument("--days", type=int, default=7)
+    parser.add_argument("--now", type=float, default=None)
+    parser.add_argument("--signals-file", default=DEFAULT_SIGNALS)
+    args = parser.parse_args(argv)
+    if args.days <= 0:
+        parser.error("--days は正の整数")
+    if not os.path.isdir(args.projects_dir):
+        print(f"harness-signals: 会話ログのディレクトリがありません: {args.projects_dir}", file=sys.stderr)
+        return 1
+    try:
+        rework_re = load_rework_pattern(args.signals_file)
+    except (OSError, ValueError) as e:
+        print(f"harness-signals: {e}", file=sys.stderr)
+        return 1
+    now = args.now if args.now is not None else time.time()
+    result = collect(recent_files(args.projects_dir, args.days, now), rework_re, now - args.days * 86400)
+    result["days"] = args.days
+    json.dump(result, sys.stdout, ensure_ascii=False, indent=2)
+    print()
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

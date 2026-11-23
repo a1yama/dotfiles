@@ -19,6 +19,11 @@ ok() {
 has() { if printf '%s' "$1" | grep -qF -e "$2"; then echo 1; else echo 0; fi; }
 eq() { if [ "$1" = "$2" ]; then echo 1; else echo 0; fi; }
 
+# 呼び出し元が差し込んだ git の設定を持ち込まない。push を禁じた無人ループの中から実行されると、
+# 一時リポジトリへの push まで失敗してテストが崩れる
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
+for v in $(compgen -v | grep '^GIT_CONFIG_'); do unset "$v"; done
+
 ROOTS=()
 cleanup() { [ "${#ROOTS[@]}" -gt 0 ] && rm -rf "${ROOTS[@]}"; return 0; }
 trap cleanup EXIT
@@ -53,6 +58,15 @@ if [ -n "${STUB_CLAUDE_COMMIT:-}" ]; then
   echo c > "$PWD/committed.txt"; git add committed.txt
   git -c user.name=t -c user.email=t@example.com commit -q -m "detached のまま積んだコミット"
 fi
+if [ -n "${STUB_CLAUDE_PUSH:-}" ]; then
+  git checkout -q -b "${STUB_CLAUDE_BRANCH:-loop-branch}"
+  echo p > "$PWD/pushed.txt"; git add pushed.txt
+  git -c user.name=t -c user.email=t@example.com commit -q -m "push を試みるコミット"
+  git push -q origin HEAD 2>/dev/null; echo "push_origin_rc=$?" >> "$STUB_LOG"
+  git push -q "$STUB_CLAUDE_PUSH" HEAD 2>/dev/null; echo "push_url_rc=$?" >> "$STUB_LOG"
+  git push -q "$(python3 -c 'import os,sys; print(os.path.relpath(sys.argv[1]))' "$STUB_CLAUDE_PUSH")" HEAD 2>/dev/null; echo "push_rel_rc=$?" >> "$STUB_LOG"
+  git -c remote.origin.pushurl= -c url.x.pushInsteadOf= push -q origin HEAD 2>/dev/null; echo "push_hook_rc=$?" >> "$STUB_LOG"
+fi
 [ -n "${STUB_CLAUDE_IGNORE_TERM:-}" ] && trap '' TERM
 [ -n "${STUB_CLAUDE_SLEEP:-}" ] && sleep "$STUB_CLAUDE_SLEEP"
 echo "claude の出力"
@@ -66,7 +80,7 @@ STUB
   chmod +x "$ROOT/bin/"*
   export STUB_LOG="$ROOT/stub.log"
   : > "$STUB_LOG"
-  unset STUB_HOST STUB_CLAUDE_TOUCH STUB_CLAUDE_SLEEP STUB_CLAUDE_RC STUB_CLAUDE_COMMIT STUB_CLAUDE_IGNORE_TERM
+  unset STUB_CLAUDE_PUSH STUB_CLAUDE_BRANCH STUB_HOST STUB_CLAUDE_TOUCH STUB_CLAUDE_SLEEP STUB_CLAUDE_RC STUB_CLAUDE_COMMIT STUB_CLAUDE_IGNORE_TERM
   unset CLAUDE_SLACK_WEBHOOK_URL CLAUDE_DISCORD_WEBHOOK_URL CLAUDE_CODE_OAUTH_TOKEN
 }
 
@@ -211,6 +225,62 @@ out=$(run_cli run demo)
 ok "env ファイルのトークンを claude に渡す" "$(has "$(cat "$STUB_LOG")" "token=dummy-token-for-test")"
 ok "準備コマンド(SETUP)にはトークンを渡さない(再発防止: 依存のスクリプトが長期トークンを読める)" "$(has "$(cat "$STUB_LOG")" "setup_token=none")"
 ok "トークンを実行ログや出力に書かない" "$(eq "$(grep -rc 'dummy-token-for-test' "$ROOT/state" | grep -vc ':0$')$(has "$out" dummy-token-for-test)" 00)"
+
+# --- NO_PUSH: Claude からの push を止める(origin 宛ても URL 直書きも) ---
+setup; conf demo "NO_PUSH=1"
+STUB_CLAUDE_PUSH="$ROOT/origin.git" run_cli run demo >/dev/null
+ok "NO_PUSH=1 のテストで push を実際に試みている" "$(has "$(cat "$STUB_LOG")" "push_origin_rc=")"
+ok "NO_PUSH=1 なら origin への push が失敗する" "$(eq "$(grep -c 'push_origin_rc=0' "$STUB_LOG")" 0)"
+ok "NO_PUSH=1 なら URL 直書きの push も失敗する" "$(eq "$(grep -c 'push_url_rc=0' "$STUB_LOG")" 0)"
+ok "NO_PUSH=1 なら相対パスへの push も失敗する" "$(eq "$(grep -c 'push_rel_rc=0' "$STUB_LOG")" 0)"
+ok "NO_PUSH=1 なら宛先の書き換えを外されても pre-push で止まる" "$(eq "$(grep -c 'push_hook_rc=0' "$STUB_LOG")" 0)"
+ok "NO_PUSH=1 のテストで4通りの push を試みている" "$(eq "$(grep -c '^push_.*_rc=' "$STUB_LOG")" 4)"
+ok "NO_PUSH=1 なら origin にブランチが増えない" "$(eq "$(git -C "$ROOT/origin.git" branch --list loop-branch | wc -l | tr -d ' ')" 0)"
+ok "NO_PUSH=1 なら gh を道具ごと禁じる" "$(has "$(cat "$STUB_LOG")" "arg=Bash(gh *)")"
+ok "NO_PUSH=1 なら git push を道具ごと禁じる" "$(has "$(cat "$STUB_LOG")" "arg=Bash(git push *)")"
+ok "NO_PUSH=1 なら MCP サーバを読み込まない" "$(has "$(cat "$STUB_LOG")" "arg=--strict-mcp-config")"
+ok "NO_PUSH=1 なら push 禁止を Claude に伝える" "$(has "$(cat "$STUB_LOG")" "git push と PR の作成を禁じています")"
+ok "commit はローカルのブランチに残る" "$(eq "$(git -C "$ROOT/repo" branch --list loop-branch | wc -l | tr -d ' ')" 1)"
+out=$(run_cli run demo --dry-run); rc=$?
+ok "ブランチに積んだ未 push のコミットは次回の準備を止めない" "$(eq "$rc" 0)"
+
+# --- NO_PUSH の成果を届ける: 確認待ちのブランチを数えて結果と通知に出す ---
+setup; conf demo "NO_PUSH=1"
+cat > "$ROOT/bin/curl" <<'STUB'
+#!/bin/bash
+echo "curl-data $*" >> "$STUB_LOG"
+STUB
+chmod +x "$ROOT/bin/curl"
+printf 'CLAUDE_SLACK_WEBHOOK_URL=https://hooks.example.test/a\n' > "$ROOT/conf/env"
+run_cli run demo >/dev/null
+ok "確認待ちが無ければ成功を通知しない" "$(eq "$(grep -c 'curl-data' "$STUB_LOG")" 0)"
+ok "接頭辞を Claude に伝える" "$(has "$(cat "$STUB_LOG")" "loop-demo/")"
+STUB_CLAUDE_BRANCH=loop-demo/20260101-x STUB_CLAUDE_PUSH="$ROOT/origin.git" run_cli run demo >/dev/null
+ok "確認待ちのブランチ数を結果に残す" "$(has "$(cat "$ROOT/state/demo.last.json")" "確認待ちのブランチ 1本 (loop-demo/")"
+ok "確認待ちがあれば成功でも通知する" "$(has "$(cat "$STUB_LOG")" "curl-data")"
+ok "結果は ok のまま" "$(eq "$(status_of demo)" ok)"
+# 未 merge のコミットを持たせる。merge 済みだと、接頭辞を見なくても数えから外れてしまう
+( cd "$ROOT/repo" && git checkout -q -b other-work && echo o > other.txt && git add other.txt \
+  && git -c user.name=t -c user.email=t@example.com commit -q -m other && git checkout -q main )
+run_cli run demo --dry-run >/dev/null; : > "$STUB_LOG"; run_cli run demo >/dev/null
+ok "接頭辞の違うブランチは数えない" "$(has "$(cat "$ROOT/state/demo.last.json")" "確認待ちのブランチ 1本 (loop-demo/")"
+
+setup; conf demo
+STUB_CLAUDE_PUSH="$ROOT/origin.git" run_cli run demo >/dev/null
+ok "NO_PUSH が無ければ push できる(既定の挙動を変えない)" "$(has "$(cat "$STUB_LOG")" "push_origin_rc=0")"
+ok "NO_PUSH が無ければ道具を禁じない" "$(eq "$(grep -c 'disallowedTools' "$STUB_LOG")" 0)"
+ok "NO_PUSH が無ければ PR にするよう伝える" "$(has "$(cat "$STUB_LOG")" "ブランチを切って PR にしてください")"
+
+setup; conf demo "NO_PUSH=1"
+git -C "$ROOT/repo" config remote.origin.pushurl "$ROOT/origin.git"
+out=$(run_cli run demo); rc=$?
+ok "NO_PUSH=1 で origin に pushurl があれば起動しない(再発防止: 足した pushurl は既存の値を置き換えない)" "$(eq "$rc" 1)"
+ok "pushurl が原因だと知らせる" "$(has "$out" "pushurl が設定されています")"
+ok "そのとき claude を起動しない" "$(eq "$(grep -c '^cwd=' "$STUB_LOG")" 0)"
+
+setup; conf demo "NO_PUSH=yes"
+out=$(run_cli run demo 2>&1); rc=$?
+ok "NO_PUSH の不正な値は止める" "$(eq "$rc" 1)"
 
 # --- LINKS の symlink は残骸として数えない(gitignore の書き方に依らず) ---
 setup; conf demo "LINKS=untracked-link"

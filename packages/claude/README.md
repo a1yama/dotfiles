@@ -62,6 +62,23 @@ claude-loop uninstall             # 登録を外す
 - 対話ログインは期限で切れる。無人で動かし続けるには `claude setup-token` の出力を同じファイルに `CLAUDE_CODE_OAUTH_TOKEN=` で書き、`chmod 600` する(これも dotfiles には入れない)
   - トークンは `claude` の起動時にだけ渡し、`SETUP` には渡さない。ただし `claude` が実行するコマンド(テストや npm スクリプト)に引き継がれるかは確認していない
 - 導入の直後は `claude-loop run <name> --dry-run` で準備が通ることを確かめる。`env -i HOME=$HOME /bin/zsh -lc 'claude-loop run <name> --dry-run'` なら launchd に近い環境で確かめられる
+- `NO_PUSH=1` を設定に書くと、そのループの `claude` からの `git push` が失敗する(origin 宛ても URL の直書きも)。commit までで止めたいループに使う
+  - あわせて `gh` と `git push` を道具として禁じ、MCP サーバを読み込まずに起動する
+  - 止めているのは道具と git の設定で、認証そのものではない。確実にしたいなら、専用マシンの GitHub 認証を書き込み権限なしにする
+
+### ハーネス改善ループ(`harness-improve`)
+
+このリポジトリのフック・規約・スキルを、実際の作業で起きた手がかりから1日1件まで直す。手順は `.claude/loops/harness-improve.md`。
+
+- 公開リポジトリなので **commit までしか行わない**。変更は専用マシンの `loop-harness-improve/<日付>-<題>` というローカルブランチに残り、push は対話セッションで確認してから行う
+  - 確認待ちのブランチがあると、`claude-loop` が本数を結果に残して通知する(通知先の設定が要る)。`claude-loop list` でも見える
+  - 反映するとき: 対話セッションで専用マシンからブランチを取り込み(`git fetch <専用マシン>:dotfiles 'refs/heads/loop-harness-improve/*:refs/heads/loop-harness-improve/*'`)、差分を読んで master に merge(squash しない)してから push する。ブランチそのものは push しない
+- `harness-signals` — 会話ログから、フックの拒否・`# tool-exception:` の多用・手戻りの発言を数える。出力は会話の一部を含むのでリポジトリに書き写さない
+- `harness-gate` — 反映前の検査。変更が `packages/claude/` の中だけか、秘密の値・メールアドレス・ホームの絶対パス・非公開の固有名が追加行に無いか、フックのテストが全部通るかを見る。exit 0 のときだけ commit する
+  - 安全装置(`harness-gate`・`claude-loop`・その2つのテスト・手順書・ループの設定)と `settings.json` の変更、バイナリ、追加 300 行超の変更は通さない
+  - ループは origin/master 側の `harness-gate` で検査する。検査を変えたいときは対話セッションで変えて push する
+  - 非公開の固有名は `~/ghq` 配下のリポジトリ名・所有者名(既にこのリポジトリに出ている名前は除く)と、`~/.config/claude-loop/denylist`(1行1語。dotfiles には入れない)
+- 報告は `~/.local/state/claude-loop/reports/harness-improve/`、直した履歴は `~/.local/state/claude-loop/harness-improve.ledger.jsonl`
 
 ## スキル
 

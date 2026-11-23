@@ -27,6 +27,7 @@
 #   LINKS=.env .note-session           任意。対話用 clone から symlink する git 管理外のファイル
 #   SETUP=npm ci                       任意。Claude の前に worktree で実行する準備コマンド
 #   ENABLED=0                          任意。0 なら登録も実行もしない
+#   NO_PUSH=1                          任意。1 なら Claude からの git push を止める(commit までのループ用)
 #
 # 通知: ~/.config/claude-loop/env に CLAUDE_SLACK_WEBHOOK_URL= / CLAUDE_DISCORD_WEBHOOK_URL= を書く。
 # 認証: 同じファイルに CLAUDE_CODE_OAUTH_TOKEN=(`claude setup-token` の出力)を書くと claude に渡る。
@@ -94,13 +95,13 @@ load_conf() {
   valid_name "$name" || die "ループ名は英小文字・数字・ハイフンのみ: $name"
   [ -f "$file" ] || die "設定がありません: $file"
   REPO="" PROMPT="" HOST="" HOUR="" MINUTE="" WEEKDAY="" TIMEOUT_MIN="90"
-  BASE="origin/main" LINKS="" SETUP="" ENABLED="1"
+  BASE="origin/main" LINKS="" SETUP="" ENABLED="1" NO_PUSH="0"
   while IFS= read -r line || [ -n "$line" ]; do
     case "$line" in ''|'#'*) continue ;; esac
     [[ "$line" == *=* ]] || die "$file: KEY=VALUE の形ではありません: $line"
     key="${line%%=*}" value="${line#*=}"
     case "$key" in
-      REPO|PROMPT|HOST|HOUR|MINUTE|WEEKDAY|TIMEOUT_MIN|BASE|LINKS|SETUP|ENABLED)
+      REPO|PROMPT|HOST|HOUR|MINUTE|WEEKDAY|TIMEOUT_MIN|BASE|LINKS|SETUP|ENABLED|NO_PUSH)
         printf -v "$key" '%s' "$value" ;;
       *) die "$file: 不明なキーです: $key" ;;
     esac
@@ -115,6 +116,7 @@ load_conf() {
   [[ -z "$WEEKDAY" || "$WEEKDAY" =~ ^[0-6]$ ]] || die "$file: WEEKDAY は 0〜6: $WEEKDAY"
   [[ "$TIMEOUT_MIN" =~ ^[1-9][0-9]*$ ]] || die "$file: TIMEOUT_MIN は正の整数: $TIMEOUT_MIN"
   [[ "$ENABLED" == "0" || "$ENABLED" == "1" ]] || die "$file: ENABLED は 0 か 1: $ENABLED"
+  [[ "$NO_PUSH" == "0" || "$NO_PUSH" == "1" ]] || die "$file: NO_PUSH は 0 か 1: $NO_PUSH"
 }
 
 xml_escape() {
@@ -234,12 +236,41 @@ prepare_worktree() {
     grep -qxF "/$f" "$exclude" 2>/dev/null || printf '/%s\n' "$f" >> "$exclude"
   done
   set +f
+  # 環境変数で足した pushurl は既存の値を置き換えない。リポジトリ側に pushurl があると、
+  # git は両方へ push するので、push の禁止が効かない
+  if [ "$NO_PUSH" = "1" ] && [ -n "$(git -C "$REPO" config --get-all remote.origin.pushurl 2>/dev/null)" ]; then
+    echo "NO_PUSH=1 ですが、origin に pushurl が設定されています。外してから実行してください: git -C $REPO config --unset-all remote.origin.pushurl"
+    return 1
+  fi
   if [ -n "$SETUP" ]; then
     (cd "$wt" && bash -c "$SETUP") || { echo "SETUP が失敗しました: $SETUP"; return 1; }
   fi
 }
 
-UNATTENDED_NOTE='これは無人の定時実行です。質問に答える人はいません。AskUserQuestion を使わず、確認が必要なことや判断できないことは実行せずに最終報告へ書いて終了してください。作業は現在の作業ツリー(専用の git worktree)の中だけで行い、ブランチを切って PR にしてください。'
+UNATTENDED_NOTE='これは無人の定時実行です。質問に答える人はいません。AskUserQuestion を使わず、確認が必要なことや判断できないことは実行せずに最終報告へ書いて終了してください。作業は現在の作業ツリー(専用の git worktree)の中だけで行ってください。'
+NOTE_PR='変更はブランチを切って PR にしてください。'
+NOTE_NO_PUSH='このループでは git push と PR の作成を禁じています(push は失敗するように設定してあります)。変更はローカルのブランチに commit するところまでにしてください。ブランチ名は必ず次の接頭辞で始めてください: '
+
+# Claude とその子プロセスの git push を失敗させる。手順書に「push しない」と書くだけでは、
+# 公開リポジトリへの反映を文面の解釈に預けることになる。
+# 環境変数で渡すので、同じリポジトリを使う対話セッションの設定は変えない
+block_push() {
+  local i=0 prefix
+  export GIT_CONFIG_KEY_0="remote.origin.pushurl" GIT_CONFIG_VALUE_0="no-push://claude-loop/"
+  # origin 以外の宛先(URL の直書き)も止める
+  for prefix in "https://" "http://" "ssh://" "git://" "git@" "file://" "/" "." "~"; do
+    i=$((i + 1))
+    export "GIT_CONFIG_KEY_$i=url.no-push://claude-loop/.pushInsteadOf" "GIT_CONFIG_VALUE_$i=$prefix"
+  done
+  # 宛先の書き換えは、宛先の書き方しだいで外れる。push の直前に必ず呼ばれる pre-push でも止める
+  # (--no-verify で飛ばせるので、宛先の書き換えと両方を置く)
+  local hooks="$STATE_DIR/no-push-hooks"
+  mkdir -p "$hooks" && printf '#!/bin/sh\necho "claude-loop: このループでは push を禁じています" >&2\nexit 1\n' > "$hooks/pre-push" \
+    && chmod +x "$hooks/pre-push" || exit 1
+  i=$((i + 1))
+  export "GIT_CONFIG_KEY_$i=core.hooksPath" "GIT_CONFIG_VALUE_$i=$hooks"
+  export GIT_CONFIG_COUNT=$((i + 1))
+}
 
 # 制限時間つきで実行する。超えたらプロセスグループごと TERM し、猶予のあと KILL する。
 #   $1: 制限秒 / $2: 出力先 / $3: 時間切れの目印ファイル / 残り: コマンド(シェル関数も可)
@@ -291,12 +322,29 @@ on_interrupt() {
   exit 143
 }
 
+# NO_PUSH のループが作るブランチの接頭辞。確認待ちを数えるために名前を決めておく
+pending_prefix() { printf 'loop-%s/' "$1"; }
+
+# push されずに確認を待っているブランチの数。NO_PUSH のループは成果が外から見えないので、
+# 数えて結果に残し、通知する。そうしないと、作った改善にも、溜まって止まったことにも誰も気づかない
+pending_branches() {
+  git -C "$REPO" for-each-ref --no-merged "$BASE" --format='%(refname:short)' \
+    "refs/heads/$(pending_prefix "$1")" 2>/dev/null | grep -c . || true
+}
+
 launch_claude() {
   cd "$1" || exit 1
   # 標準入力を閉じる。開いたままだと claude が入力を数秒待ってから始める
   [ -n "${LOOP_OAUTH_TOKEN:-}" ] && export CLAUDE_CODE_OAUTH_TOKEN="$LOOP_OAUTH_TOKEN"
+  if [ "$NO_PUSH" = "1" ]; then
+    block_push
+    # git の設定で止められるのは git の経路だけ。gh と MCP からも GitHub へ書けるので、道具ごと外す
+    exec claude -p "$PROMPT" --permission-mode auto --name "loop-$2" \
+      --append-system-prompt "$UNATTENDED_NOTE$NOTE_NO_PUSH$(pending_prefix "$2")" --strict-mcp-config \
+      --disallowedTools "Bash(git push *)" "Bash(gh *)" < /dev/null
+  fi
   exec claude -p "$PROMPT" --permission-mode auto --name "loop-$2" \
-    --append-system-prompt "$UNATTENDED_NOTE" < /dev/null
+    --append-system-prompt "$UNATTENDED_NOTE$NOTE_PR" < /dev/null
 }
 
 # ロックを取る。取れたら 0、前回が実行中なら 1
@@ -395,9 +443,16 @@ $detail"
   else
     status="failed"; detail="終了コード $rc"
   fi
+  local pending=0
+  if [ "$NO_PUSH" = "1" ]; then
+    pending=$(pending_branches "$name")
+    [ "$pending" -gt 0 ] && detail="${detail} / 確認待ちのブランチ ${pending}本 ($(pending_prefix "$name")*)"
+  fi
   write_result "$name" "$status" "$detail" "$started" "$logfile"
   log "[$name] $status: $detail (ログ: $logfile)"
-  [ "$status" = "ok" ] || notify "claude-loop [$name] $status: $detail (ログ: $logfile)"
+  if [ "$status" != "ok" ] || [ "$pending" -gt 0 ]; then
+    notify "claude-loop [$name] $status: $detail (ログ: $logfile)"
+  fi
   [ "$status" = "ok" ]
 }
 

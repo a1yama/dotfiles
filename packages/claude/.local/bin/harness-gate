@@ -1,0 +1,260 @@
+#!/usr/bin/env python3
+"""ハーネス改善ループの変更を、反映してよいか機械で検査する。
+
+使い方: harness-gate [--base REF] [--repo DIR] [--skip-tests] [--no-ghq] [--max-lines N]
+
+BASE(既定 origin/master)から作業ツリーまでの差分を見て、次を全部満たせば exit 0。
+  1. 変更が許可した範囲の中だけにあり、安全装置そのものを変えていない
+  2. 追加した行・ファイル名・ブランチ名・コミットメッセージに、秘密の値・個人の情報・非公開の固有名が無い
+  3. 変更が大きすぎず、バイナリを含まない
+  4. フックのテストが全部通る
+1つでも欠ければ exit 1。検査そのものができなかったときは exit 2(通過扱いにしない)。
+
+このリポジトリは公開されている。無人のループは会話ログを読んで改善点を探すので、
+作業の中身が差分に混ざる経路がある。その経路をここで塞ぐ。
+"""
+import argparse
+import glob
+import os
+import re
+import subprocess
+import sys
+
+ALLOWED_PREFIXES = ("packages/claude/",)
+# settings.json は stow で同期しておらず、マシンごとの値が入る。無人で触らない
+FORBIDDEN_FILES = re.compile(r"(^|/)settings(\.local)?\.json(\..*)?$")
+# 無人ループが自分の安全装置を書き換えられると、検査も push の禁止も意味を失う。
+# ここに挙げたものは対話セッションでだけ変える
+FORBIDDEN_PREFIXES = (
+    "packages/claude/.config/claude-loop/",
+    "packages/claude/.claude/loops/",
+)
+FORBIDDEN_PATHS = (
+    "packages/claude/.local/bin/harness-gate",
+    "packages/claude/.local/bin/claude-loop",
+    "packages/claude/.claude/hooks/tests/harness-gate.test.sh",
+    "packages/claude/.claude/hooks/tests/claude-loop.test.sh",
+)
+
+HOME_NAME_EXCLUDED = r"(?:you|user|username|name)(?![\w.-])"
+SECRET_PATTERNS = [
+    ("Slack の webhook", re.compile(r"hooks\.slack\.com/services/[A-Za-z0-9/]{10,}")),
+    ("Discord の webhook", re.compile(r"discord(app)?\.com/api/webhooks/\d+")),
+    ("API キーらしい値", re.compile(r"\b(sk-[A-Za-z0-9_-]{20,}|ghp_[A-Za-z0-9]{20,}|gho_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|xox[abprs]-[A-Za-z0-9-]{10,}|AKIA[0-9A-Z]{16})")),
+    ("秘密鍵", re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----")),
+    ("メールアドレス", re.compile(r"\b(?!git@|noreply@)[A-Za-z0-9._%+-]+@(?!example\.(com|org|test)\b)[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}\b")),
+    # 末尾の / を必須にすると、HOME=/Users/<名前> や行末・引用符で終わる書き方を見逃す
+    ("ホームディレクトリの絶対パス", re.compile(r"/(Users|home)/(?!" + HOME_NAME_EXCLUDED + r")[A-Za-z0-9._-]+")),
+]
+TESTS_DIR = "packages/claude/.claude/hooks/tests"
+MIN_NAME_LEN = 4
+DEFAULT_MAX_LINES = 300
+# 呼び出し元(push を禁じた無人ループ)が差し込んだ git の設定を、検査とテストには引き継がない。
+# 引き継ぐと、テストが作る一時リポジトリの push まで失敗して検査が必ず落ちる
+GIT_ENV_PREFIXES = ("GIT_CONFIG_", "GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE")
+# 利用者の設定(接頭辞の省略、外部 diff、textconv)で出力の形が変わると、追加行を取りこぼす
+DIFF_OPTS = ["--no-ext-diff", "--no-textconv", "--no-color", "--no-renames",
+             "--src-prefix=a/", "--dst-prefix=b/"]
+
+
+def clean_env():
+    return {k: v for k, v in os.environ.items() if not k.startswith(GIT_ENV_PREFIXES)}
+
+
+def git(repo, *args, check=True):
+    result = subprocess.run(["git", "-C", repo, "-c", "core.quotePath=false", *args],
+                            capture_output=True, text=True, errors="replace", env=clean_env())
+    if check and result.returncode != 0:
+        raise RuntimeError(f"git {' '.join(args)} が失敗: {result.stderr.strip()}")
+    return result
+
+
+def untracked_files(repo):
+    out = git(repo, "ls-files", "--others", "--exclude-standard", "-z").stdout
+    return [n for n in out.split("\0") if n]
+
+
+def changed_files(repo, base):
+    """変更されたパスの一覧。リネームは「削除+追加」に分け、変更前の名前も検査に掛ける。"""
+    out = git(repo, "diff", "--name-only", "-z", "--no-renames", base).stdout
+    names = {n for n in out.split("\0") if n}
+    names |= set(untracked_files(repo))
+    return sorted(names)
+
+
+def parse_added(diff_text):
+    """1ファイル分の unified diff から追加行を取り出す。
+
+    見出しは最初の @@ より前にしか無い。@@ より後を行頭の文字だけで見出しと判定すると、
+    内容が `++` で始まる行を見出しと取り違え、以降の追加行を取りこぼす。
+    """
+    lines, in_hunk = [], False
+    for line in diff_text.split("\n"):
+        if line.startswith("@@"):
+            in_hunk = True
+        elif in_hunk and line.startswith("+"):
+            lines.append(line[1:])
+    return lines
+
+
+def added_lines(repo, base, files):
+    """(ファイル, 行) の列と、バイナリのファイル一覧。未追跡ファイルは全行が追加分。"""
+    lines, binaries = [], []
+    untracked = set(untracked_files(repo))
+    for name in files:
+        if name in untracked:
+            path = os.path.join(repo, name)
+            if os.path.islink(path):
+                # git が記録するのはリンク先のパス文字列。open() はリンクをたどって別物を読む
+                lines.append((name, os.readlink(path)))
+                continue
+            try:
+                with open(path, "rb") as f:
+                    data = f.read()
+            except OSError as e:
+                raise RuntimeError(f"未追跡ファイルを読めません: {name}: {e}")
+            if b"\0" in data:
+                binaries.append(name)
+                continue
+            lines.extend((name, text) for text in data.decode("utf-8", errors="replace").split("\n"))
+            continue
+        numstat = git(repo, "diff", "--numstat", *DIFF_OPTS, base, "--", name).stdout
+        if numstat.startswith("-\t-"):
+            binaries.append(name)
+            continue
+        diff = git(repo, "diff", "--unified=0", *DIFF_OPTS, base, "--", name).stdout
+        lines.extend((name, text) for text in parse_added(diff))
+    return lines, binaries
+
+
+def removed_tests(repo, base):
+    """消えたテスト。消せば落ちなくなるので、テストを通す一番安い方法になる。リネームも「消えた」に数える。"""
+    out = git(repo, "diff", "--name-only", "-z", "--no-renames", "--diff-filter=D", base, "--", TESTS_DIR).stdout
+    return [n for n in out.split("\0") if n]
+
+
+def check_scope(files):
+    problems = []
+    for name in files:
+        if (name in FORBIDDEN_PATHS or name.startswith(FORBIDDEN_PREFIXES)
+                or FORBIDDEN_FILES.search(name)):
+            problems.append(f"触ってはいけないファイル: {name}")
+        elif not name.startswith(ALLOWED_PREFIXES):
+            problems.append(f"許可した範囲の外: {name}")
+    return problems
+
+
+def private_names(repo, base, ghq_root, denylist_file):
+    """公開してはいけない固有名。既に公開済みの木に出ている名前は、新しい漏えいではないので除く。"""
+    names = set()
+    if denylist_file and os.path.isfile(denylist_file):
+        with open(denylist_file, encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#"):
+                    names.add(("denylist", line))
+    if ghq_root is not None:
+        # 場所が違うだけで検査が0件のまま「通過」になるのを防ぐ
+        if not os.path.isdir(ghq_root):
+            raise RuntimeError(f"ghq のルートがありません: {ghq_root} (固有名の照合を省くなら --no-ghq)")
+        for path in glob.glob(os.path.join(ghq_root, "*", "*", "*")):
+            if not os.path.isdir(path):
+                continue
+            for name in (os.path.basename(path), os.path.basename(os.path.dirname(path))):
+                if len(name) >= MIN_NAME_LEN:
+                    names.add(("ghq", name))
+    kept = []
+    for source, name in sorted(names):
+        # 自分で書いた禁止語は、既に木にあっても常に効かせる
+        if source == "ghq" and git(repo, "grep", "-qiF", "-e", name, base, check=False).returncode == 0:
+            continue
+        kept.append(name)
+    return kept
+
+
+def check_leaks(lines, names):
+    problems = []
+    lowered = [n.lower() for n in names]
+    for name, text in lines:
+        for label, pattern in SECRET_PATTERNS:
+            if pattern.search(text):
+                problems.append(f"{label}: {name}")
+        low = text.lower()
+        for n in lowered:
+            if n in low:
+                # 語そのものは出さない。検査の出力がログや報告に写ると、それ自体が漏えいになる
+                problems.append(f"非公開の固有名({len(n)}文字): {name}")
+    return sorted(set(problems))
+
+
+def run_tests(tests_dir):
+    scripts = sorted(glob.glob(os.path.join(tests_dir, "*.test.sh")))
+    if not scripts:
+        raise RuntimeError(f"テストが1本も見つかりません: {tests_dir}")
+    problems = []
+    for script in scripts:
+        try:
+            result = subprocess.run(["bash", script], capture_output=True, text=True, errors="replace",
+                                    timeout=600, stdin=subprocess.DEVNULL, env=clean_env())
+        except subprocess.TimeoutExpired:
+            problems.append(f"テストが時間切れ: {os.path.basename(script)}")
+            continue
+        if result.returncode != 0:
+            tail = (result.stdout.strip().split("\n") or [""])[-1]
+            problems.append(f"テストが失敗: {os.path.basename(script)} ({tail})")
+    return problems, len(scripts)
+
+
+def main(argv):
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--base", default="origin/master")
+    parser.add_argument("--repo", default=".")
+    parser.add_argument("--skip-tests", action="store_true", help="範囲と漏えいの検査だけ行う(通過しても反映の根拠にしない)")
+    parser.add_argument("--ghq-root", default=os.environ.get("HARNESS_GATE_GHQ_ROOT", os.path.expanduser("~/ghq")))
+    parser.add_argument("--no-ghq", action="store_true", help="ghq 配下の名前との照合を省く(ghq を使っていないマシン用)")
+    parser.add_argument("--denylist", default=os.environ.get(
+        "HARNESS_GATE_DENYLIST", os.path.expanduser("~/.config/claude-loop/denylist")))
+    parser.add_argument("--tests-dir", default=os.environ.get("HARNESS_GATE_TESTS_DIR"))
+    parser.add_argument("--max-lines", type=int, default=DEFAULT_MAX_LINES)
+    args = parser.parse_args(argv)
+    try:
+        repo = git(args.repo, "rev-parse", "--show-toplevel").stdout.strip()
+        git(repo, "rev-parse", "--verify", "--quiet", args.base + "^{commit}")
+        files = changed_files(repo, args.base)
+        if not files:
+            print("harness-gate: 変更がありません")
+            return 1
+        problems = check_scope(files)
+        problems += [f"テストを消しています: {name}" for name in removed_tests(repo, args.base)]
+        lines, binaries = added_lines(repo, args.base, files)
+        problems += [f"バイナリは反映できません: {name}" for name in binaries]
+        if len(lines) > args.max_lines:
+            problems.append(f"変更が大きすぎます: 追加 {len(lines)} 行(上限 {args.max_lines} 行)。1件に絞る")
+        # ブランチ名・ファイル名・コミットメッセージは会話を読んだ後に付けるので、中身と同じく漏えいの経路になる
+        branch = git(repo, "rev-parse", "--abbrev-ref", "HEAD").stdout.strip()
+        lines.append(("(ブランチ名)", branch))
+        lines.extend(("(ファイル名)", name) for name in files)
+        messages = git(repo, "log", "--format=%B", f"{args.base}..HEAD").stdout
+        lines.extend(("(コミットメッセージ)", text) for text in messages.split("\n"))
+        names = private_names(repo, args.base, None if args.no_ghq else args.ghq_root, args.denylist)
+        problems += check_leaks(lines, names)
+        test_count = 0
+        if not args.skip_tests:
+            tests_dir = args.tests_dir or os.path.join(repo, TESTS_DIR)
+            test_problems, test_count = run_tests(tests_dir)
+            problems += test_problems
+    except RuntimeError as e:
+        print(f"harness-gate: 検査できませんでした: {e}", file=sys.stderr)
+        return 2
+    if problems:
+        print("harness-gate: 反映できません")
+        for p in problems:
+            print(f"  - {p}")
+        return 1
+    suffix = "テストは省略" if args.skip_tests else f"テスト {test_count} 本"
+    print(f"harness-gate: 通過(変更 {len(files)} ファイル、照合した固有名 {len(names)} 件、{suffix})")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

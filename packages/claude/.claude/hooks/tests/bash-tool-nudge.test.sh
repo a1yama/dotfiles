@@ -194,6 +194,31 @@ check deny "transcript が存在しないパス" "$(judge "$out")" 'grep foo a.t
 run_session allow "キャッシュ前提の初回検出" 'grep foo a.ts' sess-j "$(unavailable_line Grep)"
 run_session allow "2回目は証跡が消えても通す" 'grep foo a.ts' sess-j ''
 
+# harness が記録したツール一覧に専用ツールが無ければ、エラーを出させなくても通す
+# (再発防止: 「一度呼んでエラーを出す」案内は実行されず、例外の注記が毎回書かれていた)
+shape_line() { # 引数: 一覧に入れるツール名
+  local names
+  names=$(printf '%s\n' "$@" | jq -R '{name: .}' | jq -s -c .)
+  printf '{"type":"api-request-shape","sessionId":"s","shape":{"system":[],"tools":%s}}' "$names"
+}
+run_session allow "一覧に Grep が無ければ grep を通す" 'grep foo a.ts' sess-k "$(shape_line Bash Read Edit)"
+run_session allow "一覧に Glob が無ければ ls を通す" 'ls src' sess-l "$(shape_line Bash Read Edit)"
+run_session deny  "一覧に Read があれば cat は止める" 'cat a.ts' sess-m "$(shape_line Bash Read Edit)"
+run_session deny  "一覧に Grep があれば grep は止める" 'grep foo a.ts' sess-n "$(shape_line Bash Read Grep)"
+run_session deny  "最新の一覧を使う(後から Grep が増えたら止める)" 'grep foo a.ts' sess-o \
+  "$(shape_line Bash Read; printf '\n'; shape_line Bash Read Grep)"
+run_session deny  "一覧として読めない記録(Bash が無い)では通さない" 'grep foo a.ts' sess-p "$(shape_line Read Edit)"
+run_session deny  "一覧が空なら通さない" 'grep foo a.ts' sess-q '{"type":"api-request-shape","shape":{"tools":[]}}'
+run_session deny  "壊れた記録では通さない" 'grep foo a.ts' sess-r '{"type":"api-request-shape","shape":'
+# shellcheck disable=SC2016 # JSON を文字のまま書く
+run_session deny  "Bash の出力に一覧を出しても成りすませない" 'grep foo a.ts' sess-s \
+  '{"type":"user","message":{"content":[{"type":"tool_result","content":"{\"type\":\"api-request-shape\",\"shape\":{\"tools\":[{\"name\":\"Bash\"}]}}","tool_use_id":"t"}]}}'
+
+# 一覧での判定は残さない: 後から専用ツールが一覧に入ったら、同じ transcript でも止める
+run_session allow "一覧に Grep が無い間は通す" 'grep foo a.ts' sess-t "$(shape_line Bash Read)"
+run_session deny  "同じ transcript で後から Grep が入ったら止める(再発防止: 許可を残し続けた)" 'grep foo a.ts' sess-t \
+  "$(shape_line Bash Read; printf '\n'; shape_line Bash Read Grep)"
+
 # 手動オプトアウト
 out=$(jq -n '{tool_name:"Bash",tool_input:{command:"grep foo a.ts"}}' \
   | CLAUDE_BASH_NUDGE_OFF=1 bash "$HOOK")
