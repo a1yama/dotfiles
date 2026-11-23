@@ -416,7 +416,19 @@ doctor_stubs() { # $1: 固定ホスト名 / $2: 自動ログインの利用者 /
   printf '#!/bin/bash\n[ "$1" = "--get" ] && { [ -n "%s" ] && echo "%s" || exit 1; }\n' "$1" "$1" > "$ROOT/bin/scutil"
   printf '#!/bin/bash\n[ -n "%s" ] && echo "%s" || exit 1\n' "$2" "$2" > "$ROOT/bin/defaults"
   printf '#!/bin/bash\necho "launchctl $*" >> "$STUB_LOG"\n[ "$1" = "print" ] && exit %s\nexit 0\n' "$3" > "$ROOT/bin/launchctl"
-  chmod +x "$ROOT/bin/scutil" "$ROOT/bin/defaults" "$ROOT/bin/launchctl"
+  # 実機の FileVault の状態で結果が変わらないよう、必ず差し替える。STUB_FILEVAULT: On / Off(既定) / error
+  cat > "$ROOT/bin/fdesetup" <<'STUB'
+#!/bin/bash
+[ "${STUB_FILEVAULT:-Off}" = "error" ] && exit 1
+echo "FileVault is ${STUB_FILEVAULT:-Off}."
+STUB
+  chmod +x "$ROOT/bin/scutil" "$ROOT/bin/defaults" "$ROOT/bin/launchctl" "$ROOT/bin/fdesetup"
+}
+doctor_ready() { # 自動ログイン以外が揃った状態を作る。$1: 自動ログインの利用者
+  setup; conf demo; doctor_stubs loopbox "$1" 0
+  printf 'CLAUDE_SLACK_WEBHOOK_URL=https://hooks.example.test/a\nCLAUDE_CODE_OAUTH_TOKEN=dummy-token-for-test\n' > "$ROOT/conf/env"
+  chmod 600 "$ROOT/conf/env"
+  run_cli install >/dev/null; run_cli run demo >/dev/null
 }
 setup; conf demo; doctor_stubs "" "" 1
 out=$(run_cli doctor); rc=$?
@@ -494,6 +506,25 @@ printf 'REPO=x\nBROKEN\n' > "$ROOT/conf/aaa-broken.conf"
 out=$(run_cli doctor); rc=$?
 ok "doctor: 壊れた設定を要対応として知らせる" "$(has "$out" "[aaa-broken] 設定を読めません")"
 ok "doctor: 壊れた設定の後ろのループも点検する" "$(has "$out" "[demo]")"
+
+doctor_ready ""
+out=$(STUB_FILEVAULT=On run_cli doctor); rc=$?
+ok "doctor: FileVault が有効なら自動ログインを要対応にしない(再発防止: 設定できない案内を出し続けた)" "$(eq "$(has "$out" "要対応  自動ログイン")" 0)"
+ok "doctor: FileVault が理由だと知らせる" "$(has "$out" "情報    FileVault が有効なので自動ログインは使えません")"
+ok "doctor: FileVault 以外が揃っていれば exit 0" "$(eq "$rc" 0)"
+
+doctor_ready ""
+out=$(STUB_FILEVAULT=Off run_cli doctor); rc=$?
+ok "doctor: FileVault が無効なら自動ログインを要対応にする" "$(has "$out" "要対応  自動ログインが無効です")"
+ok "doctor: FileVault が無効で自動ログインも無効なら exit 1" "$(eq "$rc" 1)"
+
+doctor_ready ""
+out=$(STUB_FILEVAULT=error run_cli doctor)
+ok "doctor: FileVault の状態を読めないときは要対応のままにする" "$(has "$out" "要対応  自動ログインが無効です")"
+
+doctor_ready "$(id -un)"
+out=$(STUB_FILEVAULT=On run_cli doctor)
+ok "doctor: 自動ログインが有効なら FileVault の表示より優先する" "$(has "$out" "OK      自動ログインが有効です")"
 
 out=$(run_cli); rc=$?
 ok "使い方に doctor が出る" "$(has "$out" "claude-loop doctor")"

@@ -576,6 +576,10 @@ cmd_doctor() {
   if command -v defaults >/dev/null 2>&1; then
     user=$(defaults read /Library/Preferences/com.apple.loginwindow autoLoginUser 2>/dev/null || true)
     if [ "$user" = "$(id -un)" ]; then d_ok "自動ログインが有効です"
+    elif command -v fdesetup >/dev/null 2>&1 && fdesetup status 2>/dev/null | grep -q '^FileVault is On'; then
+      # FileVault が有効な間、macOS は自動ログインを設定させない。実行できない案内を要対応に出し続けると、
+      # 要対応が常に1件残り、本当に足りないものが増えたときに見分けられなくなる
+      printf '情報    FileVault が有効なので自動ログインは使えません(再起動後は、一度ログインするまで起動しません。無人で復帰させるには FileVault を切る必要があります)\n'
     else d_need "自動ログインが無効です(再起動後、ログインするまで起動しません)" "システム設定 > ユーザとグループ > 自動ログイン で $(id -un) を選ぶ"; fi
   fi
 
