@@ -47,6 +47,9 @@ SECRET_PATTERNS = [
     ("ホームディレクトリの絶対パス", re.compile(r"/(Users|home)/(?!" + HOME_NAME_EXCLUDED + r")[A-Za-z0-9._-]+")),
 ]
 TESTS_DIR = "packages/claude/.claude/hooks/tests"
+SKILLS_DIR = "packages/claude/.claude/skills"
+SKILL_KEEP_FILE = "packages/claude/.claude/loops/skill-keep.txt"
+KEPT_SKILL_MAX_DELETED_LINES = 30
 MIN_NAME_LEN = 4
 DEFAULT_MAX_LINES = 300
 # 呼び出し元(push を禁じた無人ループ)が差し込んだ git の設定を、検査とテストには引き継がない。
@@ -131,6 +134,62 @@ def removed_tests(repo, base):
     """消えたテスト。消せば落ちなくなるので、テストを通す一番安い方法になる。リネームも「消えた」に数える。"""
     out = git(repo, "diff", "--name-only", "-z", "--no-renames", "--diff-filter=D", base, "--", TESTS_DIR).stdout
     return [n for n in out.split("\0") if n]
+
+
+def frontmatter_value(text, key):
+    """frontmatter の値。空・引用符だけ・中身の無い折り返し記号は「無い」として扱う。
+
+    同じ行の中だけを見る。\\s は改行もまたぐので、値を空にしても次の行の文字に当たってしまう。
+    """
+    m = re.search(rf"^{key}:[ \t]*(.*)$", text, re.M)
+    if not m:
+        return ""
+    value = m.group(1).strip().strip("\"'").strip()
+    if value in ("", "|", ">", "|-", ">-", "|+", ">+"):
+        # 折り返し記法なら、続く字下げ行に中身があるかを見る
+        rest = text[m.end():].split("\n")[1:2]
+        return rest[0].strip() if rest and rest[0].startswith((" ", "\t")) else ""
+    return value
+
+
+def check_skill_removal(repo, base):
+    """スキルの削除は、残すと決めたもの以外を、1回に1つまで。
+
+    残す一覧は base 側の版を読む。作業ツリーの版を読むと、一覧を書き換えてから消せてしまう。
+    """
+    def skill_of(path):
+        return path[len(SKILLS_DIR) + 1:].split("/")[0]
+
+    out = git(repo, "diff", "--name-only", "-z", "--no-renames", "--diff-filter=D", base, "--", SKILLS_DIR).stdout
+    deleted = [n for n in out.split("\0") if n]
+    removed = sorted({skill_of(n) for n in deleted if n.endswith("/SKILL.md")})
+    shown = git(repo, "show", f"{base}:{SKILL_KEEP_FILE}", check=False)
+    if shown.returncode != 0:
+        # 一覧が読めないときに空として扱うと、保護が黙って外れる
+        return [f"残すスキルの一覧が {base} にありません。スキルの削除は検査できません: {name}" for name in removed]
+    keep = {line.strip() for line in shown.stdout.split("\n") if line.strip() and not line.startswith("#")}
+    problems = [f"残すと決めたスキルを消しています: {name}" for name in removed if name in keep]
+    # SKILL.md を残して中身や付属ファイルだけを消しても、実質的に消せる
+    problems += [f"残すと決めたスキルのファイルを消しています: {n}" for n in deleted
+                 if skill_of(n) in keep and not n.endswith("/SKILL.md")]
+    for name in sorted(keep - set(removed)):
+        # 付属ファイルも含めて、大きく削る書き換えを止める(空にする書き換えは「削除」には出ない)
+        numstat = git(repo, "diff", "--numstat", "-z", *DIFF_OPTS, base, "--", f"{SKILLS_DIR}/{name}").stdout
+        for row in (r for r in numstat.split("\0") if r):
+            cols = row.split("\t")
+            if len(cols) == 3 and cols[1].isdigit() and int(cols[1]) > KEPT_SKILL_MAX_DELETED_LINES:
+                problems.append(f"残すと決めたスキルから {cols[1]} 行消しています"
+                                f"(上限 {KEPT_SKILL_MAX_DELETED_LINES} 行): {cols[2]}")
+        try:
+            with open(os.path.join(repo, SKILLS_DIR, name, "SKILL.md"), encoding="utf-8", errors="replace") as f:
+                head = f.read(4000)
+        except OSError:
+            continue  # 消えている場合は上の「ファイルを消しています」で止まる
+        if not (frontmatter_value(head, "name") and frontmatter_value(head, "description")):
+            problems.append(f"残すと決めたスキルの name / description が消えています: {name}")
+    if len(removed) > 1:
+        problems.append(f"スキルを一度に {len(removed)} 個消しています(1回に1つまで): {', '.join(removed)}")
+    return problems
 
 
 def check_scope(files):
@@ -226,6 +285,7 @@ def main(argv):
             return 1
         problems = check_scope(files)
         problems += [f"テストを消しています: {name}" for name in removed_tests(repo, args.base)]
+        problems += check_skill_removal(repo, args.base)
         lines, binaries = added_lines(repo, args.base, files)
         problems += [f"バイナリは反映できません: {name}" for name in binaries]
         if len(lines) > args.max_lines:

@@ -10,6 +10,7 @@
 #
 # 使い方:
 #   claude-loop list                 設定されているループと直近の結果
+#   claude-loop doctor               このマシンで無人実行を続けるのに足りない設定を点検する
 #   claude-loop run <name>           1回実行(launchd から呼ばれる)
 #   claude-loop run <name> --dry-run 準備までを確かめ、Claude は起動しない
 #   claude-loop install              このマシン向けのループを launchd に登録
@@ -515,11 +516,112 @@ cmd_uninstall() {
   done
 }
 
+# このマシンで無人実行を続けるのに足りないものを点検する。人が手でやる設定(ホスト名の固定、通知先、
+# 認証トークン、自動ログイン)は会話や記憶に頼ると抜けるので、機械で確かめられる形にしておく
+cmd_doctor() {
+  local bad=0 mine=0 name uid file perm fixed status detail pending user hosts="" target
+  uid=$(id -u)
+  d_ok() { printf 'OK      %s\n' "$1"; }
+  d_ng() { printf '要対応  %s\n        → %s\n' "$1" "$2"; bad=1; }
+  # マシン単位の設定。ループを動かさないマシン(普段使いの端末)では、足りなくても困らないので知らせるだけにする
+  d_need() { if [ "$mine" -gt 0 ]; then d_ng "$1" "$2"; else printf '情報    %s\n' "$1"; fi; }
+
+  # 先に、このマシン向けのループの数と、設定に書かれた HOST の一覧を数える。壊れた設定で点検を止めない
+  for name in $(list_names); do
+    ( load_conf "$name" ) >/dev/null 2>&1 || continue
+    load_conf "$name"
+    [ "$ENABLED" = "1" ] || continue
+    case " $hosts " in *" $HOST "*) ;; *) hosts="$hosts $HOST" ;; esac
+    [ "$(this_host)" = "$HOST" ] && mine=$((mine + 1))
+  done
+  hosts="${hosts# }"
+
+  for name in claude git python3; do
+    command -v "$name" >/dev/null 2>&1 && d_ok "コマンド $name" || d_ng "コマンド $name が見つかりません" "インストールするか PATH を確かめる"
+  done
+
+  if command -v scutil >/dev/null 2>&1; then
+    fixed=$(scutil --get HostName 2>/dev/null || true)
+    # 固定する名前は設定の HOST から出す。固定されていないときの hostname -s はネットワークが付けた
+    # 名前かもしれず、それで固定させると、ずれた名前のまま全ループが対象外になる
+    target="$(this_host)"
+    if [ "$mine" -eq 0 ] && [ -n "$hosts" ]; then
+      # 候補が複数あるときは選んでもらう。今の名前を固定先として出さない
+      if [ "${hosts#* }" = "$hosts" ]; then target="$hosts"; else target="<次のどれか: ${hosts}>"; fi
+    fi
+    # HostName を FQDN で固定していても、hostname -s は先頭の部分だけを返す
+    if [ -n "$fixed" ] && [ "${fixed%%.*}" = "$(this_host)" ]; then d_ok "ホスト名は固定されています(${fixed})"
+    elif [ "$mine" -eq 0 ] && [ -n "$hosts" ]; then
+      d_ng "ホスト名が固定されておらず、今の名前($(this_host))に合うループがありません。名前がずれている可能性があります(設定の HOST: ${hosts})" \
+        "ここが専用マシンなら: sudo scutil --set HostName ${target}"
+    else d_need "ホスト名が固定されていません(接続先のネットワークで変わり、全ループが止まります)" "sudo scutil --set HostName ${target}"; fi
+  fi
+
+  file="$CONF_DIR/env"
+  if [ -f "$file" ]; then
+    # GNU の stat は -f を「ファイルシステムの情報」と解釈し、何か出力してから失敗する。先に GNU の形を試す
+    perm=$(stat -c %a "$file" 2>/dev/null) || perm=$(stat -f %Lp "$file" 2>/dev/null) || perm=""
+    if [[ "$perm" =~ ^[0-7]+$ ]] && [ $(( 8#$perm & 8#077 )) -eq 0 ]; then d_ok "env ファイルは本人だけが読めます"
+    else d_ng "env ファイルを他の利用者が読めます(権限 ${perm:-不明})" "chmod 600 $file"; fi
+  fi
+  # 対話シェルで export 済みの値を数えない。launchd はその環境を引き継がないので、
+  # env ファイルに無ければ無人実行では届かない
+  unset CLAUDE_SLACK_WEBHOOK_URL CLAUDE_DISCORD_WEBHOOK_URL LOOP_OAUTH_TOKEN
+  load_env_file
+  if [ -n "${CLAUDE_SLACK_WEBHOOK_URL:-}${CLAUDE_DISCORD_WEBHOOK_URL:-}" ]; then d_ok "通知先が設定されています"
+  else d_need "通知先がありません(失敗にも、確認待ちのブランチにも気づけません)" "$file に CLAUDE_SLACK_WEBHOOK_URL=<URL> を1行書く"; fi
+  if [ -n "${LOOP_OAUTH_TOKEN:-}" ]; then d_ok "無人実行用の認証トークンが設定されています"
+  else d_need "認証トークンがありません(対話ログインの期限が切れると止まります)" "claude setup-token の出力を $file に CLAUDE_CODE_OAUTH_TOKEN=<値> で書き、chmod 600 する"; fi
+
+  if command -v defaults >/dev/null 2>&1; then
+    user=$(defaults read /Library/Preferences/com.apple.loginwindow autoLoginUser 2>/dev/null || true)
+    if [ "$user" = "$(id -un)" ]; then d_ok "自動ログインが有効です"
+    else d_need "自動ログインが無効です(再起動後、ログインするまで起動しません)" "システム設定 > ユーザとグループ > 自動ログイン で $(id -un) を選ぶ"; fi
+  fi
+
+  for name in $(list_names); do
+    if ! ( load_conf "$name" ) >/dev/null 2>&1; then
+      d_ng "[$name] 設定を読めません: $( ( load_conf "$name" ) 2>&1 | head -1)" "$CONF_DIR/$name.conf を直す"
+      continue
+    fi
+    load_conf "$name"
+    { [ "$ENABLED" = "1" ] && [ "$(this_host)" = "$HOST" ]; } || continue
+    if ! command -v launchctl >/dev/null 2>&1; then
+      printf '情報    [%s] launchctl が無い環境なので、登録は確かめていません\n' "$name"
+    elif [ -f "$AGENTS_DIR/$LABEL_PREFIX.$name.plist" ] && launchctl print "gui/$uid/$LABEL_PREFIX.$name" >/dev/null 2>&1; then
+      d_ok "[$name] 登録されています(毎日 $(printf '%02d:%02d' "$HOUR" "$MINUTE"))"
+    else d_ng "[$name] launchd に登録されていません" "claude-loop install"; fi
+    if [ -d "$REPO/.git" ] || [ -f "$REPO/.git" ]; then d_ok "[$name] リポジトリがあります"
+    else d_ng "[$name] リポジトリがありません: $REPO" "clone する"; continue; fi
+    if [ "$NO_PUSH" = "1" ] && [ -n "$(git -C "$REPO" config --get-all remote.origin.pushurl 2>/dev/null)" ]; then
+      d_ng "[$name] origin に pushurl があり、push の禁止が効きません" "git -C $REPO config --unset-all remote.origin.pushurl"
+    fi
+    if [ -f "$STATE_DIR/$name.last.json" ]; then
+      status=$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print(d["status"]); print(d["finished"], d["detail"].split("\n")[0])' "$STATE_DIR/$name.last.json" 2>/dev/null || echo "不明")
+      detail="${status#*$'\n'}"; status="${status%%$'\n'*}"
+      case "$status" in
+        ok|dry_run) d_ok "[$name] 直近の結果: $status ($detail)" ;;
+        *) d_ng "[$name] 直近の結果: $status ($detail)" "ログを読む: $STATE_DIR/logs/$name/" ;;
+      esac
+    else
+      printf '情報    [%s] まだ一度も実行されていません\n' "$name"
+    fi
+    if [ "$NO_PUSH" = "1" ]; then
+      pending=$(pending_branches "$name")
+      [ "$pending" -gt 0 ] && printf '情報    [%s] 確認待ちのブランチが %s本あります(%s*)。対話セッションで「変更を push して」と指示する\n' "$name" "$pending" "$(pending_prefix "$name")"
+    fi
+  done
+  [ "$mine" -gt 0 ] || printf '情報    このマシン(%s)向けのループはありません\n' "$(this_host)"
+  [ "$bad" -eq 0 ] && printf '\n要対応はありません\n'
+  return "$bad"
+}
+
 case "${1:-}" in
   list) cmd_list ;;
+  doctor) cmd_doctor ;;
   run) shift; cmd_run "$@" ;;
   install) cmd_install ;;
   uninstall) cmd_uninstall ;;
   render) [ -n "${2:-}" ] || die "使い方: claude-loop render <name>"; render_plist "$2" ;;
-  *) sed -n '2,31p' "$0" | sed 's/^# \{0,1\}//'; exit 1 ;;
+  *) awk 'NR > 1 && /^set -uo pipefail/ { exit } NR > 1 { sub(/^# ?/, ""); print }' "$0"; exit 1 ;;
 esac

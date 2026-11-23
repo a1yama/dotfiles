@@ -13,10 +13,14 @@ import glob
 import json
 import os
 import re
+import subprocess
 import sys
 import time
 
 DEFAULT_PROJECTS = os.path.expanduser("~/.claude/projects")
+DEFAULT_SKILLS = os.path.join(
+    os.path.dirname(os.path.realpath(__file__)), "..", "..", ".claude", "skills"
+)
 DEFAULT_SIGNALS = os.path.join(
     os.path.dirname(os.path.realpath(__file__)), "..", "..", ".claude", "hooks", "premise-signals.sh"
 )
@@ -203,15 +207,102 @@ def collect(files, rework_re, cutoff=0.0):
     }
 
 
+def skill_names(event):
+    """この出来事で使われたスキルの名前。Skill ツールの呼び出しと、スラッシュコマンドでの起動の両方を数える。"""
+    content = event.get("message", {}).get("content")
+    if event.get("type") == "assistant" and isinstance(content, list):
+        for block in content:
+            if isinstance(block, dict) and block.get("type") == "tool_use" and block.get("name") == "Skill":
+                name = (block.get("input") or {}).get("skill")
+                if isinstance(name, str) and name:
+                    yield name
+    elif event.get("type") == "user" and isinstance(content, str):
+        for name in re.findall(r"<command-name>/([\w:./-]+)</command-name>", content):
+            yield name
+
+
+def local_skill_name(name):
+    """手元のスキルとして数える名前。ディレクトリの scope(`dir/sub:name`)は外す。
+
+    プラグインの接頭辞(`plugin:name`)は外さない。同じ名前のプラグインのスキルが使われただけで、
+    手元のスキルが「使われている」ことになるのを防ぐ。
+    """
+    prefix, sep, rest = name.rpartition(":")
+    return rest if (sep and "/" in prefix) else name
+
+
+def subagent_files(files):
+    """スキルの集計にだけ使う。サブエージェントの中で呼ばれたスキルは親のログに残らない。"""
+    result = []
+    for path in files:
+        result.extend(sorted(glob.glob(os.path.join(os.path.splitext(path)[0], "subagents", "*.jsonl"))))
+    return result
+
+
+def skill_created_epoch(skill_md):
+    """スキルが最初に追加された時刻。git で分からなければファイルの更新時刻。"""
+    directory = os.path.dirname(skill_md)
+    try:
+        out = subprocess.run(
+            ["git", "-C", directory, "log", "--diff-filter=A", "--follow", "--format=%ct", "--", "SKILL.md"],
+            capture_output=True, text=True, timeout=30).stdout.split()
+        if out:
+            return float(out[-1])
+    except (OSError, subprocess.SubprocessError, ValueError):
+        pass
+    try:
+        return os.path.getmtime(skill_md)
+    except OSError:
+        return 0.0
+
+
+def collect_skills(files, cutoff, skills_dir):
+    """スキルごとの使用回数と最後に使った日。skills_dir にあるのに一度も使われていないものも返す。"""
+    counts = collections.Counter()
+    last_used = {}
+    seen = set()
+    for path in files + subagent_files(files):
+        for event in read_events(path):
+            if not in_period(event, cutoff, seen):
+                continue
+            for name in skill_names(event):
+                name = local_skill_name(name)
+                counts[name] += 1
+                stamp = event.get("timestamp") or ""
+                last_used[name] = max(last_used.get(name, ""), stamp[:10])
+
+    def rows(names):
+        return [{"skill": k, "count": c, "last_used": last_used[k]} for k, c in counts.most_common() if k in names]
+
+    # 対話の量が少ないマシンでは「使われていない」が何の根拠にもならない。判断の材料として出す
+    result = {"sessions_scanned": len(files)}
+    if not skills_dir:
+        result["skill_usage"] = rows(set(counts))
+        return result
+    paths = {os.path.basename(os.path.dirname(p)): p for p in glob.glob(os.path.join(skills_dir, "*", "SKILL.md"))}
+    defined = sorted(paths)
+    # 期間より後に作られたスキルは、使われていなくて当然。削除の候補に入れない
+    too_new = [name for name in defined if counts[name] == 0 and skill_created_epoch(paths[name]) > cutoff]
+    result["skills_defined"] = len(defined)
+    result["skill_usage"] = rows(set(defined))
+    # 組み込みコマンドやプラグインのスキル。手元のスキルの手入れの対象ではない
+    result["other_commands"] = rows(set(counts) - set(defined))
+    result["skills_too_new"] = too_new
+    result["skills_unused"] = [name for name in defined if counts[name] == 0 and name not in too_new]
+    return result
+
+
 def main(argv):
     parser = argparse.ArgumentParser()
     parser.add_argument("--projects-dir", default=DEFAULT_PROJECTS)
     parser.add_argument("--days", type=int, default=7)
     parser.add_argument("--now", type=float, default=None)
     parser.add_argument("--signals-file", default=DEFAULT_SIGNALS)
+    parser.add_argument("--skill-days", type=int, default=60, help="スキルの使用実績を数える日数(手がかりより長く見る)")
+    parser.add_argument("--skills-dir", default=DEFAULT_SKILLS, help="未使用を判定するスキル置き場")
     args = parser.parse_args(argv)
-    if args.days <= 0:
-        parser.error("--days は正の整数")
+    if args.days <= 0 or args.skill_days <= 0:
+        parser.error("--days と --skill-days は正の整数")
     if not os.path.isdir(args.projects_dir):
         print(f"harness-signals: 会話ログのディレクトリがありません: {args.projects_dir}", file=sys.stderr)
         return 1
@@ -223,6 +314,10 @@ def main(argv):
     now = args.now if args.now is not None else time.time()
     result = collect(recent_files(args.projects_dir, args.days, now), rework_re, now - args.days * 86400)
     result["days"] = args.days
+    result["skill_days"] = args.skill_days
+    skills_dir = args.skills_dir if os.path.isdir(args.skills_dir) else None
+    result.update(collect_skills(recent_files(args.projects_dir, args.skill_days, now),
+                                 now - args.skill_days * 86400, skills_dir))
     json.dump(result, sys.stdout, ensure_ascii=False, indent=2)
     print()
     return 0

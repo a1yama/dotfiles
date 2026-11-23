@@ -411,5 +411,93 @@ out=$(run_cli list)
 ok "list に時刻と直近の結果を出す" "$(has "$out" "06:40")"
 ok "list に結果の状態を出す" "$(has "$out" " ok ")"
 
+# --- doctor: 足りない設定を1つずつ知らせ、揃っていれば exit 0 ---
+doctor_stubs() { # $1: 固定ホスト名 / $2: 自動ログインの利用者 / $3: launchctl print の終了コード
+  printf '#!/bin/bash\n[ "$1" = "--get" ] && { [ -n "%s" ] && echo "%s" || exit 1; }\n' "$1" "$1" > "$ROOT/bin/scutil"
+  printf '#!/bin/bash\n[ -n "%s" ] && echo "%s" || exit 1\n' "$2" "$2" > "$ROOT/bin/defaults"
+  printf '#!/bin/bash\necho "launchctl $*" >> "$STUB_LOG"\n[ "$1" = "print" ] && exit %s\nexit 0\n' "$3" > "$ROOT/bin/launchctl"
+  chmod +x "$ROOT/bin/scutil" "$ROOT/bin/defaults" "$ROOT/bin/launchctl"
+}
+setup; conf demo; doctor_stubs "" "" 1
+out=$(run_cli doctor); rc=$?
+ok "doctor: 足りないものがあれば exit 1" "$(eq "$rc" 1)"
+ok "doctor: ホスト名が固定されていないと知らせ、直すコマンドを出す" "$(has "$out" "sudo scutil --set HostName loopbox")"
+ok "doctor: 通知先が無いと知らせる" "$(has "$out" "通知先がありません")"
+ok "doctor: 認証トークンが無いと知らせる" "$(has "$out" "認証トークンがありません")"
+ok "doctor: 自動ログインが無効だと知らせる" "$(has "$out" "自動ログインが無効です")"
+ok "doctor: 登録されていないループを知らせる" "$(has "$out" "[demo] launchd に登録されていません")"
+ok "doctor: claude を起動しない" "$(eq "$(grep -c '^cwd=' "$STUB_LOG")" 0)"
+
+setup; conf demo "NO_PUSH=1"; conf other "HOST=laptop"; doctor_stubs loopbox "$(id -un)" 0
+printf 'CLAUDE_SLACK_WEBHOOK_URL=https://hooks.example.test/a\nCLAUDE_CODE_OAUTH_TOKEN=dummy-token-for-test\n' > "$ROOT/conf/env"
+chmod 600 "$ROOT/conf/env"
+run_cli install >/dev/null; run_cli run demo >/dev/null
+out=$(run_cli doctor); rc=$?
+ok "doctor: 揃っていれば exit 0" "$(eq "$rc" 0)"
+ok "doctor: 揃っていると言い切る" "$(has "$out" "要対応はありません")"
+ok "doctor: 直近の結果を出す" "$(has "$out" "[demo] 直近の結果: ok")"
+ok "doctor: 別マシン向けのループは点検しない" "$(eq "$(has "$out" "[other]")" 0)"
+ok "doctor: 秘密の値を出力に写さない" "$(eq "$(has "$out" "dummy-token-for-test")$(has "$out" "hooks.example.test")" 00)"
+
+chmod 644 "$ROOT/conf/env"
+out=$(run_cli doctor); rc=$?
+ok "doctor: env ファイルを他の利用者が読めるなら exit 1" "$(eq "$rc" 1)"
+ok "doctor: 権限を直すコマンドを出す" "$(has "$out" "chmod 600")"
+chmod 600 "$ROOT/conf/env"
+STUB_CLAUDE_RC=3 run_cli run demo >/dev/null
+out=$(run_cli doctor); rc=$?
+ok "doctor: 直近の実行が失敗なら exit 1" "$(eq "$rc" 1)"
+ok "doctor: 失敗の状態を出す" "$(has "$out" "[demo] 直近の結果: failed")"
+STUB_CLAUDE_BRANCH=loop-demo/20260101-x STUB_CLAUDE_PUSH="$ROOT/origin.git" run_cli run demo >/dev/null
+out=$(run_cli doctor)
+ok "doctor: 確認待ちのブランチ数を出す" "$(has "$out" "確認待ちのブランチが 1本あります")"
+git -C "$ROOT/repo" config remote.origin.pushurl "$ROOT/origin.git"
+out=$(run_cli doctor); rc=$?
+ok "doctor: NO_PUSH のループで pushurl があれば exit 1" "$(eq "$rc" 1)"
+
+chmod 400 "$ROOT/conf/env"; git -C "$ROOT/repo" config --unset-all remote.origin.pushurl
+out=$(run_cli doctor)
+ok "doctor: 権限 400 は本人だけが読めるので OK" "$(has "$out" "env ファイルは本人だけが読めます")"
+
+# ループを動かさないマシンでは、マシン単位の設定が無くても要対応にしない
+setup; conf other "HOST=laptop"; doctor_stubs loopbox "" 0
+out=$(run_cli doctor); rc=$?
+ok "doctor: このマシン向けのループが無いことを知らせる" "$(has "$out" "向けのループはありません")"
+ok "doctor: ループの無いマシンでは exit 0" "$(eq "$rc" 0)"
+ok "doctor: ループの無いマシンでは通知先などを要対応にしない" "$(eq "$(has "$out" "要対応  通知先")" 0)"
+
+# ホスト名が固定されておらず、今の名前に合うループが無い = 名前がずれた専用マシンかもしれない
+setup; conf demo "HOST=fixedbox"; doctor_stubs "" "" 0
+out=$(STUB_HOST=dhcp-123 run_cli doctor); rc=$?
+ok "doctor: 名前がずれている可能性を要対応にする" "$(eq "$rc" 1)"
+ok "doctor: 固定する名前は設定の HOST から出す(再発防止: ずれた今の名前で固定させる案内を出した)" "$(has "$out" "sudo scutil --set HostName fixedbox")"
+ok "doctor: ずれた今の名前を固定先にしない" "$(eq "$(has "$out" "--set HostName dhcp-123")" 0)"
+
+setup; conf demo "HOST=fixedbox"; conf second "HOST=otherbox"; doctor_stubs "" "" 0
+out=$(STUB_HOST=dhcp-123 run_cli doctor)
+ok "doctor: HOST の候補が複数でも、ずれた今の名前を固定先にしない" "$(eq "$(has "$out" "--set HostName dhcp-123")" 0)"
+ok "doctor: 候補を並べて選ばせる" "$(has "$out" "次のどれか: fixedbox otherbox")"
+
+setup; conf demo; doctor_stubs loopbox.local "$(id -un)" 0
+out=$(run_cli doctor)
+ok "doctor: FQDN で固定していても固定済みと判定する" "$(has "$out" "ホスト名は固定されています")"
+
+# 対話シェルで export 済みの通知先は数えない(launchd には届かない)
+setup; conf demo; doctor_stubs loopbox "$(id -un)" 0
+out=$(CLAUDE_SLACK_WEBHOOK_URL=https://hooks.example.test/a run_cli doctor); rc=$?
+ok "doctor: env ファイルに無い通知先は、環境変数にあっても要対応(再発防止: 対話シェルの値で OK と出た)" "$(has "$out" "要対応  通知先がありません")"
+ok "doctor: そのとき exit 1" "$(eq "$rc" 1)"
+
+# 壊れた設定が1つあっても、ほかの点検を続ける
+setup; conf demo; doctor_stubs loopbox "$(id -un)" 0
+printf 'REPO=x\nBROKEN\n' > "$ROOT/conf/aaa-broken.conf"
+out=$(run_cli doctor); rc=$?
+ok "doctor: 壊れた設定を要対応として知らせる" "$(has "$out" "[aaa-broken] 設定を読めません")"
+ok "doctor: 壊れた設定の後ろのループも点検する" "$(has "$out" "[demo]")"
+
+out=$(run_cli); rc=$?
+ok "使い方に doctor が出る" "$(has "$out" "claude-loop doctor")"
+ok "使い方にコードの行が混ざらない" "$(eq "$(has "$out" "set -uo pipefail")" 0)"
+
 printf '\n%d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

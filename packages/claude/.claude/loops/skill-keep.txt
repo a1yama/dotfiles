@@ -1,0 +1,11 @@
+# 無人のハーネス改善ループが削除してはいけないスキル(1行1つ)。
+# 使用回数が0でも残す理由があるものを書く。このファイルは対話セッションでだけ変える。
+
+# 所有者の指定(2026-11-23)
+diff-review
+
+# ループ自身と、反映前の確認が使う
+skill-trigger-eval
+code-review
+update-review-checklist
+frame-check

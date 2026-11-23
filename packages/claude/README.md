@@ -43,6 +43,7 @@ claude-tmux kill all
 
 ```bash
 claude-loop list                  # 設定されているループと直近の結果
+claude-loop doctor                # このマシンで無人実行を続けるのに足りない設定を点検する
 claude-loop run <name> --dry-run  # 準備(専用 worktree・リンク・SETUP)までを確かめる
 claude-loop run <name>            # 1回実行する
 claude-loop install               # このマシン向けのループを launchd に登録する
@@ -56,6 +57,7 @@ claude-loop uninstall             # 登録を外す
 - 結果は `~/.local/state/claude-loop/<name>.last.json`、ログは `~/.local/state/claude-loop/logs/<name>/`
 - ループの手順そのもの(何を判定し、何を提案するか)は各リポジトリの手順書に置く。ここに書くのは「いつ・どこで・何を起動するか」だけ
 - 新しいマシンで使うとき: `stow -d packages -t ~ -R claude` のあと `claude-loop install`。設定を変えたときも `claude-loop install` をやり直す
+- 人が手でやる設定(ホスト名の固定、通知先、認証トークン、自動ログイン)が揃っているかは `claude-loop doctor` で確かめる。足りないものと、直すコマンドが出る。専用マシンで何か止まったときも、まずこれを実行する
 - launchd の登録先は画面にログインしているユーザーの領域(`gui/<uid>`)。専用マシンは自動ログインにしておく。ログインしていない間は起動しない
 - launchd から起動したシェルは `.zshrc` を読まない。失敗の通知を受けるには `~/.config/claude-loop/env` に `CLAUDE_SLACK_WEBHOOK_URL=` か `CLAUDE_DISCORD_WEBHOOK_URL=` を書く(秘密の値なので dotfiles には入れない)
 - PR は merge コミットでマージする手順にする。squash してブランチを消すと、worktree に残ったコミットがどこからも参照されなくなり、次の回が「未 push のコミット」で止まる
@@ -78,6 +80,9 @@ claude-loop uninstall             # 登録を外す
   - 安全装置(`harness-gate`・`claude-loop`・その2つのテスト・手順書・ループの設定)と `settings.json` の変更、バイナリ、追加 300 行超の変更は通さない
   - ループは origin/master 側の `harness-gate` で検査する。検査を変えたいときは対話セッションで変えて push する
   - 非公開の固有名は `~/ghq` 配下のリポジトリ名・所有者名(既にこのリポジトリに出ている名前は除く)と、`~/.config/claude-loop/denylist`(1行1語。dotfiles には入れない)
+- スキルの手入れも行う。60日間使われていないスキルは、発火を実測してから「説明文を直す」か「削除する」かを決める。使っているスキルは手戻りの実例から直し、繰り返されている手作業は新しいスキルにする
+  - 削除してほしくないスキルは `.claude/loops/skill-keep.txt` に書く(`harness-gate` が削除を止める。削除は1回に1つまで)
+  - ループが見るのは専用マシンの使用実績だけ。削除の push を確認するときは、他のマシンでの使用回数(`harness-signals` の `skill_usage`)と突き合わせる
 - 報告は `~/.local/state/claude-loop/reports/harness-improve/`、直した履歴は `~/.local/state/claude-loop/harness-improve.ledger.jsonl`
 
 ## スキル

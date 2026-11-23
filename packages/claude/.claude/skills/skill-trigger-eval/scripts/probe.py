@@ -70,7 +70,8 @@ def scan_stream(lines, max_tools: int) -> dict:
 
 
 def run_query(query: str, cwd: str, timeout: int, max_tools: int, model: str | None) -> dict:
-    cmd = ["claude", "-p", query, "--output-format", "stream-json", "--verbose"]
+    # 実測の会話を残さない。残すと、スキルの使用実績の集計で「実際に使われた」ものとして数えられる
+    cmd = ["claude", "-p", query, "--output-format", "stream-json", "--verbose", "--no-session-persistence"]
     if model:
         cmd.extend(["--model", model])
     # CLAUDECODE を外さないと Claude Code セッション内から claude -p を起動できない

@@ -120,6 +120,59 @@ G add . && G commit -q -m s
 G mv packages/claude/.claude/settings.json packages/claude/.claude/renamed.json
 out=$(gate); ok "禁止ファイルのリネームを止める(変更前の名前も見る)" "$(eq "$?" 1)"
 
+# --- スキルの削除: 残すと決めたものは消せず、1回に1つまで ---
+skills_setup() {
+  setup
+  for s in alpha beta kept; do
+    mkdir -p "$ROOT/repo/packages/claude/.claude/skills/$s/refs"; echo ref > "$ROOT/repo/packages/claude/.claude/skills/$s/refs/a.md"
+    { printf -- '---\nname: %s\ndescription: 説明\n---\n' "$s"; seq 1 40; } > "$ROOT/repo/packages/claude/.claude/skills/$s/SKILL.md"
+  done
+  mkdir -p "$ROOT/repo/packages/claude/.claude/loops"
+  printf '# 残すもの\nkept\n' > "$ROOT/repo/packages/claude/.claude/loops/skill-keep.txt"
+  G add . && G commit -q -m skills
+}
+skills_setup; G rm -rq packages/claude/.claude/skills/alpha
+out=$(gate); ok "使っていないスキル1つの削除は通す" "$(eq "$?" 0)"
+skills_setup; G rm -rq packages/claude/.claude/skills/kept
+out=$(gate); rc=$?
+ok "残すと決めたスキルの削除は exit 1" "$(eq "$rc" 1)"; ok "残すスキルだと知らせる" "$(has "$out" "残すと決めたスキルを消しています: kept")"
+skills_setup; G rm -rq packages/claude/.claude/skills/alpha packages/claude/.claude/skills/beta
+out=$(gate); rc=$?
+ok "スキルを一度に2つ消すのは exit 1" "$(eq "$rc" 1)"; ok "1回に1つまでだと知らせる" "$(has "$out" "1回に1つまで")"
+skills_setup; G rm -rq packages/claude/.claude/skills/kept; G rm -q packages/claude/.claude/loops/skill-keep.txt
+out=$(gate); ok "残す一覧ごと消しても通さない(base 側の一覧で判定する)" "$(eq "$?" 1)"
+
+skills_setup; G rm -q packages/claude/.claude/skills/kept/refs/a.md
+out=$(gate); ok "残すスキルの付属ファイルだけ消すのも exit 1" "$(eq "$?" 1)"
+skills_setup; printf -- '---\nname: kept\n---\n' > "$ROOT/repo/packages/claude/.claude/skills/kept/SKILL.md"
+out=$(gate); rc=$?
+ok "残すスキルの description を消すのは exit 1" "$(eq "$rc" 1)"; ok "何が消えたか知らせる" "$(has "$out" "name / description が消えています")"
+skills_setup; { printf -- '---\nname: kept\ndescription:\n---\n'; seq 1 40; } > "$ROOT/repo/packages/claude/.claude/skills/kept/SKILL.md"
+out=$(gate); rc=$?
+ok "残すスキルの description の値を空にするのは exit 1(再発防止: 次の行の文字で値ありと判定した)" "$(eq "$rc" 1)"
+ok "値が空のときも name / description の消失として知らせる" "$(has "$out" "name / description が消えています")"
+for v in '""' "''" '>' '|'; do
+  skills_setup; { printf -- '---\nname: kept\ndescription: %s\n---\n' "$v"; seq 1 40; } > "$ROOT/repo/packages/claude/.claude/skills/kept/SKILL.md"
+  out=$(gate); rc=$?
+  ok "残すスキルの description を中身の無い値($v)にするのは exit 1" "$(eq "$rc" 1)"
+done
+skills_setup; { printf -- '---\nname: kept\ndescription: >\n  折り返した説明\n---\n'; seq 1 40; } > "$ROOT/repo/packages/claude/.claude/skills/kept/SKILL.md"
+out=$(gate --skip-tests); ok "折り返し記法で中身のある description は通す" "$(eq "$?" 0)"
+skills_setup; seq 1 50 > "$ROOT/repo/packages/claude/.claude/skills/kept/refs/a.md"; G add . && G commit -q -m long
+: > "$ROOT/repo/packages/claude/.claude/skills/kept/refs/a.md"
+out=$(gate); rc=$?
+ok "残すスキルの付属ファイルを空にするのは exit 1(削除には出ない書き換え)" "$(eq "$rc" 1)"
+ok "どのファイルから消したか知らせる" "$(has "$out" "kept/refs/a.md")"
+skills_setup; printf -- '---\nname: kept\ndescription: 説明\n---\n' > "$ROOT/repo/packages/claude/.claude/skills/kept/SKILL.md"
+out=$(gate); ok "残すスキルの本文を大きく削るのは exit 1" "$(eq "$?" 1)"
+skills_setup; echo "追記" >> "$ROOT/repo/packages/claude/.claude/skills/kept/SKILL.md"
+out=$(gate --skip-tests); ok "残すスキルへの追記は通す" "$(eq "$?" 0)"
+skills_setup; G rm -q packages/claude/.claude/loops/skill-keep.txt; G commit -q -m nokeep
+G rm -rq packages/claude/.claude/skills/alpha
+out=$(gate); rc=$?
+ok "base に残す一覧が無ければ、どのスキルの削除も exit 1(再発防止: 読めないと保護が空になった)" "$(eq "$rc" 1)"
+ok "一覧が無いことを知らせる" "$(has "$out" "残すスキルの一覧が")"
+
 # --- テストを消して通すことはできない ---
 setup; mkdir -p "$ROOT/repo/packages/claude/.claude/hooks/tests"
 echo 'exit 0' > "$ROOT/repo/packages/claude/.claude/hooks/tests/some.test.sh"; G add . && G commit -q -m t
