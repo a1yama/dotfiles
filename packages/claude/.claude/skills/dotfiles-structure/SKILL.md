@@ -15,9 +15,12 @@ GNU Stow でホームディレクトリにシンボリックリンクを展開�
 │   ├── codex/         # Codex 設定
 │   ├── ghostty/       # Ghostty 設定
 │   ├── git/           # Git 設定・エイリアス・ignore
+│   ├── karabiner/     # Karabiner-Elements のキー割り当て
 │   ├── lazygit/       # lazygit 設定
+│   ├── life/          # life リポジトリ用のコマンド(そのリポジトリがある前提)
 │   ├── nvim/          # Neovim 設定
 │   ├── starship/      # Starship プロンプト
+│   ├── takt/          # TAKT ピースエンジン設定
 │   ├── tmux/          # tmux 設定
 │   ├── yazi/          # Yazi ファイルマネージャー
 │   └── zsh/           # Zsh 設定・エイリアス
