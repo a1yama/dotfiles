@@ -67,11 +67,66 @@ alt=""
 # 別のコマンドでの書き込みに流れていた。alt は「そのツールが無ければ通す」判定の鍵でもあるので
 # 変えず、使い方に合うツールは文面にだけ足す。
 hint=""
+# 案内の出し分けに使う引数列(bare_args)。seg と違い、引用符の中身を捨て、リダイレクトの一部である & では切らない。
+# seg のまま部分一致させると、引用符の中の文字(`cat 'a>b'`、sed のスクリプト内の ` -i`)を
+# リダイレクトやオプションと取り違える。また seg は & で切れるので、`>&2` は `>` だけが残って
+# 書き込みに見え、`&> out` は `>` まで届かない
+# どちらも該当するコマンドの分岐の中でだけ呼ぶ(このフックは Bash の実行ごとに同期で走る)。
+# バックスラッシュは次の1文字を引用符と同じ扱いにする(`a\>b` の > はリダイレクトではない)
+bare_args() {
+  printf '%s' "$line" | awk '{
+    q = ""; out = ""
+    for (i = 1; i <= length($0); i++) {
+      c = substr($0, i, 1)
+      if (q != "") {
+        if (c == q) q = ""
+        else if (q == "\"" && c == "\\") i++
+        continue
+      }
+      if (c == "\\") { i++; continue }
+      if (c == "\"" || c == "\047") { q = c; continue }
+      if (c == "|" || c == ";") break
+      if (c == "&" && substr($0, i - 1, 1) != ">" && substr($0, i + 1, 1) != ">") break
+      out = out c
+    }
+    print out
+  }'
+}
+# 同じ範囲を、シェルと同じ区切り方で1行1語にする。引用符は外して中身を残すので、
+# `sed '-i'` は -i という語になり、`sed -n '/ -i/p'` のスクリプトは - で始まらない1語のままになる
+arg_words() {
+  printf '%s' "$line" | awk '{
+    q = ""; w = ""; open = 0
+    for (i = 1; i <= length($0); i++) {
+      c = substr($0, i, 1)
+      if (q != "") {
+        if (c == q) q = ""
+        else if (q == "\"" && c == "\\") { i++; w = w substr($0, i, 1) }
+        else w = w c
+        continue
+      }
+      if (c == "\\") { i++; w = w substr($0, i, 1); open = 1; continue }
+      if (c == "\"" || c == "\047") { q = c; open = 1; continue }
+      if (c == "|" || c == ";") break
+      if (c == "&" && substr($0, i - 1, 1) != ">" && substr($0, i + 1, 1) != ">") break
+      if (c == " " || c == "\t") { if (open) print w; w = ""; open = 0; continue }
+      w = w c; open = 1
+    }
+    if (open) print w
+  }'
+}
+# 標準出力をファイルへ書き込む形か。fd の複製(2>&1 / >&2)と、標準出力以外の fd の出力先(2>file)は、
+# コマンドの出力をファイルに書くものではないので除いてから見る。
+# fd の番号は語の先頭にあるときだけ番号として扱う(`a2>out` は a2 という名前のファイルの出力)
+writes_file() {
+  printf '%s' "$1" \
+    | sed -E 's/[0-9]*>&[0-9-]+//g; s/(^|[[:space:]])([2-9]|[1-9][0-9]+)>>?/\1/g' \
+    | grep -q '>'
+}
 case "$first" in
   cat|head)
     alt="Read"
-    # 2>/dev/null や 2>&1 は出力先の指定であって、ファイルへの書き込みではない
-    if printf '%s' "$seg" | grep -qE '(^|[^0-9&>])>'; then
+    if writes_file "$(bare_args)"; then
       hint="ファイルへ書き込むなら Write(新規・上書き)か Edit(追記・一部の変更)が該当します。"
     fi
     ;;
@@ -107,10 +162,27 @@ case "$first" in
     ;;
   sed|awk)
     alt="Edit"
-    case " $seg " in
-      *" -i"*|*" --in-place"*) ;;
-      *) hint="書き換えではなく表示や抜き出しなら Read(行の範囲は offset / limit で指定)が該当します。" ;;
-    esac
+    # 短オプションは結合される(-Ei / -ni)ので、語の単位で探す。
+    # awk の -i はライブラリの読み込みで、書き換えになるのは inplace を読み込むときだけ
+    inplace=0
+    while IFS= read -r w; do
+      if [ "$first" = "awk" ]; then
+        case "$w" in
+          inplace|inplace.awk|-iinplace|-iinplace.awk|--include=inplace|--include=inplace.awk) inplace=1 ;;
+        esac
+      else
+        case "$w" in
+          --in-place*) inplace=1 ;;
+          --*) ;;
+          -*[iI]*) inplace=1 ;;
+        esac
+      fi
+    done <<EOF
+$(arg_words)
+EOF
+    if [ "$inplace" = "0" ]; then
+      hint="書き換えではなく表示や抜き出しなら Read(行の範囲は offset / limit で指定)が該当します。"
+    fi
     ;;
   echo)
     # 追記・上書きリダイレクトのときだけ Write を促す
